@@ -270,8 +270,8 @@ export function SignSession() {
         </p>
       </header>
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
-        <section className="flex flex-col gap-3">
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[minmax(0,1.15fr)_minmax(300px,0.85fr)]">
+        <section className="flex min-w-0 flex-col gap-3">
           <div className="flex gap-2">
             <Button
               variant={mode === "practice" ? "default" : "outline"}
@@ -349,7 +349,7 @@ export function SignSession() {
             </Card>
           ) : null}
 
-          <div className="flex gap-2 overflow-x-auto pb-1">
+          <div className="flex w-full min-w-0 gap-2 overflow-x-auto pb-1">
             {STATIC_SIGNS.map((sign) => (
               <Button
                 key={sign}
@@ -368,7 +368,7 @@ export function SignSession() {
           </p>
         </section>
 
-        <section className="flex flex-col gap-3">
+        <section className="flex min-w-0 flex-col gap-3">
           <Card>
             <CardHeader>
               <CardTitle>Line</CardTitle>

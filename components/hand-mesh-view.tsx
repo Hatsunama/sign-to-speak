@@ -19,11 +19,19 @@ export function HandMeshView({
     if (!canvas) {
       return;
     }
-    const renderer = new THREE.WebGLRenderer({
-      canvas,
-      alpha: true,
-      antialias: true,
-    });
+    if (!webglAvailable()) {
+      return drawFlatHand(canvas, jointsRef, mode);
+    }
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        canvas,
+        alpha: true,
+        antialias: true,
+      });
+    } catch {
+      return drawFlatHand(canvas, jointsRef, mode);
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     const scene = new THREE.Scene();
     const perspective = new THREE.PerspectiveCamera(32, 1, 0.01, 10);
@@ -100,5 +108,124 @@ export function HandMeshView({
     };
   }, [jointsRef, mode]);
 
-  return <canvas ref={canvasRef} className="h-full w-full" />;
+  return <canvas ref={canvasRef} className="block h-full w-full" />;
+}
+
+const HAND_EDGES: ReadonlyArray<readonly [number, number]> = [
+  [0, 1],
+  [1, 2],
+  [2, 3],
+  [3, 4],
+  [0, 5],
+  [5, 6],
+  [6, 7],
+  [7, 8],
+  [0, 9],
+  [9, 10],
+  [10, 11],
+  [11, 12],
+  [0, 13],
+  [13, 14],
+  [14, 15],
+  [15, 16],
+  [0, 17],
+  [17, 18],
+  [18, 19],
+  [19, 20],
+  [5, 9],
+  [9, 13],
+  [13, 17],
+];
+
+function webglAvailable(): boolean {
+  const probe = document.createElement("canvas");
+  try {
+    return Boolean(probe.getContext("webgl2") ?? probe.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+function drawFlatHand(
+  canvas: HTMLCanvasElement,
+  jointsRef: React.RefObject<Point[] | null>,
+  mode: "overlay" | "stage",
+): () => void {
+  const context = canvas.getContext("2d");
+  if (!context) {
+    return () => undefined;
+  }
+  let frame = 0;
+  const draw = () => {
+    frame = window.requestAnimationFrame(draw);
+    const width = canvas.clientWidth;
+    const height = canvas.clientHeight;
+    if (width < 2 || height < 2) {
+      return;
+    }
+    const ratio = Math.min(window.devicePixelRatio || 1, 2);
+    canvas.width = Math.round(width * ratio);
+    canvas.height = Math.round(height * ratio);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, width, height);
+    const joints = jointsRef.current;
+    if (!joints || joints.length < 21) {
+      return;
+    }
+    const placed = joints.map((point) => placeFlat(point, joints, mode, width, height));
+    context.lineWidth = Math.max(3, Math.min(width, height) * 0.012);
+    context.lineCap = "round";
+    context.strokeStyle = "#e4b08a";
+    context.fillStyle = "#f0c7a4";
+    for (const [from, to] of HAND_EDGES) {
+      const start = placed[from];
+      const end = placed[to];
+      if (!start || !end) {
+        continue;
+      }
+      context.beginPath();
+      context.moveTo(start.x, start.y);
+      context.lineTo(end.x, end.y);
+      context.stroke();
+    }
+    for (const point of placed) {
+      if (!point) {
+        continue;
+      }
+      context.beginPath();
+      context.arc(point.x, point.y, context.lineWidth * 0.85, 0, Math.PI * 2);
+      context.fill();
+    }
+  };
+  draw();
+  return () => window.cancelAnimationFrame(frame);
+}
+
+function placeFlat(
+  point: Point,
+  joints: Point[],
+  mode: "overlay" | "stage",
+  width: number,
+  height: number,
+): { x: number; y: number } {
+  if (mode === "overlay") {
+    return { x: point.x, y: point.y };
+  }
+  const wrist = joints[0] ?? { x: 0, y: 0, z: 0 };
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const joint of joints) {
+    minX = Math.min(minX, joint.x - wrist.x);
+    maxX = Math.max(maxX, joint.x - wrist.x);
+    minY = Math.min(minY, joint.y - wrist.y);
+    maxY = Math.max(maxY, joint.y - wrist.y);
+  }
+  const span = Math.max(maxX - minX, maxY - minY, 1e-4);
+  const scale = Math.min(width, height) * 0.72 / span;
+  return {
+    x: width / 2 + (point.x - wrist.x - (minX + maxX) / 2) * scale,
+    y: height / 2 - (point.y - wrist.y - (minY + maxY) / 2) * scale,
+  };
 }
