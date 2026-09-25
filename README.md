@@ -4,6 +4,49 @@ Free ASL to speech app. Sign To Speak watches one hand through the phone camera,
 
 Android application id: `com.xmilo_at_your_side.sign_to_speak`
 
+## Install from GitHub
+
+Paste this into Windows PowerShell 5.1 or PowerShell 7. It downloads the installer from GitHub `main`, runs it in a separate PowerShell process, then deletes that temporary script.
+
+```powershell
+& {
+    $ErrorActionPreference = 'Stop'
+    $PSNativeCommandUseErrorActionPreference = $false
+    $PowerShellExe = if ($PSVersionTable.PSEdition -eq 'Core') {
+        Join-Path $PSHOME 'pwsh.exe'
+    } else {
+        Join-Path $PSHOME 'powershell.exe'
+    }
+    $Installer = Join-Path $env:TEMP ("install-sign-to-speak-" + [Guid]::NewGuid().ToString('N') + '.ps1')
+    try {
+        Invoke-WebRequest -UseBasicParsing `
+            -Uri 'https://raw.githubusercontent.com/Hatsunama/sign-to-speak/main/scripts/install-sign-to-speak.ps1' `
+            -OutFile $Installer
+        & $PowerShellExe -NoProfile -ExecutionPolicy Bypass -File $Installer
+        if ($LASTEXITCODE -ne 0) {
+            throw "Sign To Speak installer failed (exit $LASTEXITCODE)."
+        }
+    }
+    finally {
+        if (Test-Path -LiteralPath $Installer) {
+            try {
+                Remove-Item -LiteralPath $Installer -Force -ErrorAction Stop
+                Write-Host 'Temporary installer script removed.'
+            }
+            catch {
+                Write-Warning "Could not remove temporary installer ${Installer}: $($_.Exception.Message)"
+            }
+        }
+    }
+}
+```
+
+From a clone, the same bootstrap is `.\scripts\bootstrap-install.ps1`.
+
+The bootstrap pulls [`scripts/install-sign-to-speak.ps1`](scripts/install-sign-to-speak.ps1). That script downloads the current `main` commit archive from GitHub, runs `npm ci`, places the app in `%LOCALAPPDATA%\SignToSpeak`, and deletes the temporary archive. A failed install leaves the previous copy in place.
+
+Start the installed app with `npm run dev --prefix "$env:LOCALAPPDATA\SignToSpeak"`. It listens on port 43123. On the phone, open that URL in Chrome, allow the camera, then Add to Home screen.
+
 ## What a 1.5B Qwen model can and cannot do
 
 It cannot reliably understand ASL, or any other sign language. Caption Studio’s Qwen2.5-1.5B is a text model. It rewrites subtitle lines (`qwen2.5-caption-json-v2`) and ships on Android as a LiteRT-LM file of about 1.6 GB. It never sees a camera frame. A text model has no handshape, movement, or face channel, so “run Qwen 1.5B on the phone and it will translate signing” does not hold.
@@ -26,14 +69,14 @@ Hold a shape until it locks. Drop the hand before repeating a letter. The mesh i
 
 Speech is [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX), also downloaded from Hugging Face when you ask. Heart, Bella, Nicole, Sarah, Michael, Fenrir, Puck, Emma, Isabella, George, and Fable. Until that download finishes, preview falls back to the phone’s own voice.
 
-## Run it
+## Run it from a checkout
 
 ```bash
 npm install
 npm run dev
 ```
 
-The dev server listens on port 43123. On an Android phone, open that URL in Chrome on the same network, allow the camera, then Add to Home screen.
+The dev server listens on port 43123.
 
 ```bash
 npm test
