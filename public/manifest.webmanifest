@@ -1,6 +1,7 @@
 {
-  "name": "Signspeaker",
-  "short_name": "Signspeaker",
+  "id": "/",
+  "name": "Sign To Speak",
+  "short_name": "Sign To Speak",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#14110e",
@@ -11,6 +12,12 @@
       "sizes": "any",
       "type": "image/svg+xml",
       "purpose": "any"
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "id": "com.xmilo_at_your_side.sign_to_speak"
     }
   ]
 }

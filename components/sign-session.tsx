@@ -260,7 +260,7 @@ export function SignSession() {
     <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-4 md:px-6 md:py-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <p className="font-heading text-3xl tracking-tight text-[#f6efe4]">Signspeaker</p>
+          <p className="font-heading text-3xl tracking-tight text-[#f6efe4]">Sign To Speak</p>
           <Badge variant="secondary">Hands only</Badge>
         </div>
         <p className="max-w-2xl text-sm leading-6 text-[#cbbba6]">

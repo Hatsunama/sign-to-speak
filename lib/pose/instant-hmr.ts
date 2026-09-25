@@ -19,7 +19,7 @@ export async function downloadPoseModel(
   if (typeof caches === "undefined") {
     return fetchBuffer(MODEL_URL, onProgress);
   }
-  const cache = await caches.open("signspeaker-pose-v1");
+  const cache = await caches.open("sign-to-speak-pose-v1");
   const cached = await cache.match(MODEL_URL);
   if (cached) {
     onProgress(1);

@@ -13,14 +13,14 @@ const fraunces = Fraunces({
 });
 
 export const metadata: Metadata = {
-  title: "Signspeaker",
+  title: "Sign To Speak",
   description:
     "Watch ASL fingerspelling through the camera, recover a 3D hand mesh, and speak it with a voice you pick.",
-  applicationName: "Signspeaker",
+  applicationName: "Sign To Speak",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
-    title: "Signspeaker",
+    title: "Sign To Speak",
     statusBarStyle: "black-translucent",
   },
 };

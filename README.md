@@ -1,6 +1,8 @@
-# Signspeaker
+# Sign To Speak
 
-Signspeaker watches one hand through the phone camera, draws a 3D mesh on that hand, and speaks the fingerspelled line in a voice you pick.
+Sign To Speak watches one hand through the phone camera, draws a 3D mesh on that hand, and speaks the fingerspelled line in a voice you pick.
+
+Android application id: `com.xmilo_at_your_side.sign_to_speak`
 
 ## What a 1.5B Qwen model can and cannot do
 
