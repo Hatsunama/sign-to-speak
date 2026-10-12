@@ -1,0 +1,32 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> sign-to-speak-android@0.1.0 test
+> node --test tests/*.test.mjs
+
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React home handles permission cancellation, native stop, local thanks and Back (1079.555984ms)
+✔ manifest asks for camera only, disables backup and cleartext (34.762675ms)
+✔ camera foundation has no recording, frame export, network, logging or speech fallback (1.127486ms)
+✔ canonical owner renderer and seed are exact pinned copies (22.429156ms)
+✔ all build variants are bundled and unsigned with bounded Gradle resources (0.83742ms)
+✔ native launcher uses the real app name (0.344238ms)
+✔ all builds disable React Native development-server support (0.487904ms)
+✔ starts only after explicit permission and foreground confirmation (1.55572ms)
+✔ stop invalidates pending camera starts and results without retaining content (1.553307ms)
+✔ new session rejects old asynchronous callbacks (0.25899ms)
+✔ repeated start does not resurrect or create parallel sessions (0.297528ms)
+✔ one cleanup failure cannot skip other actions or allow restart (0.867365ms)
+✔ foundation never publishes transcripts or recognized speech (0.344358ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2840.734399
+npm notice
+npm notice New major version of npm available! 11.9.0 -> 12.2.0
+npm notice Changelog: https://github.com/npm/cli/releases/tag/v12.2.0
+npm notice To update run: npm install -g npm@12.2.0
+npm notice

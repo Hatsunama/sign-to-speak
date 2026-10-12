@@ -1,0 +1,192 @@
+✔ manifest asks for camera only, disables backup and cleartext (86.781168ms)
+✖ camera foundation has no recording, frame export, network, logging or speech fallback (3.599445ms)
+✔ canonical owner renderer and seed are exact pinned copies (1.878326ms)
+✖ all build variants are bundled and unsigned with bounded Gradle resources (49.432188ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 2
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 851.809576
+
+✖ failing tests:
+
+test at native/tests/privacy-structure.test.mjs:17:1
+✖ camera foundation has no recording, frame export, network, logging or speech fallback (3.599445ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /previewView.visibility = INVISIBLE/. Input:
+  
+  'package com.xmilo_at_your_side.sign_to_speak\n' +
+    '\n' +
+    'import android.Manifest\n' +
+    'import android.content.pm.PackageManager\n' +
+    'import android.widget.FrameLayout\n' +
+    'import androidx.camera.core.CameraSelector\n' +
+    'import androidx.camera.core.Preview\n' +
+    'import androidx.camera.lifecycle.ProcessCameraProvider\n' +
+    'import androidx.camera.view.PreviewView\n' +
+    'import androidx.core.content.ContextCompat\n' +
+    'import androidx.lifecycle.Lifecycle\n' +
+    'import androidx.lifecycle.LifecycleOwner\n' +
+    'import com.facebook.react.bridge.Arguments\n' +
+    'import com.facebook.react.bridge.LifecycleEventListener\n' +
+    'import com.facebook.react.uimanager.ThemedReactContext\n' +
+    'import com.facebook.react.uimanager.events.RCTEventEmitter\n' +
+    '\n' +
+    '/** Preview only. No frame analysis, capture, recording, model, transcript or speech. */\n' +
+    'class PrivateCameraView(private val reactContext: ThemedReactContext) :\n' +
+    '    FrameLayout(reactContext), LifecycleEventListener {\n' +
+    '    private val previewView = PreviewView(reactContext)\n' +
+    '    private var provider: ProcessCameraProvider? = null\n' +
+    '    private var preview: Preview? = null\n' +
+    '    private var generation = 0L\n' +
+    '    private var requested = false\n' +
+    '    private var observing = false\n' +
+    '    private var disposed = false\n' +
+    '\n' +
+    '    init {\n' +
+    '        // TextureView remains inside the normal secure Activity composition.\n' +
+    '        previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE\n' +
+    '        addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))\n' +
+    '    }\n' +
+    '\n' +
+    '    fun setActive(active: Boolean) {\n' +
+    '        if (!active) { stop(); return }\n' +
+    '        if (disposed || requested) return\n' +
+    '        requested = true\n' +
+    '        if (isAttachedToWindow) start()\n' +
+    '    }\n' +
+    '\n' +
+    '    private fun start() {\n' +
+    '        val owner = reactContext.currentActivity as? LifecycleOwner\n' +
+    '        if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {\n' +
+    '            stop(); status("stopped"); return\n' +
+    '        }\n' +
+    '        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {\n' +
+    '            stop(); status("permission_denied"); return\n' +
+    '        }\n' +
+    '        val token = ++generation\n' +
+    '        val future = ProcessCameraProvider.getInstance(context)\n' +
+    '        future.addListener({\n' +
+    '            if (!requested || disposed || !isAttachedToWindow || token != generation ||\n' +
+    '                !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@addListener\n' +
+    '            try {\n' +
+    '                val cameraProvider = future.get()\n' +
+    '                val camera = CameraSelector.DEFAULT_FRONT_CAMERA\n' +
+    '                if (!cameraProvider.hasCamera(camera)) {\n' +
+    '                    stop(); status("front_camera_unavailable"); return@addListener\n' +
+    '                }\n' +
+    '                val useCase = Preview.Builder().build()\n' +
+    '                useCase.setSurfaceProvider(previewView.surfaceProvider)\n' +
+    '                provider = cameraProvider\n' +
+    '                preview = useCase\n' +
+    '                cameraProvider.bindToLifecycle(owner, camera, useCase)\n' +
+    '                status("preview_only")\n' +
+    '            } catch (_: Exception) {\n' +
+    '                stop(); status("camera_unavailable")\n' +
+    '            }\n' +
+    '        }, ContextCompat.getMainExecutor(context))\n' +
+    '    }\n' +
+    '\n' +
+    '    private fun stop() {\n' +
+    '        requested = false\n' +
+    '        ++generation\n' +
+    '        preview?.let { useCase ->\n' +
+    '            useCase.setSurfaceProvider(null)\n' +
+    '            provider?.unbind(useCase)\n' +
+    '        }\n' +
+    '        preview = null\n' +
+    '        provider = null\n' +
+    '        // No app-owned frame/landmark/transcript buffers exist in this milestone.\n' +
+    '    }\n' +
+    '\n' +
+    '    fun dispose() {\n' +
+    '        disposed = true\n' +
+    '        stop()\n' +
+    '        if (observing) reactContext.removeLifecycleEventListener(this)\n' +
+    '        observing = false\n' +
+    '    }\n' +
+    '\n' +
+    '    override fun onAttachedToWindow() {\n' +
+    '        super.onAttachedToWindow()\n' +
+    '        if (disposed) return\n' +
+    '        if (!observing) reactContext.addLifecycleEventListener(this)\n' +
+    '        observing = true\n' +
+    '        if (requested) start()\n' +
+    '    }\n' +
+    '\n' +
+    '    override fun onDetachedFromWindow() {\n' +
+    '        stop()\n' +
+    '        if (observing) reactContext.removeLifecycleEventListener(this)\n' +
+    '        observing = false\n' +
+    '        super.onDetachedFromWindow()\n' +
+    '    }\n' +
+    '\n' +
+    '    override fun onHostPause() { stop(); status("stopped") }\n' +
+    '    override fun onHostDestroy() { dispose() }\n' +
+    '    override fun onHostResume() = Unit // User must explicitly start again.\n' +
+    '\n' +
+    '    @Suppress("DEPRECATION")\n' +
+    '    private fun status(value: String) {\n' +
+    '        if (id == NO_ID || disposed || !reactContext.hasActiveReactInstance()) return\n' +
+    '        val event = Arguments.createMap().apply { putString("status", value) }\n' +
+    '        reactContext.getJSModule(RCTEventEmitter::class.java).receiveEvent(id, "topStatus", event)\n' +
+    '    }\n' +
+    '}\n'
+  
+      at TestContext.<anonymous> (file:///workspace/shared/sign-android-work/native/tests/privacy-structure.test.mjs:22:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'package com.xmilo_at_your_side.sign_to_speak\n\nimport android.Manifest\nimport android.content.pm.PackageManager\nimport android.widget.FrameLayout\nimport androidx.camera.core.CameraSelector\nimport androidx.camera.core.Preview\nimport androidx.camera.lifecycle.ProcessCameraProvider\nimport androidx.camera.view.PreviewView\nimport androidx.core.content.ContextCompat\nimport androidx.lifecycle.Lifecycle\nimport androidx.lifecycle.LifecycleOwner\nimport com.facebook.react.bridge.Arguments\nimport com.facebook.react.bridge.LifecycleEventListener\nimport com.facebook.react.uimanager.ThemedReactContext\nimport com.facebook.react.uimanager.events.RCTEventEmitter\n\n/** Preview only. No frame analysis, capture, recording, model, transcript or speech. */\nclass PrivateCameraView(private val reactContext: ThemedReactContext) :\n    FrameLayout(reactContext), LifecycleEventListener {\n    private val previewView = PreviewView(reactContext)\n    private var provider: ProcessCameraProvider? = null\n    private var preview: Preview? = null\n    private var generation = 0L\n    private var requested = false\n    private var observing = false\n    private var disposed = false\n\n    init {\n        // TextureView remains inside the normal secure Activity composition.\n        previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE\n        addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))\n    }\n\n    fun setActive(active: Boolean) {\n        if (!active) { stop(); return }\n        if (disposed || requested) return\n        requested = true\n        if (isAttachedToWindow) start()\n    }\n\n    private fun start() {\n        val owner = reactContext.currentActivity as? LifecycleOwner\n        if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {\n            stop(); status("stopped"); return\n        }\n        if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {\n            stop(); status("permission_denied"); return\n        }\n        val token = ++generation\n        val future = ProcessCameraProvider.getInstance(context)\n        future.addListener({\n            if (!requested || disposed || !isAttachedToWindow || token != generation ||\n                !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@addListener\n            try {\n                val cameraProvider = future.get()\n                val camera = CameraSelector.DEFAULT_FRONT_CAMERA\n                if (!cameraProvider.hasCamera(camera)) {\n                    stop(); status("front_camera_unavailable"); return@addListener\n                }\n                val useCase = Preview.Builder().build()\n                useCase.setSurfaceProvider(previewView.surfaceProvider)\n                provider = cameraProvider\n                preview = useCase\n                cameraProvider.bindToLifecycle(owner, camera, useCase)\n                status("preview_only")\n            } catch (_: Exception) {\n                stop(); status("camera_unavailable")\n            }\n        }, ContextCompat.getMainExecutor(context))\n    }\n\n    private fun stop() {\n        requested = false\n        ++generation\n        preview?.let { useCase ->\n            useCase.setSurfaceProvider(null)\n            provider?.unbind(useCase)\n        }\n        preview = null\n        provider = null\n        // No app-owned frame/landmark/transcript buffers exist in this milestone.\n    }\n\n    fun dispose() {\n        disposed = true\n        stop()\n        if (observing) reactContext.removeLifecycleEventListener(this)\n        observing = false\n    }\n\n    override fun onAttachedToWindow() {\n        super.onAttachedToWindow()\n        if (disposed) return\n        if (!observing) reactContext.addLifecycleEventListener(this)\n        observing = true\n        if (requested) start()\n    }\n\n    override fun onDetachedFromWindow() {\n        stop()\n        if (observing) reactContext.removeLifecycleEventListener(this)\n        observing = false\n        super.onDetachedFromWindow()\n    }\n\n    override fun onHostPause() { stop(); status("stopped") }\n    override fun onHostDestroy() { dispose() }\n    override fun onHostResume() = Unit // User must explicitly start again.\n\n    @Suppress("DEPRECATION")\n    private fun status(value: String) {\n        if (id == NO_ID || disposed || !reactContext.hasActiveReactInstance()) return\n        val event = Arguments.createMap().apply { putString("status", value) }\n        reactContext.getJSModule(RCTEventEmitter::class.java).receiveEvent(id, "topStatus", event)\n    }\n}\n',
+    expected: /previewView.visibility = INVISIBLE/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at native/tests/privacy-structure.test.mjs:36:1
+✖ all build variants are bundled and unsigned with bounded Gradle resources (49.432188ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /minSdkVersion = 26/. Input:
+  
+  'buildscript {\n' +
+    '    ext {\n' +
+    '        buildToolsVersion = "36.0.0"\n' +
+    '        minSdkVersion = 24\n' +
+    '        compileSdkVersion = 36\n' +
+    '        targetSdkVersion = 36\n' +
+    '        ndkVersion = "27.1.12297006"\n' +
+    '        kotlinVersion = "2.1.20"\n' +
+    '    }\n' +
+    '    repositories {\n' +
+    '        google()\n' +
+    '        mavenCentral()\n' +
+    '    }\n' +
+    '    dependencies {\n' +
+    '        classpath("com.android.tools.build:gradle")\n' +
+    '        classpath("com.facebook.react:react-native-gradle-plugin")\n' +
+    '        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")\n' +
+    '    }\n' +
+    '}\n' +
+    '\n' +
+    'apply plugin: "com.facebook.react.rootproject"\n'
+  
+      at TestContext.<anonymous> (file:///workspace/shared/sign-android-work/native/tests/privacy-structure.test.mjs:42:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'buildscript {\n    ext {\n        buildToolsVersion = "36.0.0"\n        minSdkVersion = 24\n        compileSdkVersion = 36\n        targetSdkVersion = 36\n        ndkVersion = "27.1.12297006"\n        kotlinVersion = "2.1.20"\n    }\n    repositories {\n        google()\n        mavenCentral()\n    }\n    dependencies {\n        classpath("com.android.tools.build:gradle")\n        classpath("com.facebook.react:react-native-gradle-plugin")\n        classpath("org.jetbrains.kotlin:kotlin-gradle-plugin")\n    }\n}\n\napply plugin: "com.facebook.react.rootproject"\n',
+    expected: /minSdkVersion = 26/,
+    operator: 'match',
+    diff: 'simple'
+  }

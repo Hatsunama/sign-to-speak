@@ -1,0 +1,98 @@
+import com.android.build.api.artifact.SingleArtifact
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+react {
+    // Bundle all variants; this foundation has no network/dev-server permission.
+    debuggableVariants = []
+    autolinkLibrariesWithApp()
+}
+android {
+    // Pinned to the CMake already present on the approved standard Ubuntu CI image.
+    externalNativeBuild { cmake { version "3.31.5" } }
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.xmilo_at_your_side.sign_to_speak"
+    defaultConfig {
+        applicationId "com.xmilo_at_your_side.sign_to_speak"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "0.1.0-foundation"
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = "1g"
+            maxParallelForks = 1
+        }
+    }
+    buildTypes {
+        debug { signingConfig = null }
+        release {
+            signingConfig = null
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+    }
+}
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("org.mockito:mockito-core:5.18.0")
+    testImplementation("com.google.guava:guava:33.4.8-jre")
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+}
+
+/** Check AGP's merged artifact, including transitive/debug dependency manifests. */
+abstract class VerifyMergedPermissions extends DefaultTask {
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getMergedManifest()
+
+    @TaskAction
+    void verifyPermissions() {
+        def factory = DocumentBuilderFactory.newInstance()
+        factory.setNamespaceAware(true)
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        def document = factory.newDocumentBuilder().parse(mergedManifest.get().asFile)
+        def permissions = new TreeSet<String>()
+        // The alternate SDK-specific forms also grant permissions.
+        ["uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m"].each { tag ->
+            def nodes = document.getElementsByTagName(tag)
+            for (int i = 0; i < nodes.length; ++i) {
+                permissions.add(nodes.item(i).getAttributeNS(
+                    "http://schemas.android.com/apk/res/android", "name"))
+            }
+        }
+        def allowed = ["android.permission.CAMERA"] as Set
+        if (permissions != allowed) {
+            throw new GradleException("Merged permission allowlist failed for ${mergedManifest.get().asFile}: " +
+                "expected ${allowed}; found ${permissions}; unexpected ${permissions - allowed}; " +
+                "missing ${allowed - permissions}. Review the merger report; never silently widen this list.")
+        }
+        logger.lifecycle("Merged permission allowlist passed: ${permissions}")
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantTitle = variant.name.capitalize()
+        def verifyTask = tasks.register("verify${variantTitle}MergedPermissions", VerifyMergedPermissions) {
+            group = "verification"
+            description = "Enforce CAMERA-only permissions in the ${variant.name} merged manifest."
+            mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST.INSTANCE))
+        }
+        tasks.named("check").configure { dependsOn(verifyTask) }
+    }
+}
