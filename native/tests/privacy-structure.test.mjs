@@ -40,7 +40,7 @@ test('canonical owner renderer and seed are exact pinned copies', () => {
 test('all build variants are bundled and unsigned with bounded Gradle resources', () => {
   const build = read('android/app/build.gradle');
   assert.match(build, /debuggableVariants = \[\]/);
-  assert.equal([...build.matchAll(/signingConfig = null/g)].length, 2);
+  assert.equal([...build.matchAll(/signingConfig = null/g)].length, 3);
   assert.doesNotMatch(build, /storePassword|keyPassword|signingConfigs\.debug/);
   assert.match(read('android/gradle.properties'), /org.gradle.workers.max=1/);
   assert.match(read('android/build.gradle'), /minSdkVersion = 26/);
@@ -52,4 +52,98 @@ test('native launcher uses the real app name', () => {
 
 test('all builds disable React Native development-server support', () => {
   assert.match(read(java + 'MainApplication.kt'), /useDevSupport = false/);
+});
+
+
+function block(source, marker) {
+  const start = source.indexOf(marker);
+  assert.notEqual(start, -1, `Missing ${marker}`);
+  const open = source.indexOf('{', start);
+  let depth = 1;
+  for (let i = open + 1; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    if (source[i] === '}' && --depth === 0) return source.slice(open + 1, i);
+  }
+  assert.fail(`Unclosed ${marker}`);
+}
+
+function verifyUnsignedPhoneQaStructure(build, manifest) {
+  assert.match(build, /providers\.gradleProperty\("unsignedPhoneQa"\)\.orElse\("false"\)\.get\(\)/);
+  assert.match(build, /unsignedPhoneQaProperty == "true"/);
+  assert.match(build, /\["false", "true"\]\.contains\(unsignedPhoneQaProperty\)/);
+  assert.match(build, /unsignedPhoneQa && providers\.gradleProperty\("reactNativeArchitectures"\)\.orElse\(""\)\.get\(\) != "arm64-v8a"/);
+  const optIn = block(build, 'if (unsignedPhoneQa)');
+  const qa = block(optIn, 'qa {');
+  for (const required of [
+    /initWith release/, /matchingFallbacks = \["release"\]/,
+    /applicationIdSuffix "\.qa"/, /versionNameSuffix "-phone-qa"/,
+    /debuggable false/, /signingConfig = null/, /ndk \{ abiFilters "arm64-v8a" \}/,
+  ]) assert.match(qa, required);
+  assert.doesNotMatch(build, /System\.getenv|environmentVariable|System\.getProperty|storeFile|storePassword|keyAlias|keyPassword|keystore|keytool|signingConfigs\.debug|androidTestImplementation|testInstrumentationRunner/);
+  assert.match(block(build, 'debug {'), /signingConfig = null/);
+  const release = block(build, 'release {');
+  assert.match(release, /signingConfig = null/);
+  assert.doesNotMatch(release, /applicationIdSuffix|versionNameSuffix|testOnly/);
+  assert.match(build, /debuggableVariants = \[\]/);
+  assert.match(manifest, /<application android:testOnly="true"\s*\/>/);
+  assert.doesNotMatch(manifest, /uses-permission|<permission|activity|receiver|provider|debuggable|allowBackup|usesCleartextTraffic|tools:replace/);
+}
+
+test('unsigned phone QA is an explicit arm64 opt-in with no signing or production changes', () => {
+  verifyUnsignedPhoneQaStructure(read('android/app/build.gradle'), read('android/app/src/qa/AndroidManifest.xml'));
+  assert.doesNotMatch(read('android/app/src/main/AndroidManifest.xml'), /testOnly/);
+});
+
+test('unsigned phone QA structural guard rejects identity, signing, bundling and manifest mutations', () => {
+  const build = read('android/app/build.gradle');
+  const manifest = read('android/app/src/qa/AndroidManifest.xml');
+  const mutations = [
+    ['implicit opt-in', build.replace('unsignedPhoneQaProperty == "true"', 'true'), manifest],
+    ['production identity', build.replace('applicationIdSuffix ".qa"', 'applicationIdSuffix ""'), manifest],
+    ['missing version suffix', build.replace('versionNameSuffix "-phone-qa"', ''), manifest],
+    ['debuggable QA', build.replace('debuggable false', 'debuggable true'), manifest],
+    ['debug inheritance', build.replace('initWith release', 'initWith debug'), manifest],
+    ['extra architecture', build.replace('ndk { abiFilters "arm64-v8a" }', 'ndk { abiFilters "arm64-v8a", "x86_64" }'), manifest],
+    ['inherited signer', build.replace('debuggable false\n                signingConfig = null', 'debuggable false'), manifest],
+    ['Metro dependency', build.replace('debuggableVariants = []', 'debuggableVariants = ["qa"]'), manifest],
+    ['secret environment read', build + '\nSystem.getenv("SIGNING_SECRET")', manifest],
+    ['non-test APK', build, manifest.replace('testOnly="true"', 'testOnly="false"')],
+    ['QA network permission', build, manifest.replace('</manifest>', '<uses-permission android:name="android.permission.INTERNET" /></manifest>')],
+  ];
+  for (const [label, mutatedBuild, mutatedManifest] of mutations) {
+    assert.throws(() => verifyUnsignedPhoneQaStructure(mutatedBuild, mutatedManifest), {name: 'AssertionError'}, label);
+  }
+});
+
+test('merged permission guards bind production and QA to separate exact application identities', () => {
+  const build = read('android/app/build.gradle');
+  assert.match(block(build, 'static void verify(org.w3c.dom.Document document)'), /verifyForApplication\(document, APPLICATION_ID\)/);
+  assert.match(block(build, 'static void verifyQa(org.w3c.dom.Document document)'), /verifyForApplication\(document, APPLICATION_ID \+ "\.qa"\)/);
+  assert.match(build, /private static void verifyForApplication/);
+  assert.match(build, /def receiverPermission = applicationId \+ "\.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/);
+  assert.match(build, /phoneQa\.set\(variant\.buildType == "qa"\)/);
+  assert.match(build, /if \(phoneQa\.get\(\)\) MergedPermissionPolicy\.verifyQa\(document\)/);
+  assert.match(build, /else MergedPermissionPolicy\.verify\(document\)/);
+  for (const fixture of ['crossVariantIdentity', 'productionReceiverInQa', 'normalProtection', 'dangerousProtection', 'widenedProtection', 'boundedInternalUse', 'duplicateUse', 'extraDeclaration']) {
+    assert.match(build, new RegExp(`${fixture}:`));
+  }
+});
+
+test('unsigned QA isolation checks actual merged output and gates packaging', () => {
+  const build = read('android/app/build.gradle');
+  const guard = block(build, 'tasks.register("verifyUnsignedPhoneQaIsolation")');
+  for (const required of [
+    /qa\.signingConfig != null/, /qa\.debuggable/,
+    /qa\.applicationIdSuffix != "\.qa"/, /qa\.versionNameSuffix != "-phone-qa"/,
+    /qa\.ndk\.abiFilters\.toSet\(\) != \["arm64-v8a"\]\.toSet\(\)/,
+    /react\.debuggableVariants\.get\(\)\.contains\(variant\.name\)/,
+    /variant\.applicationId\.get\(\) != expectedApp/,
+    /android\.defaultConfig\.applicationId != MergedPermissionPolicy\.APPLICATION_ID/,
+    /android\.buildTypes\.debug\.signingConfig != null/,
+    /android\.buildTypes\.release\.signingConfig != null/,
+    /getAttributeNS\(MergedPermissionPolicy\.ANDROID_NS, "testOnly"\) != "true"/,
+    /getAttributeNS\(MergedPermissionPolicy\.ANDROID_NS, "debuggable"\)/,
+  ]) assert.match(guard, required);
+  assert.match(build, /it\.name == "packageQa" \|\| it\.name == "assembleQa"/);
+  assert.match(build, /dependsOn\(isolationTask\)/);
 });

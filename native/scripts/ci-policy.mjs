@@ -27,6 +27,9 @@ export function validateWorkflow(config) {
   }
   check(steps.some(s => s.id === 'baseline' && s.run?.includes('ci-isolation-baseline.sh') && s['timeout-minutes'] === 12), 'Bounded counterfactual baseline required');
   check(steps.filter(s => /:app:(testDebugUnitTest|verifyDebugMergedPermissions|assembleDebug)/.test(s.run ?? '')).every(s => s.if?.includes("steps.baseline.outputs.restored == 'true'") && !s.if?.includes('steps.baseline.outcome')), 'Candidate gates require verified restoration, independently of baseline result');
+  const phone = steps.find(s => s.id === 'phone_qa');
+  check(phone?.['timeout-minutes'] === 10 && phone?.run?.includes('-PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true') && phone?.run?.includes(':app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa') && phone?.run?.includes('ci-phone-qa-audit.sh'), 'Bounded unsigned arm64 QA build and binary audit required');
+  check(!/keytool|keystore|storePassword|SIGN_QA_/.test(runs), 'No cloud signer or credential generation');
   check(runs.includes('JAVA_HOME_21_X64'), 'Robolectric SDK36 requires JDK21');
   check(steps.some(s => s.run?.includes(':app:verifyDebugMergedPermissions') && s.run.includes(':app:verifyReleaseMergedPermissions') && s.run.includes('--continue')), 'Run both manifest checks even when one fails');
   check(!/bundleRelease|assembleRelease|--licenses|continue-on-error|\|\| true/.test(runs), 'No release bundle or weakened gates');

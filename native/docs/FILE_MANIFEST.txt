@@ -25,6 +25,7 @@ native/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 native/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 native/android/app/src/main/res/values/strings.xml
 native/android/app/src/main/res/values/styles.xml
+native/android/app/src/qa/AndroidManifest.xml
 native/android/app/src/test/java/com/xmilo_at_your_side/sign_to_speak/NativeBackPrivacyTest.java
 native/android/app/src/test/java/com/xmilo_at_your_side/sign_to_speak/UnitTestRuntimeTest.java
 native/android/build.gradle
@@ -39,6 +40,7 @@ native/babel.config.js
 native/docs/FILE_MANIFEST.txt
 native/docs/FOUNDATION.md
 native/docs/NATIVE_BACK_REGRESSION.md
+native/docs/UNSIGNED_PHONE_QA_CI_PLAN.md
 native/docs/evidence/dev-support-before-fix.txt
 native/docs/evidence/host-tests.txt
 native/docs/evidence/launcher-before-fix.txt
@@ -55,7 +57,10 @@ native/package.json
 native/scripts/CI.md
 native/scripts/check-isolation-baseline.py
 native/scripts/check-isolation-baseline.test.py
+native/scripts/check-phone-qa.py
+native/scripts/check-phone-qa.test.py
 native/scripts/ci-isolation-baseline.sh
+native/scripts/ci-phone-qa-audit.sh
 native/scripts/ci-policy.mjs
 native/scripts/ci-policy.test.mjs
 native/scripts/ci-sdk.sh

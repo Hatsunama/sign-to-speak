@@ -65,6 +65,7 @@ jobs:
           sh tests/run-java-tests.sh
           node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs
           python3 scripts/check-isolation-baseline.test.py
+          python3 scripts/check-phone-qa.test.py
       - name: Verify Android prerequisites without accepting new licenses
         id: sdk
         run: bash scripts/ci-sdk.sh
@@ -102,6 +103,18 @@ jobs:
             :app:assembleDebug
           find app/build/outputs/apk/debug -name '*.apk' -exec sha256sum {} + > "$RUNNER_TEMP/sign-evidence/apk-checksums.txt"
           test -s "$RUNNER_TEMP/sign-evidence/apk-checksums.txt"
+      - name: Build unsigned arm64 test-only phone QA APK (no device operation)
+        id: phone_qa
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
+            :app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa
+          cd ..
+          bash scripts/ci-phone-qa-audit.sh
       - name: Retain bounded test evidence, including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
@@ -122,3 +135,11 @@ jobs:
           if-no-files-found: error
           compression-level: 0
           path: native/android/app/build/outputs/apk/debug/*.apk
+      - name: Retain unsigned arm64 QA APK for approved local development signing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-phone-qa-UNSIGNED-arm64-${{ env.TESTED_SHA }}
+          retention-days: 3
+          if-no-files-found: error
+          compression-level: 0
+          path: native/android/app/build/outputs/apk/qa/*.apk
