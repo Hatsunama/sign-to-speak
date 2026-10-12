@@ -26,35 +26,50 @@ function Home() {
   const {width, height} = useWindowDimensions();
   const [route, setRoute] = useState<'home' | 'thanks'>('home');
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
-  const [preview, setPreview] = useState(false);
+  const [preview, setPreview] = useState<number | null>(null);
   const [requesting, setRequesting] = useState(false);
   const [cleanupFailed, setCleanupFailed] = useState(false);
   const [notice, setNotice] = useState('Camera is off.');
-  const request = useRef(0);
+  const request = useRef<{canStart: boolean} | null>(null);
+  const mounted = useRef(true);
   const gate = useRef(createSession({
-    stopCamera: () => setPreview(false),
+    stopCamera: () => setPreview(null),
     // No speech engine or app-owned camera buffers are present in this build.
     stopSpeech: () => {}, clearNativeBuffers: () => {},
   })).current;
 
   const stop = useCallback(() => {
-    ++request.current;
+    request.current = null;
     gate.stop();
     setRequesting(false);
     setNotice('Camera is off.');
   }, [gate]);
 
   useEffect(() => {
+    mounted.current = true;
     const subscription = AppState.addEventListener('change', state => {
       setForeground(state === 'active');
-      if (state !== 'active') stop();
+      if (state !== 'active') {
+        // Every pause revokes capture eligibility, but the latest permission
+        // outcome can still explain why the camera is off when it resolves.
+        if (request.current) request.current.canStart = false;
+        const wasPreviewing = gate.state().phase === 'preview';
+        gate.stop();
+        setRequesting(false);
+        if (wasPreviewing) setNotice('Camera is off.');
+      }
     });
-    return () => { subscription.remove(); ++request.current; gate.stop(); };
-  }, [gate, stop]);
+    return () => {
+      mounted.current = false;
+      subscription.remove();
+      request.current = null;
+      gate.stop();
+    };
+  }, [gate]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (preview || requesting) { stop(); return true; }
+      if (preview || requesting || request.current) { stop(); return true; }
       if (route === 'thanks') { setRoute('home'); return true; }
       return false;
     });
@@ -63,23 +78,32 @@ function Home() {
 
   async function startPreview() {
     if (cleanupFailed || requesting || preview || AppState.currentState !== 'active') return;
-    const token = ++request.current;
+    const attempt = {canStart: true};
+    request.current = attempt;
     setRequesting(true);
     try {
       const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.CAMERA);
-      if (token !== request.current || AppState.currentState !== 'active') return;
+      if (attempt !== request.current) return;
       if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
         setNotice('Camera permission was not granted. You can use the home screen without it.');
         return;
       }
-      if (gate.start({permission: true, foreground: true}) !== null) {
+      if (!attempt.canStart || AppState.currentState !== 'active') {
+        setNotice('Camera is off. Permission was granted; tap Start local preview to begin.');
+        return;
+      }
+      const previewToken = gate.start({permission: true, foreground: true});
+      if (previewToken !== null) {
         setNotice('Starting local preview. Translation is unavailable.');
-        setPreview(true);
+        setPreview(previewToken);
       }
     } catch {
-      if (token === request.current) setNotice('Camera permission could not be requested.');
+      if (attempt === request.current) setNotice('Camera permission could not be requested.');
     } finally {
-      if (token === request.current) setRequesting(false);
+      if (attempt === request.current) {
+        request.current = null;
+        setRequesting(false);
+      }
     }
   }
 
@@ -106,8 +130,12 @@ function Home() {
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>Live camera</Text>
-            {preview ? <CameraPreview active={preview} style={styles.preview}
+            {preview ? <CameraPreview active={true} style={styles.preview}
               onStatus={({nativeEvent}) => {
+                if (!mounted.current) return;
+                // Cleanup uncertainty is Activity-wide and must latch even for
+                // a retired view. Ordinary events belong only to this preview.
+                if (nativeEvent.status !== 'camera_cleanup_failed' && !gate.isCurrent(preview)) return;
                 if (nativeEvent.status === 'preview_only') {
                   setNotice('Live preview only. Recognition: unsupported.');
                 } else {
