@@ -30,6 +30,10 @@ class BaselineCheckerTest(unittest.TestCase):
     def test_setup_failure_rejected(self):
         self.root.find('testcase/failure').set('message', 'Precondition: actual start() must bind a Preview')
         with self.assertRaises(AssertionError): self.verify()
+    def test_unapproved_prefix_rejected(self):
+        failure = self.root.find('testcase/failure')
+        failure.set('message', 'RuntimeError: ' + failure.get('message'))
+        with self.assertRaises(AssertionError): self.verify()
     def test_wrong_line_rejected(self):
         self.root.find('testcase/failure').text = 'NativeBackPrivacyTest.java:999'
         with self.assertRaises(AssertionError): self.verify()
@@ -42,6 +46,29 @@ class BaselineCheckerTest(unittest.TestCase):
     def test_green_baseline_rejected(self):
         self.root.set('failures', '0')
         with self.assertRaises(AssertionError): self.verify()
+class RealXmlShapeTest(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        self.report = pathlib.Path(self.tmp.name) / 'actual.xml'
+        self.source = pathlib.Path(self.tmp.name) / 'NativeBackPrivacyTest.java'
+        lines = [''] * 232
+        for line, message in zip((204, 232), checker.MESSAGES.values()):
+            lines[line - 1] = f'assertNull("{message}", escaped);'
+        self.source.write_text('\n'.join(lines))
+        self.root = ET.parse(pathlib.Path(__file__).with_name('fixtures') / 'run4-isolation-baseline.xml').getroot()
+    def verify(self):
+        ET.ElementTree(self.root).write(self.report)
+        checker.verify(self.report, self.source)
+    def test_real_primary_assertions_match_gradle_xml(self):
+        # Isolate the authentic primary records; the extra teardown records are
+        # independently required to reject below. No primary content is altered.
+        for case in self.root.findall('testcase'):
+            for extra in case.findall('failure')[1:]: case.remove(extra)
+        self.verify()
+    def test_real_extra_teardown_failures_rejected(self):
+        with self.assertRaises(AssertionError): self.verify()
+
 class RestoreIntegrationTest(unittest.TestCase):
     def exercise(self, fake_exit):
         repository = pathlib.Path(__file__).resolve().parents[2]

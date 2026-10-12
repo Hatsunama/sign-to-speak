@@ -60,6 +60,7 @@ native/scripts/ci-policy.mjs
 native/scripts/ci-policy.test.mjs
 native/scripts/ci-sdk.sh
 native/scripts/ci-sdk.test.mjs
+native/scripts/fixtures/run4-isolation-baseline.xml
 native/src/session.mjs
 native/tests/app.test.mjs
 native/tests/fixtures/pre-isolation.patch

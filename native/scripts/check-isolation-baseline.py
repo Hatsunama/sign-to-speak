@@ -22,11 +22,13 @@ def verify(report, source):
         message = MESSAGES[name]
         locations = [i for i, line in enumerate(lines, 1) if f'assertNull("{message}", escaped)' in line]
         assert len(locations) == 1, 'Expected assertion source location changed'
-        failure = case.find('failure')
+        failures = case.findall('failure')
+        assert len(failures) == 1, 'Extra teardown or harness failures invalidate clean baseline evidence'
+        failure = failures[0]
         assert case.find('skipped') is None and failure is not None, 'A counterfactual case did not fail'
         assert failure.attrib.get('type') == 'java.lang.AssertionError', 'Harness/setup failure is not behavioral red'
         exact = message + ' expected null, but was:<java.lang.UnsupportedOperationException: Injected CameraX cleanup failure>'
-        assert failure.attrib.get('message') == exact, f'Unexpected assertion: {failure.attrib.get("message")}'
+        assert failure.attrib.get('message', '').removeprefix('java.lang.AssertionError: ') == exact, f'Unexpected assertion: {failure.attrib.get("message")}'
         location = f'NativeBackPrivacyTest.{name}(NativeBackPrivacyTest.java:{locations[0]})'
         assert location in (failure.text or ''), 'Failure did not originate at the intended assertion'
     print('Confirmed four precise cleanup-isolation fail-before assertions (API28/36).')

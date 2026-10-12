@@ -56,6 +56,7 @@ public class NativeBackPrivacyTest {
     private PrivateCameraView view;
     private ProcessCameraProvider provider;
     private SettableFuture<ProcessCameraProvider> future;
+    private Preview[] injectedUnbindFaults;
 
     @Before public void setUp() throws Exception {
         // Do not bootstrap Hermes or load the app's native libraries in a JVM test.
@@ -83,6 +84,11 @@ public class NativeBackPrivacyTest {
     }
 
     @After public void tearDown() {
+        // Assertions have already completed. Remove only this test's deliberate faults,
+        // so a counterfactual assertion failure is not duplicated by fixture disposal.
+        if (provider != null && injectedUnbindFaults != null) {
+            for (Preview target : injectedUnbindFaults) doNothing().when(provider).unbind(target);
+        }
         if (view != null) view.dispose();
         if (controller != null) controller.pause().stop().destroy();
         if (delegates != null) delegates.close();
@@ -199,6 +205,7 @@ public class NativeBackPrivacyTest {
         long secondToken = leaseToken(secondView);
         doThrow(new UnsupportedOperationException("Injected CameraX cleanup failure")).when(provider).unbind(first);
         doThrow(new UnsupportedOperationException("Injected CameraX cleanup failure")).when(provider).unbind(second);
+        injectedUnbindFaults = new Preview[] {first, second};
         RuntimeException escaped = null;
         try { committedBack(); } catch (RuntimeException error) { escaped = error; }
         assertNull("Back must isolate each camera cleanup failure before delegating", escaped);
@@ -226,6 +233,7 @@ public class NativeBackPrivacyTest {
         long secondToken = leaseToken(secondView);
         doThrow(new UnsupportedOperationException("Injected CameraX cleanup failure")).when(provider).unbind(first);
         doThrow(new UnsupportedOperationException("Injected CameraX cleanup failure")).when(provider).unbind(second);
+        injectedUnbindFaults = new Preview[] {first, second};
         RuntimeException escaped = null;
         try { controller.pause().stop().destroy(); } catch (RuntimeException error) { escaped = error; }
         controller = null;

@@ -1,0 +1,31 @@
+<?xml version='1.0' encoding='utf-8'?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" tests="4" skipped="0" failures="4" errors="0">
+  <properties />
+  <testcase name="cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest">
+    <failure message="java.lang.AssertionError: Activity destruction must isolate each camera cleanup failure expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;" type="java.lang.AssertionError">java.lang.AssertionError: Activity destruction must isolate each camera cleanup failure expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates(NativeBackPrivacyTest.java:232)</failure>
+  </testcase>
+  <testcase name="cleanupFailureOnBackStillCancelsEveryViewAndDelegates[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest">
+    <failure message="java.lang.AssertionError: Back must isolate each camera cleanup failure before delegating expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;" type="java.lang.AssertionError">java.lang.AssertionError: Back must isolate each camera cleanup failure before delegating expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.cleanupFailureOnBackStillCancelsEveryViewAndDelegates(NativeBackPrivacyTest.java:204)</failure>
+    <failure message="java.lang.UnsupportedOperationException: Injected CameraX cleanup failure" type="java.lang.UnsupportedOperationException">java.lang.UnsupportedOperationException: Injected CameraX cleanup failure
+	at androidx.camera.lifecycle.ProcessCameraProvider.unbind(ProcessCameraProvider.kt:665)
+	at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.stop(PrivateCameraView.kt:89)
+	at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.dispose(PrivateCameraView.kt:106)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.tearDown(NativeBackPrivacyTest.java:86)</failure>
+  </testcase>
+  <testcase name="cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest">
+    <failure message="java.lang.AssertionError: Activity destruction must isolate each camera cleanup failure expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;" type="java.lang.AssertionError">java.lang.AssertionError: Activity destruction must isolate each camera cleanup failure expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates(NativeBackPrivacyTest.java:232)</failure>
+  </testcase>
+  <testcase name="cleanupFailureOnBackStillCancelsEveryViewAndDelegates" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest">
+    <failure message="java.lang.AssertionError: Back must isolate each camera cleanup failure before delegating expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;" type="java.lang.AssertionError">java.lang.AssertionError: Back must isolate each camera cleanup failure before delegating expected null, but was:&lt;java.lang.UnsupportedOperationException: Injected CameraX cleanup failure&gt;
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.cleanupFailureOnBackStillCancelsEveryViewAndDelegates(NativeBackPrivacyTest.java:204)</failure>
+    <failure message="java.lang.UnsupportedOperationException: Injected CameraX cleanup failure" type="java.lang.UnsupportedOperationException">java.lang.UnsupportedOperationException: Injected CameraX cleanup failure
+	at androidx.camera.lifecycle.ProcessCameraProvider.unbind(ProcessCameraProvider.kt:665)
+	at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.stop(PrivateCameraView.kt:89)
+	at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.dispose(PrivateCameraView.kt:106)
+	at com.xmilo_at_your_side.sign_to_speak.MainActivity.onDestroy(MainActivity.kt:25)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.tearDown(NativeBackPrivacyTest.java:87)</failure>
+  </testcase>
+</testsuite>
