@@ -56,6 +56,7 @@ jobs:
           node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
           python3 scripts/check-emulator-unsigned.test.py
           python3 scripts/check-emulator-task-graph.test.py
+          bash scripts/check-native-library-mapping.sh
       - name: Verify official pinned build inputs without accepting terms
         run: bash scripts/ci-sdk.sh
       - name: Inspect exact opt-in task graph before any build task executes

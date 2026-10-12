@@ -82,3 +82,11 @@ test('runner diagnostics only inspect access and ACL-tool availability',()=>{
  assert.match(diagnostics,/getfacl -p \/dev\/kvm/);
  assert.doesNotMatch(diagnostics.split("\n").filter(line=>!line.trim().startsWith("#")).join("\n"),/sudo|chmod|usermod|udev|setfacl\s+-[mbx]/);
 });
+
+test('loaded-library evidence binds executable mappings to the current APK or native directory',()=>{
+ const source=read('../android/app/src/androidTestEmulatorQa/java/com/xmilo_at_your_side/sign_to_speak/EmulatorPrivacyLifecycleTest.java');
+ assert.match(source,/NativeLibraryMapping\.executableMapping\(library, maps,/);
+ assert.match(source,/installed\.sourceDir, installed\.nativeLibraryDir/);
+ assert.doesNotMatch(source,/maps\.contains\(library\)/);
+ assert.ok(workflow.jobs.unsigned.steps.some(s=>s.run?.includes('check-native-library-mapping.sh')));
+});

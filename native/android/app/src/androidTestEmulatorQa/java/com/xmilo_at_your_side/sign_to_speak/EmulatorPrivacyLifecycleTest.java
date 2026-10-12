@@ -294,7 +294,10 @@ public final class EmulatorPrivacyLifecycleTest {
         }));
         String maps = new String(Files.readAllBytes(Paths.get("/proc/self/maps")), java.nio.charset.StandardCharsets.UTF_8);
         for (String library : new String[]{"libhermesvm.so", "libreactnative.so", "libappmodules.so"}) {
-            assertTrue("Native library is actually mapped: " + library, maps.contains(library));
+            ApplicationInfo installed = target.getApplicationInfo();
+            assertTrue("Current APK native library has an executable mapping: " + library,
+                    NativeLibraryMapping.executableMapping(library, maps,
+                            installed.sourceDir, installed.nativeLibraryDir));
         }
         onMain(() -> {
             ReactHost host = ((MainApplication) activity.getApplication()).getReactHost();
