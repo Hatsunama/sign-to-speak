@@ -47,7 +47,12 @@ def verify(app_xml,app_apk,test_xml,test_apk):
     assert test.find('application').get(ANDROID+'testOnly')=='true'
     requests=[p for p in test if p.tag in ('uses-permission','uses-permission-sdk-23','uses-permission-sdk-m')]
     assert all(p.tag=='uses-permission' for p in requests)
-    assert {p.get(ANDROID+'name') for p in requests}<={'android.permission.CAMERA'}
+    # Pinned androidx.test.core 1.7.0 contributes only this normal ActivityScenario permission.
+    # It belongs to the isolated test package, never to the app's CAMERA-only contract.
+    assert len(requests)==1 and requests[0].attrib=={ANDROID+'name':'android.permission.REORDER_TASKS'}
+    assert not test.findall('permission'), 'Instrumentation cannot define custom permission authority'
+    test_sdk=test.find('uses-sdk');assert test_sdk is not None
+    assert test_sdk.get(ANDROID+'minSdkVersion')=='26' and test_sdk.get(ANDROID+'targetSdkVersion')=='36'
     unsigned(test_apk)
     print('Unsigned, isolated, test-only x86_64 app/instrumentation pair verified; no runtime test yet.')
 

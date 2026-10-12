@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:compileSdkVersion="36"
+    android:compileSdkVersionCodename="16"
+    package="com.xmilo_at_your_side.sign_to_speak.qa.test"
+    platformBuildVersionCode="36"
+    platformBuildVersionName="16">
+
+    <uses-sdk
+        android:minSdkVersion="26"
+        android:targetSdkVersion="36" />
+
+    <instrumentation
+        android:label="Tests for com.xmilo_at_your_side.sign_to_speak.qa"
+        android:name="androidx.test.runner.AndroidJUnitRunner"
+        android:targetPackage="com.xmilo_at_your_side.sign_to_speak.qa"
+        android:handleProfiling="false"
+        android:functionalTest="false" />
+
+    <uses-permission
+        android:name="android.permission.REORDER_TASKS" />
+
+    <queries>
+
+        <package
+            android:name="androidx.test.orchestrator" />
+
+        <package
+            android:name="androidx.test.services" />
+
+        <package
+            android:name="com.google.android.apps.common.testing.services" />
+    </queries>
+
+    <application
+        android:testOnly="true"
+        android:extractNativeLibs="false">
+
+        <uses-library
+            android:name="android.test.runner" />
+
+        <activity
+            android:theme="@ref/0x7f030001"
+            android:name="androidx.test.core.app.InstrumentationActivityInvoker$BootstrapActivity"
+            android:exported="true">
+
+            <intent-filter
+                android:priority="-100">
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:theme="@ref/0x7f030001"
+            android:name="androidx.test.core.app.InstrumentationActivityInvoker$EmptyActivity"
+            android:exported="true">
+
+            <intent-filter
+                android:priority="-100">
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:theme="@ref/0x7f030000"
+            android:name="androidx.test.core.app.InstrumentationActivityInvoker$EmptyFloatingActivity"
+            android:exported="true">
+
+            <intent-filter
+                android:priority="-100">
+
+                <category
+                    android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>
