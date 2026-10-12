@@ -28,6 +28,7 @@ function Home() {
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [preview, setPreview] = useState(false);
   const [requesting, setRequesting] = useState(false);
+  const [cleanupFailed, setCleanupFailed] = useState(false);
   const [notice, setNotice] = useState('Camera is off.');
   const request = useRef(0);
   const gate = useRef(createSession({
@@ -61,7 +62,7 @@ function Home() {
   }, [preview, requesting, route, stop]);
 
   async function startPreview() {
-    if (requesting || preview || AppState.currentState !== 'active') return;
+    if (cleanupFailed || requesting || preview || AppState.currentState !== 'active') return;
     const token = ++request.current;
     setRequesting(true);
     try {
@@ -111,15 +112,20 @@ function Home() {
                   setNotice('Live preview only. Recognition: unsupported.');
                 } else {
                   stop();
-                  setNotice(nativeEvent.status === 'front_camera_unavailable'
-                    ? 'A front camera is not available on this device.'
-                    : 'Camera stopped. Tap Start to try again.');
+                  if (nativeEvent.status === 'camera_cleanup_failed') setCleanupFailed(true);
+                  setNotice(nativeEvent.status === 'camera_cleanup_failed'
+                    ? 'Camera cleanup could not be confirmed. Fully close and reopen the app before starting again.'
+                    : nativeEvent.status === 'front_camera_unavailable'
+                      ? 'A front camera is not available on this device.'
+                      : 'Camera stopped. Tap Start to try again.');
                 }
-              }} /> : <View style={styles.previewOff}><Text style={styles.body}>Camera off</Text></View>}
-            <Text accessibilityLiveRegion="polite" style={styles.body}>{notice}</Text>
+              }} /> : <View style={styles.previewOff}><Text style={styles.body}>{cleanupFailed ? 'Preview hidden' : 'Camera off'}</Text></View>}
+            <Text accessibilityLiveRegion="polite" style={styles.body}>{cleanupFailed
+              ? 'Camera cleanup could not be confirmed. Fully close and reopen the app before starting again.'
+              : notice}</Text>
             {preview || requesting
               ? <Button onPress={stop}>Stop camera</Button>
-              : <Button onPress={startPreview}>Start local preview</Button>}
+              : <Button onPress={startPreview} disabled={cleanupFailed}>Start local preview</Button>}
             <Text style={styles.small}>Leaving this screen or putting the app in the background stops the camera. Starting again is always your choice.</Text>
           </View>
         </View>}

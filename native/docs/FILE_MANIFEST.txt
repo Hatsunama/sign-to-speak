@@ -26,6 +26,7 @@ native/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_round.png
 native/android/app/src/main/res/values/strings.xml
 native/android/app/src/main/res/values/styles.xml
 native/android/app/src/test/java/com/xmilo_at_your_side/sign_to_speak/NativeBackPrivacyTest.java
+native/android/app/src/test/java/com/xmilo_at_your_side/sign_to_speak/UnitTestRuntimeTest.java
 native/android/build.gradle
 native/android/gradle.properties
 native/android/gradle/wrapper/gradle-wrapper.jar
@@ -52,12 +53,16 @@ native/metro.config.js
 native/package-lock.json
 native/package.json
 native/scripts/CI.md
+native/scripts/check-isolation-baseline.py
+native/scripts/check-isolation-baseline.test.py
+native/scripts/ci-isolation-baseline.sh
 native/scripts/ci-policy.mjs
 native/scripts/ci-policy.test.mjs
 native/scripts/ci-sdk.sh
 native/scripts/ci-sdk.test.mjs
 native/src/session.mjs
 native/tests/app.test.mjs
+native/tests/fixtures/pre-isolation.patch
 native/tests/java/PreviewLeaseTest.java
 native/tests/privacy-structure.test.mjs
 native/tests/run-java-tests.sh

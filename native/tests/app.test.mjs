@@ -80,6 +80,17 @@ test('actual React home handles permission cancellation, native stop, local than
   await act(() => grant('granted'));
   await act(() => cameras()[0].props.onStatus({nativeEvent: {status: 'stopped'}}));
   assert.equal(cameras().length, 0, 'native pause reaches UI');
+  await press('Start local preview');
+  await act(() => grant('granted'));
+  await act(() => cameras()[0].props.onStatus({nativeEvent: {status: 'camera_cleanup_failed'}}));
+  assert.equal(cameras().length, 0, 'failed cleanup hides preview without claiming camera release');
+  assert.match(text(), /Preview hidden/);
+  assert.match(text(), /Fully close and reopen the app/);
+  assert.equal(button('Start local preview').props.disabled, true);
+  await act(() => {native.AppState.currentState = 'background'; stateListeners.forEach(fn => fn('background'));});
+  await act(() => {native.AppState.currentState = 'active'; stateListeners.forEach(fn => fn('active'));});
+  assert.match(text(), /Camera cleanup could not be confirmed/);
+  assert.equal(button('Start local preview').props.disabled, true, 'resume cannot clear cleanup failure');
   await act(() => app.unmount());
   assert.equal(stateListeners.size, 0);
   assert.equal(backListeners.size, 0);

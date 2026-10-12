@@ -27,8 +27,10 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     private var requested = false
     private var observing = false
     private var disposed = false
+    private var cameraActivity: MainActivity? = null
 
     init {
+        registerWithActivity()
         // TextureView remains inside the normal secure Activity composition.
         previewView.implementationMode = PreviewView.ImplementationMode.COMPATIBLE
         addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
@@ -37,6 +39,10 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     fun setActive(active: Boolean) {
         if (!active) { stop(); return }
         if (disposed || requested) return
+        registerWithActivity()
+        if ((cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+            reportCleanupFailure(); return
+        }
         requested = true
         if (isAttachedToWindow) start()
     }
@@ -88,16 +94,35 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         // No app-owned frame/landmark/transcript buffers exist in this milestone.
     }
 
+    private fun registerWithActivity() {
+        val activity = reactContext.currentActivity as? MainActivity
+        if (cameraActivity === activity) return
+        cameraActivity?.unregisterCameraView(this)
+        cameraActivity = activity
+        activity?.registerCameraView(this)
+    }
+
+    internal fun cancelFromNativeBack() { stop(); status("stopped") }
+    internal fun reportCleanupFailure() { status("camera_cleanup_failed") }
+
     fun dispose() {
         disposed = true
-        stop()
-        if (observing) reactContext.removeLifecycleEventListener(this)
-        observing = false
+        try { stop() }
+        finally {
+            try {
+                if (observing) reactContext.removeLifecycleEventListener(this)
+            } finally {
+                observing = false
+                cameraActivity?.unregisterCameraView(this)
+                cameraActivity = null
+            }
+        }
     }
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         if (disposed) return
+        registerWithActivity()
         if (!observing) reactContext.addLifecycleEventListener(this)
         observing = true
         if (requested) start()

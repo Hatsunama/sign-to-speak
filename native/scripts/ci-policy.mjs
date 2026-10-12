@@ -25,6 +25,8 @@ export function validateWorkflow(config) {
     'git rev-parse HEAD', 'android.builder.sdkDownload=false']) {
     check(runs.includes(gate), `Missing gate: ${gate}`);
   }
+  check(steps.some(s => s.id === 'baseline' && s.run?.includes('ci-isolation-baseline.sh') && s['timeout-minutes'] === 12), 'Bounded counterfactual baseline required');
+  check(steps.filter(s => /:app:(testDebugUnitTest|verifyDebugMergedPermissions|assembleDebug)/.test(s.run ?? '')).every(s => s.if?.includes("steps.baseline.outputs.restored == 'true'") && !s.if?.includes('steps.baseline.outcome')), 'Candidate gates require verified restoration, independently of baseline result');
   check(runs.includes('JAVA_HOME_21_X64'), 'Robolectric SDK36 requires JDK21');
   check(steps.some(s => s.run?.includes(':app:verifyDebugMergedPermissions') && s.run.includes(':app:verifyReleaseMergedPermissions') && s.run.includes('--continue')), 'Run both manifest checks even when one fails');
   check(!/bundleRelease|assembleRelease|--licenses|continue-on-error|\|\| true/.test(runs), 'No release bundle or weakened gates');

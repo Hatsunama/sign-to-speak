@@ -14,6 +14,8 @@ for (const [name, mutate] of [
   ['ungated pull requests', c => { c.jobs.android.if = ''; }],
   ['unsupported SDK36 JDK', c => { for (const step of c.jobs.android.steps) if (step.run) step.run = step.run.replaceAll('JAVA_HOME_21_X64', 'JAVA_HOME_17_X64'); }],
   ['manifest failure hiding another variant', c => { for (const step of c.jobs.android.steps) if (step.run?.includes(':app:verifyDebugMergedPermissions')) step.run = step.run.replace('--continue', ''); }],
+  ['missing baseline', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'baseline'); }],
+  ['unverified restoration', c => { c.jobs.android.steps.find(s => s.run?.includes(':app:testDebugUnitTest')).if = 'always()'; }],
   ['unbounded job', c => { c.jobs.android['timeout-minutes'] = 360; }],
   ['paid runner', c => { c.jobs.android['runs-on'] = 'ubuntu-latest-16-cores'; }],
   ['write permissions', c => { c.permissions.contents = 'write'; }],

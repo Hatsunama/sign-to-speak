@@ -1,0 +1,86 @@
+--- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
++++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
+@@ -10,24 +10,6 @@
+   private val cameraViews = java.util.Collections.newSetFromMap(
+       java.util.WeakHashMap<PrivateCameraView, Boolean>())
+ 
+-  internal var cameraCleanupFailures = 0
+-    private set
+-
+-  private fun cancelCameraViews(dispose: Boolean) {
+-    cameraViews.toList().forEach { view ->
+-      try {
+-        if (dispose) view.dispose() else view.cancelFromNativeBack()
+-      } catch (_: RuntimeException) {
+-        // Payload-free, in-memory accounting. Release is not confirmed; fail closed.
+-        cameraCleanupFailures++
+-        try { view.reportCleanupFailure() } catch (_: RuntimeException) {
+-          // A stalled/broken JS notification must not skip another native cleanup.
+-          // The failure remains recorded and new starts remain blocked.
+-        }
+-      }
+-    }
+-  }
+-
+   internal fun registerCameraView(view: PrivateCameraView) { cameraViews.add(view) }
+   internal fun unregisterCameraView(view: PrivateCameraView) { cameraViews.remove(view) }
+ 
+@@ -35,16 +17,14 @@
+   override fun onBackPressed() {
+     // RN 0.86.3 also routes committed predictive Back here for targetSdk 36.
+     // Do this before RN can emit a JS event; JS may never process that event.
+-    cancelCameraViews(dispose = false)
++    cameraViews.toList().forEach { it.cancelFromNativeBack() }
+     super.onBackPressed()
+   }
+ 
+   override fun onDestroy() {
+-    try { cancelCameraViews(dispose = true) }
+-    finally {
+-      cameraViews.clear()
+-      super.onDestroy()
+-    }
++    cameraViews.toList().forEach { it.dispose() }
++    cameraViews.clear()
++    super.onDestroy()
+   }
+ 
+   override fun onCreate(savedInstanceState: android.os.Bundle?) {
+--- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
++++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
+@@ -40,9 +40,6 @@
+         if (!active) { stop(); return }
+         if (disposed || requested) return
+         registerWithActivity()
+-        if ((cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+-            reportCleanupFailure(); return
+-        }
+         requested = true
+         if (isAttachedToWindow) start()
+     }
+@@ -103,20 +100,14 @@
+     }
+ 
+     internal fun cancelFromNativeBack() { stop(); status("stopped") }
+-    internal fun reportCleanupFailure() { status("camera_cleanup_failed") }
+ 
+     fun dispose() {
+         disposed = true
+-        try { stop() }
+-        finally {
+-            try {
+-                if (observing) reactContext.removeLifecycleEventListener(this)
+-            } finally {
+-                observing = false
+-                cameraActivity?.unregisterCameraView(this)
+-                cameraActivity = null
+-            }
+-        }
++        stop()
++        if (observing) reactContext.removeLifecycleEventListener(this)
++        observing = false
++        cameraActivity?.unregisterCameraView(this)
++        cameraActivity = null
+     }
+ 
+     override fun onAttachedToWindow() {
