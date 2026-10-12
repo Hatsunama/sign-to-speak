@@ -53,6 +53,59 @@ dependencies {
     implementation("androidx.camera:camera-view:1.4.2")
 }
 
+/** Exact shipping permission contract; shared by the build gate and fixture regressions. */
+class MergedPermissionPolicy {
+    static final String ANDROID_NS = "http://schemas.android.com/apk/res/android"
+    static final String APPLICATION_ID = "com.xmilo_at_your_side.sign_to_speak"
+    static final String RECEIVER_PERMISSION = APPLICATION_ID + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+
+    static org.w3c.dom.Document parse(InputStream input) {
+        def factory = DocumentBuilderFactory.newInstance()
+        factory.setNamespaceAware(true)
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        return factory.newDocumentBuilder().parse(input)
+    }
+
+    static void verify(org.w3c.dom.Document document) {
+        if (document.documentElement.tagName != "manifest" ||
+                document.documentElement.getAttribute("package") != APPLICATION_ID) {
+            throw new GradleException("Merged manifest must belong to ${APPLICATION_ID}")
+        }
+        def permissions = new ArrayList<String>()
+        ["uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m"].each { tag ->
+            def nodes = document.getElementsByTagName(tag)
+            for (int i = 0; i < nodes.length; ++i) {
+                def node = nodes.item(i)
+                def name = node.getAttributeNS(ANDROID_NS, "name")
+                permissions.add(name)
+                if (name == RECEIVER_PERMISSION && (tag != "uses-permission" ||
+                        node.hasAttributeNS(ANDROID_NS, "maxSdkVersion") ||
+                        node.hasAttributeNS(ANDROID_NS, "usesPermissionFlags"))) {
+                    throw new GradleException("Internal receiver protection must be requested unconditionally")
+                }
+            }
+        }
+        def allowed = ["android.permission.CAMERA", RECEIVER_PERMISSION] as Set
+        if (permissions.size() != 2 || permissions.toSet() != allowed) {
+            throw new GradleException("Merged permission allowlist failed: expected ${allowed}; found ${permissions}")
+        }
+        def declarations = document.getElementsByTagName("permission")
+        if (declarations.length != 1 ||
+                declarations.item(0).getAttributeNS(ANDROID_NS, "name") != RECEIVER_PERMISSION ||
+                declarations.item(0).getAttributeNS(ANDROID_NS, "protectionLevel") != "signature") {
+            throw new GradleException("Require exactly the application-owned receiver permission with signature protection")
+        }
+        def declaration = declarations.item(0)
+        if (declaration.hasAttributeNS(ANDROID_NS, "knownCerts") ||
+                declaration.hasAttributeNS(ANDROID_NS, "permissionFlags") ||
+                document.getElementsByTagName("permission-tree").length != 0 ||
+                document.getElementsByTagName("permission-group").length != 0) {
+            throw new GradleException("Unexpected custom permission authority or flags")
+        }
+    }
+}
+
 /** Check AGP's merged artifact, including transitive/debug dependency manifests. */
 abstract class VerifyMergedPermissions extends DefaultTask {
     @InputFile
@@ -61,27 +114,55 @@ abstract class VerifyMergedPermissions extends DefaultTask {
 
     @TaskAction
     void verifyPermissions() {
-        def factory = DocumentBuilderFactory.newInstance()
-        factory.setNamespaceAware(true)
-        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
-        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
-        def document = factory.newDocumentBuilder().parse(mergedManifest.get().asFile)
-        def permissions = new TreeSet<String>()
-        // The alternate SDK-specific forms also grant permissions.
-        ["uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m"].each { tag ->
-            def nodes = document.getElementsByTagName(tag)
-            for (int i = 0; i < nodes.length; ++i) {
-                permissions.add(nodes.item(i).getAttributeNS(
-                    "http://schemas.android.com/apk/res/android", "name"))
+        mergedManifest.get().asFile.withInputStream { input ->
+            MergedPermissionPolicy.verify(MergedPermissionPolicy.parse(input))
+        }
+        logger.lifecycle("Merged permissions passed: CAMERA plus exact app-owned signature receiver protection")
+    }
+}
+
+// Run the very same validator against adversarial manifests, independently of Android runtime tests.
+def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") {
+    group = "verification"
+    doLast {
+        def app = MergedPermissionPolicy.APPLICATION_ID
+        def internal = MergedPermissionPolicy.RECEIVER_PERMISSION
+        def valid = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${app}">
+            <uses-permission android:name="android.permission.CAMERA" />
+            <permission android:name="${internal}" android:protectionLevel="signature" />
+            <uses-permission android:name="${internal}" />
+        </manifest>"""
+        def verify = { String xml ->
+            MergedPermissionPolicy.verify(MergedPermissionPolicy.parse(
+                new ByteArrayInputStream(xml.getBytes("UTF-8"))))
+        }
+        verify(valid)
+        def rejected = [
+            wrongXmlNamespace: valid.replace("http://schemas.android.com/apk/res/android", "https://wrong.example/android"),
+            wrongPackage: valid.replace("package=\"${app}\"", 'package="other.app"'),
+            wrongNamespace: valid.replace(internal, "other.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+            normalProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="normal"'),
+            dangerousProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="dangerous"'),
+            widenedProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="signature|knownSigner"'),
+            missingProtection: valid.replace('android:protectionLevel="signature"', ''),
+            missingDeclaration: valid.replace("<permission android:name=\"${internal}\" android:protectionLevel=\"signature\" />", ''),
+            missingUse: valid.replace("<uses-permission android:name=\"${internal}\" />", ''),
+            boundedInternalUse: valid.replace("<uses-permission android:name=\"${internal}\" />", "<uses-permission android:name=\"${internal}\" android:maxSdkVersion=\"32\" />"),
+            duplicateUse: valid.replace('</manifest>', "<uses-permission android:name=\"${internal}\" /></manifest>"),
+            extraDeclaration: valid.replace('</manifest>', '<permission android:name="other.app.GRANT" android:protectionLevel="signature" /></manifest>'),
+        ]
+        ['SYSTEM_ALERT_WINDOW', 'INTERNET', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'READ_MEDIA_VIDEO'].each { permission ->
+            ['uses-permission', 'uses-permission-sdk-23', 'uses-permission-sdk-m'].each { tag ->
+                rejected["${permission}-${tag}"] = valid.replace('</manifest>',
+                    "<${tag} android:name=\"android.permission.${permission}\" /></manifest>")
             }
         }
-        def allowed = ["android.permission.CAMERA"] as Set
-        if (permissions != allowed) {
-            throw new GradleException("Merged permission allowlist failed for ${mergedManifest.get().asFile}: " +
-                "expected ${allowed}; found ${permissions}; unexpected ${permissions - allowed}; " +
-                "missing ${allowed - permissions}. Review the merger report; never silently widen this list.")
+        rejected.each { label, xml ->
+            boolean failed = false
+            try { verify(xml) } catch (GradleException expected) { failed = true }
+            if (!failed) throw new GradleException("Permission policy accepted invalid fixture: ${label}")
         }
-        logger.lifecycle("Merged permission allowlist passed: ${permissions}")
+        logger.lifecycle("Permission policy fixtures passed: 1 allowed, ${rejected.size()} rejected")
     }
 }
 
@@ -90,7 +171,8 @@ androidComponents {
         def variantTitle = variant.name.capitalize()
         def verifyTask = tasks.register("verify${variantTitle}MergedPermissions", VerifyMergedPermissions) {
             group = "verification"
-            description = "Enforce CAMERA-only permissions in the ${variant.name} merged manifest."
+            description = "Verify CAMERA plus exact app-owned signature receiver protection in ${variant.name}."
+            dependsOn(permissionPolicyTests)
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST.INSTANCE))
         }
         tasks.named("check").configure { dependsOn(verifyTask) }

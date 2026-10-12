@@ -1,6 +1,6 @@
 # Native Back regression: test-first candidate
 
-Status: tests prepared, Android runtime execution pending. There is no verified red or green Android run yet. Production Back/camera behavior and permission declarations have not been repaired in this candidate.
+Status: initial hosted Kotlin/APK compilation passed; the native test harness failed before assertions because SDK 36 requires JDK 21. There is no verified Back runtime red or green yet. The merged debug permission gate genuinely failed, and a scoped permission repair is now prepared below. Production Back/camera code and the existing Back regression remain unchanged.
 
 ## Defect and required behavior
 
@@ -61,3 +61,19 @@ The build selects CMake 3.31.5, matching the approved standard Ubuntu runner ima
 Publish this test-only candidate for reviewed CI. If the harness fails, repair the harness without claiming a product red. Once cancellation assertions demonstrably fail against unchanged production, record the exact commit/run and results, implement the native repair, then rerun the same suite plus merged-manifest gates and compilation. Preserve both before/after evidence. Do not substitute missing-file or source-pattern checks for runtime red.
 
 References: [Robolectric compatibility](https://robolectric.org/compatibility_table/), [Android manifest merging](https://developer.android.com/build/manage-manifests), and pinned local RN ReactActivity.java.
+
+## Hosted permission failure and scoped repair (2026-10-12)
+
+Run [38251763501](https://github.com/Hatsunama/sign-to-speak/actions/runs/38251763501), commit `a7655477`, compiled Kotlin and assembled the unsigned APK. The test class did not execute its behavioral cases: `DefaultSdkProvider` rejected Java 17 for SDK 36. This is a harness failure, not native Back evidence. CI is being corrected to JDK 21 without changing the Back regression.
+
+The actual debug merged-manifest allowlist failed. Its merger report attributes SYSTEM_ALERT_WINDOW to react-android 0.86.3 debug (lines 291–295), and the internal receiver declaration/use to androidx.core:core:1.13.1 (lines 359–375). The release gate was not reached on that first run.
+
+The candidate repair adds only a `tools:node="remove"` marker for SYSTEM_ALERT_WINDOW to the main manifest. Development support is already disabled and JS is bundled. It does not remove AndroidX's receiver protection.
+
+AndroidX's custom permission is defined as `com.xmilo_at_your_side.sign_to_speak.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`, protected by `signature`, and requested by the same application. `ContextCompat.registerReceiver` uses this app-scoped permission to enforce the non-exported boundary on Android before API 33 when no explicit broadcast permission is supplied; its permission check can throw if the declaration/use is removed. It grants no internet, microphone, media, recording or storage access. The expected security consumer is AndroidX's compatibility implementation; no claim is made that a current foundation screen actively registers such a receiver.
+
+The revised gate checks the exact package, exactly CAMERA plus this exact internal request, exactly one matching signature declaration, and an unconditional normal `uses-permission` form for the internal permission. It rejects other declarations, grant-expanding flags, other namespaces and unrelated permissions. No wildcard, suffix-only exception or generic signature permission allowance is used.
+
+`:app:verifyMergedPermissionPolicyTests` executes the same validator against one accepted manifest and 30 rejected fixtures: wrong package/XML namespace/permission namespace, missing or expanded protection, missing declaration/use, conditional or duplicate use, an unrelated custom declaration, and overlay/network/microphone/storage/media permissions in all three permission element forms. Both actual merged-manifest gates depend on these regression fixtures. The fixtures have not yet executed; Gradle execution is reserved for CI. The post-edit source host suite passed 13/13.
+
+Security reference: [AndroidX ContextCompat implementation](https://android.googlesource.com/platform/frameworks/support/+/53bce536bce3e861b1ec75d900704c563f84fab9/core/core/src/main/java/androidx/core/content/ContextCompat.java), especially `obtainAndCheckReceiverPermission` and `Api26Impl.registerReceiver`. This is an upstream implementation reference; exact dependency provenance and signature declaration come from this build's merger report.

@@ -42,12 +42,12 @@ jobs:
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
         with:
           node-version: '24.19.0'
-      - name: Record exact tested source and use preinstalled JDK 17
+      - name: Record exact tested source and use preinstalled JDK 21
         run: |
           set -euo pipefail
-          test -x "$JAVA_HOME_17_X64/bin/java"
-          echo "JAVA_HOME=$JAVA_HOME_17_X64" >> "$GITHUB_ENV"
-          echo "$JAVA_HOME_17_X64/bin" >> "$GITHUB_PATH"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           mkdir -p "$RUNNER_TEMP/sign-evidence"
           git rev-parse HEAD | tee "$RUNNER_TEMP/sign-evidence/tested-sha.txt"
           test "$(git rev-parse HEAD)" = "$TESTED_SHA"
@@ -80,7 +80,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --continue --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions
