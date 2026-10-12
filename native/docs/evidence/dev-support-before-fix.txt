@@ -1,0 +1,63 @@
+✔ manifest asks for camera only, disables backup and cleartext (4.229032ms)
+✔ camera foundation has no recording, frame export, network, logging or speech fallback (2.824869ms)
+✔ canonical owner renderer and seed are exact pinned copies (0.958582ms)
+✔ all build variants are bundled and unsigned with bounded Gradle resources (3.21769ms)
+✔ native launcher uses the real app name (0.283716ms)
+✖ all builds disable React Native development-server support (3.381057ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 5
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 252.452491
+
+✖ failing tests:
+
+test at native/tests/privacy-structure.test.mjs:49:1
+✖ all builds disable React Native development-server support (3.381057ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /useDevSupport = false/. Input:
+  
+  'package com.xmilo_at_your_side.sign_to_speak\n' +
+    '\n' +
+    'import android.app.Application\n' +
+    'import com.facebook.react.PackageList\n' +
+    'import com.facebook.react.ReactApplication\n' +
+    'import com.facebook.react.ReactHost\n' +
+    'import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\n' +
+    'import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost\n' +
+    '\n' +
+    'class MainApplication : Application(), ReactApplication {\n' +
+    '\n' +
+    '  override val reactHost: ReactHost by lazy {\n' +
+    '    getDefaultReactHost(\n' +
+    '      context = applicationContext,\n' +
+    '      packageList =\n' +
+    '        PackageList(this).packages.apply {\n' +
+    '          // Packages that cannot be autolinked yet can be added manually here, for example:\n' +
+    '          add(SignFoundationPackage())\n' +
+    '        },\n' +
+    '    )\n' +
+    '  }\n' +
+    '\n' +
+    '  override fun onCreate() {\n' +
+    '    super.onCreate()\n' +
+    '    loadReactNative(this)\n' +
+    '  }\n' +
+    '}\n'
+  
+      at TestContext.<anonymous> (file:///workspace/shared/sign-android-work/native/tests/privacy-structure.test.mjs:50:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'package com.xmilo_at_your_side.sign_to_speak\n\nimport android.app.Application\nimport com.facebook.react.PackageList\nimport com.facebook.react.ReactApplication\nimport com.facebook.react.ReactHost\nimport com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative\nimport com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost\n\nclass MainApplication : Application(), ReactApplication {\n\n  override val reactHost: ReactHost by lazy {\n    getDefaultReactHost(\n      context = applicationContext,\n      packageList =\n        PackageList(this).packages.apply {\n          // Packages that cannot be autolinked yet can be added manually here, for example:\n          add(SignFoundationPackage())\n        },\n    )\n  }\n\n  override fun onCreate() {\n    super.onCreate()\n    loadReactNative(this)\n  }\n}\n',
+    expected: /useDevSupport = false/,
+    operator: 'match',
+    diff: 'simple'
+  }

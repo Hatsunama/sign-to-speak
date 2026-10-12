@@ -1,0 +1,309 @@
+import com.android.build.api.artifact.SingleArtifact
+import com.facebook.react.ReactExtension
+import javax.xml.XMLConstants
+import javax.xml.parsers.DocumentBuilderFactory
+
+apply plugin: "com.android.application"
+apply plugin: "org.jetbrains.kotlin.android"
+apply plugin: "com.facebook.react"
+
+// The phone QA identity exists only when explicitly requested; no signing material is used.
+def unsignedPhoneQaProperty = providers.gradleProperty("unsignedPhoneQa").orElse("false").get()
+if (!["false", "true"].contains(unsignedPhoneQaProperty)) {
+    throw new GradleException("unsignedPhoneQa must be exactly true or false")
+}
+def unsignedPhoneQa = unsignedPhoneQaProperty == "true"
+if (unsignedPhoneQa && providers.gradleProperty("reactNativeArchitectures").orElse("").get() != "arm64-v8a") {
+    throw new GradleException("Unsigned phone QA requires -PreactNativeArchitectures=arm64-v8a")
+}
+
+react {
+    // Bundle all variants; this foundation has no network/dev-server permission.
+    debuggableVariants = []
+    autolinkLibrariesWithApp()
+}
+// Capture the live project provider before task closures can resolve a different `react` binding.
+def reactDebuggableVariants = project.extensions.getByType(ReactExtension).getDebuggableVariants()
+
+android {
+    // Pinned to the CMake already present on the approved standard Ubuntu CI image.
+    externalNativeBuild { cmake { version "3.31.5" } }
+    ndkVersion rootProject.ext.ndkVersion
+    buildToolsVersion rootProject.ext.buildToolsVersion
+    compileSdk rootProject.ext.compileSdkVersion
+    namespace "com.xmilo_at_your_side.sign_to_speak"
+    defaultConfig {
+        applicationId "com.xmilo_at_your_side.sign_to_speak"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "0.1.0-foundation"
+    }
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.all {
+            maxHeapSize = "1g"
+            maxParallelForks = 1
+            // RN keeps production compilation on Java 17. Robolectric SDK 36 needs
+            // a Java 21 test process, independently of JAVA_HOME/the compile toolchain.
+            javaLauncher.set(javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(21)
+            })
+            doFirst {
+                def launcher = javaLauncher.get()
+                if (launcher.metadata.languageVersion.asInt() != 21) {
+                    throw new GradleException("Android unit tests require a Java 21 launcher")
+                }
+                logger.lifecycle("Android unit-test launcher: ${launcher.executablePath.asFile} " +
+                    "(Java ${launcher.metadata.languageVersion})")
+            }
+        }
+    }
+    buildTypes {
+        debug { signingConfig = null }
+        release {
+            signingConfig = null
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile("proguard-android.txt"), "proguard-rules.pro"
+        }
+        if (unsignedPhoneQa) {
+            qa {
+                initWith release
+                matchingFallbacks = ["release"]
+                applicationIdSuffix ".qa"
+                versionNameSuffix "-phone-qa"
+                debuggable false
+                signingConfig = null
+                ndk { abiFilters "arm64-v8a" }
+            }
+        }
+    }
+}
+dependencies {
+    testImplementation("junit:junit:4.13.2")
+    testImplementation("org.robolectric:robolectric:4.16")
+    testImplementation("org.mockito:mockito-core:5.18.0")
+    testImplementation("com.google.guava:guava:33.4.8-jre")
+    implementation("com.facebook.react:react-android")
+    implementation("com.facebook.react:hermes-android")
+    implementation("androidx.camera:camera-camera2:1.4.2")
+    implementation("androidx.camera:camera-lifecycle:1.4.2")
+    implementation("androidx.camera:camera-view:1.4.2")
+}
+
+/** Exact shipping permission contract; shared by the build gate and fixture regressions. */
+class MergedPermissionPolicy {
+    static final String ANDROID_NS = "http://schemas.android.com/apk/res/android"
+    static final String APPLICATION_ID = "com.xmilo_at_your_side.sign_to_speak"
+    static final String RECEIVER_PERMISSION = APPLICATION_ID + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+
+    static org.w3c.dom.Document parse(InputStream input) {
+        def factory = DocumentBuilderFactory.newInstance()
+        factory.setNamespaceAware(true)
+        factory.setFeature(XMLConstants.FEATURE_SECURE_PROCESSING, true)
+        factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+        return factory.newDocumentBuilder().parse(input)
+    }
+
+    // Default callers keep the exact production identity contract.
+    static void verify(org.w3c.dom.Document document) {
+        verifyForApplication(document, APPLICATION_ID)
+    }
+
+    static void verifyQa(org.w3c.dom.Document document) {
+        verifyForApplication(document, APPLICATION_ID + ".qa")
+    }
+
+    private static void verifyForApplication(org.w3c.dom.Document document, String applicationId) {
+        def receiverPermission = applicationId + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+        if (document.documentElement.tagName != "manifest" ||
+                document.documentElement.getAttribute("package") != applicationId) {
+            throw new GradleException("Merged manifest must belong to ${applicationId}")
+        }
+        def applications = document.getElementsByTagName("application")
+        if (applications.length != 1 ||
+                applications.item(0).getAttributeNS(ANDROID_NS, "allowAudioPlaybackCapture") != "false") {
+            throw new GradleException("Merged application must explicitly disable audio playback capture")
+        }
+        def permissions = new ArrayList<String>()
+        ["uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m"].each { tag ->
+            def nodes = document.getElementsByTagName(tag)
+            for (int i = 0; i < nodes.length; ++i) {
+                def node = nodes.item(i)
+                def name = node.getAttributeNS(ANDROID_NS, "name")
+                permissions.add(name)
+                if (name == receiverPermission && (tag != "uses-permission" ||
+                        node.hasAttributeNS(ANDROID_NS, "maxSdkVersion") ||
+                        node.hasAttributeNS(ANDROID_NS, "usesPermissionFlags"))) {
+                    throw new GradleException("Internal receiver protection must be requested unconditionally")
+                }
+            }
+        }
+        def allowed = ["android.permission.CAMERA", receiverPermission] as Set
+        if (permissions.size() != 2 || permissions.toSet() != allowed) {
+            throw new GradleException("Merged permission allowlist failed: expected ${allowed}; found ${permissions}")
+        }
+        def declarations = document.getElementsByTagName("permission")
+        if (declarations.length != 1 ||
+                declarations.item(0).getAttributeNS(ANDROID_NS, "name") != receiverPermission ||
+                declarations.item(0).getAttributeNS(ANDROID_NS, "protectionLevel") != "signature") {
+            throw new GradleException("Require exactly the application-owned receiver permission with signature protection")
+        }
+        def declaration = declarations.item(0)
+        if (declaration.hasAttributeNS(ANDROID_NS, "knownCerts") ||
+                declaration.hasAttributeNS(ANDROID_NS, "permissionFlags") ||
+                document.getElementsByTagName("permission-tree").length != 0 ||
+                document.getElementsByTagName("permission-group").length != 0) {
+            throw new GradleException("Unexpected custom permission authority or flags")
+        }
+    }
+}
+
+/** Check AGP's merged artifact, including transitive/debug dependency manifests. */
+abstract class VerifyMergedPermissions extends DefaultTask {
+    @InputFile
+    @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getMergedManifest()
+
+    @Input
+    abstract Property<Boolean> getPhoneQa()
+
+    VerifyMergedPermissions() {
+        phoneQa.convention(false)
+    }
+
+    @TaskAction
+    void verifyPermissions() {
+        mergedManifest.get().asFile.withInputStream { input ->
+            def document = MergedPermissionPolicy.parse(input)
+            if (phoneQa.get()) MergedPermissionPolicy.verifyQa(document)
+            else MergedPermissionPolicy.verify(document)
+        }
+        logger.lifecycle("Merged permissions passed: CAMERA plus exact app-owned signature receiver protection")
+    }
+}
+
+// Run the very same validator against adversarial manifests, independently of Android runtime tests.
+def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") {
+    group = "verification"
+    doLast {
+        [false, true].each { isQa ->
+            def app = MergedPermissionPolicy.APPLICATION_ID + (isQa ? ".qa" : "")
+            def internal = app + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+            def valid = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${app}">
+                <application android:allowAudioPlaybackCapture="false" />
+                <uses-permission android:name="android.permission.CAMERA" />
+                <permission android:name="${internal}" android:protectionLevel="signature" />
+                <uses-permission android:name="${internal}" />
+            </manifest>"""
+            def verify = { String xml ->
+                def document = MergedPermissionPolicy.parse(new ByteArrayInputStream(xml.getBytes("UTF-8")))
+                if (isQa) MergedPermissionPolicy.verifyQa(document)
+                else MergedPermissionPolicy.verify(document)
+            }
+            verify(valid)
+            def otherApp = MergedPermissionPolicy.APPLICATION_ID + (isQa ? "" : ".qa")
+            def rejected = [
+                missingCaptureOptOut: valid.replace('android:allowAudioPlaybackCapture="false"', ''),
+                enabledCapture: valid.replace('allowAudioPlaybackCapture="false"', 'allowAudioPlaybackCapture="true"'),
+                wrongCaptureNamespace: valid.replace('android:allowAudioPlaybackCapture', 'allowAudioPlaybackCapture'),
+                missingApplication: valid.replace('<application android:allowAudioPlaybackCapture="false" />', ''),
+                duplicateApplication: valid.replace('</manifest>', '<application android:allowAudioPlaybackCapture="false" /></manifest>'),
+                crossVariantIdentity: valid.replace(app, otherApp),
+                productionReceiverInQa: valid.replace(internal, otherApp + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+                wrongXmlNamespace: valid.replace("http://schemas.android.com/apk/res/android", "https://wrong.example/android"),
+                wrongPackage: valid.replace("package=\"${app}\"", 'package="other.app"'),
+                wrongNamespace: valid.replace(internal, "other.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
+                normalProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="normal"'),
+                dangerousProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="dangerous"'),
+                widenedProtection: valid.replace('protectionLevel="signature"', 'protectionLevel="signature|knownSigner"'),
+                missingProtection: valid.replace('android:protectionLevel="signature"', ''),
+                missingDeclaration: valid.replace("<permission android:name=\"${internal}\" android:protectionLevel=\"signature\" />", ''),
+                missingUse: valid.replace("<uses-permission android:name=\"${internal}\" />", ''),
+                boundedInternalUse: valid.replace("<uses-permission android:name=\"${internal}\" />", "<uses-permission android:name=\"${internal}\" android:maxSdkVersion=\"32\" />"),
+                duplicateUse: valid.replace('</manifest>', "<uses-permission android:name=\"${internal}\" /></manifest>"),
+                extraDeclaration: valid.replace('</manifest>', '<permission android:name="other.app.GRANT" android:protectionLevel="signature" /></manifest>'),
+            ]
+            ['SYSTEM_ALERT_WINDOW', 'INTERNET', 'RECORD_AUDIO', 'READ_EXTERNAL_STORAGE', 'WRITE_EXTERNAL_STORAGE', 'READ_MEDIA_VIDEO'].each { permission ->
+                ['uses-permission', 'uses-permission-sdk-23', 'uses-permission-sdk-m'].each { tag ->
+                    rejected["${permission}-${tag}"] = valid.replace('</manifest>',
+                        "<${tag} android:name=\"android.permission.${permission}\" /></manifest>")
+                }
+            }
+            rejected.each { label, xml ->
+                boolean failed = false
+                try { verify(xml) } catch (GradleException expected) { failed = true }
+                if (!failed) throw new GradleException("Permission policy accepted invalid fixture: ${label}")
+            }
+            logger.lifecycle("Permission policy fixtures for ${app} passed: 1 allowed, ${rejected.size()} rejected")
+        }
+    }
+}
+
+// Pass typed objects from this compiled script into the isolated applied-script classloader.
+ext.emulatorQaBuildInputs = [bundledVariants: reactDebuggableVariants,
+    mergedManifest: SingleArtifact.MERGED_MANIFEST.INSTANCE]
+apply from: "emulator-qa.gradle"
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def variantTitle = variant.name.capitalize()
+        def verifyTask = tasks.register("verify${variantTitle}MergedPermissions", VerifyMergedPermissions) {
+            group = "verification"
+            description = "Verify CAMERA plus exact app-owned signature receiver protection in ${variant.name}."
+            dependsOn(permissionPolicyTests)
+            phoneQa.set(variant.buildType == "qa")
+            if (variant.buildType == "emulatorQa") phoneQa.set(true)
+            mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST.INSTANCE))
+        }
+        tasks.named("check").configure { dependsOn(verifyTask) }
+        if (variant.buildType == "qa") {
+            def qaManifest = variant.artifacts.get(SingleArtifact.MERGED_MANIFEST.INSTANCE)
+            def isolationTask = tasks.register("verifyUnsignedPhoneQaIsolation") {
+                group = "verification"
+                description = "Fail closed unless phone QA is unsigned, bundled, arm64-only and isolated from production."
+                dependsOn(verifyTask)
+                inputs.file(qaManifest)
+                doLast {
+                    def qa = android.buildTypes.getByName("qa")
+                    def expectedApp = MergedPermissionPolicy.APPLICATION_ID + ".qa"
+                    if (!unsignedPhoneQa || qa.signingConfig != null || qa.debuggable ||
+                            qa.applicationIdSuffix != ".qa" || qa.versionNameSuffix != "-phone-qa" ||
+                            qa.ndk.abiFilters.toSet() != ["arm64-v8a"].toSet() ||
+                            qa.matchingFallbacks != ["release"] ||
+                            variant.applicationId.get() != expectedApp ||
+                            reactDebuggableVariants.get().contains(variant.name)) {
+                        throw new GradleException("Unsigned phone QA configuration lost its required isolation")
+                    }
+                    if (android.defaultConfig.applicationId != MergedPermissionPolicy.APPLICATION_ID ||
+                            android.namespace != MergedPermissionPolicy.APPLICATION_ID ||
+                            android.buildTypes.debug.signingConfig != null ||
+                            android.buildTypes.release.signingConfig != null ||
+                            android.buildTypes.debug.applicationIdSuffix != null ||
+                            android.buildTypes.release.applicationIdSuffix != null ||
+                            android.buildTypes.debug.versionNameSuffix != null ||
+                            android.buildTypes.release.versionNameSuffix != null) {
+                        throw new GradleException("Phone QA must not change production identity or signing")
+                    }
+                    qaManifest.get().asFile.withInputStream { input ->
+                        def document = MergedPermissionPolicy.parse(input)
+                        def applications = document.getElementsByTagName("application")
+                        if (document.documentElement.getAttribute("package") != expectedApp || applications.length != 1) {
+                            throw new GradleException("Phone QA merged manifest has the wrong identity or application")
+                        }
+                        def application = applications.item(0)
+                        if (application.getAttributeNS(MergedPermissionPolicy.ANDROID_NS, "testOnly") != "true" ||
+                                !(application.getAttributeNS(MergedPermissionPolicy.ANDROID_NS, "debuggable") in ["", "false"])) {
+                            throw new GradleException("Phone QA must be testOnly and non-debuggable")
+                        }
+                    }
+                    logger.lifecycle("Unsigned phone QA isolation passed: .qa, testOnly, non-debuggable, bundled, arm64-only")
+                }
+            }
+            tasks.named("check").configure { dependsOn(isolationTask) }
+            tasks.matching { it.name == "packageQa" || it.name == "assembleQa" }.configureEach {
+                dependsOn(isolationTask)
+            }
+        }
+    }
+}

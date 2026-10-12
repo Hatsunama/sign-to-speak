@@ -1,0 +1,38 @@
+✔ manifest asks for camera only, disables backup and cleartext (12.652042ms)
+✔ camera foundation has no recording, frame export, network, logging or speech fallback (1.30309ms)
+✔ canonical owner renderer and seed are exact pinned copies (1.459375ms)
+✔ all build variants are bundled and unsigned with bounded Gradle resources (2.560211ms)
+✖ native launcher uses the real app name (2.107781ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 4
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 511.060251
+
+✖ failing tests:
+
+test at native/tests/privacy-structure.test.mjs:45:1
+✖ native launcher uses the real app name (2.107781ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<string name="app_name">Sign To Speak<\/string>/. Input:
+  
+  '<resources>\n' +
+    '    <string name="app_name">Hello App Display Name</string>\n' +
+    '</resources>\n'
+  
+      at TestContext.<anonymous> (file:///workspace/shared/sign-android-work/native/tests/privacy-structure.test.mjs:46:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<resources>\n    <string name="app_name">Hello App Display Name</string>\n</resources>\n',
+    expected: /<string name="app_name">Sign To Speak<\/string>/,
+    operator: 'match',
+    diff: 'simple'
+  }

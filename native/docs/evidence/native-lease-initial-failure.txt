@@ -1,0 +1,14 @@
+native/tests/java/PreviewLeaseTest.java:1: error: package com.xmilo_at_your_side.sign_to_speak does not exist
+import com.xmilo_at_your_side.sign_to_speak.PreviewLease;
+                                           ^
+native/tests/java/PreviewLeaseTest.java:5: error: cannot find symbol
+    PreviewLease lease = new PreviewLease();
+    ^
+  symbol:   class PreviewLease
+  location: class PreviewLeaseTest
+native/tests/java/PreviewLeaseTest.java:5: error: cannot find symbol
+    PreviewLease lease = new PreviewLease();
+                             ^
+  symbol:   class PreviewLease
+  location: class PreviewLeaseTest
+3 errors

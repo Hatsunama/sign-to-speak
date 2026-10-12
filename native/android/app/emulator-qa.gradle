@@ -1,0 +1,146 @@
+import groovy.json.JsonOutput
+
+// Opt-in unsigned instrumentation target. All signing occurs separately on the user's PC.
+def emulatorQaProperty = providers.gradleProperty("unsignedEmulatorQa").orElse("false").get()
+if (!(emulatorQaProperty in ["false", "true"])) {
+    throw new GradleException("unsignedEmulatorQa must be exactly true or false")
+}
+def emulatorQaEnabled = emulatorQaProperty == "true"
+if (emulatorQaEnabled) {
+    def fallbackOption = "android.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes"
+    if (gradle.startParameter.projectProperties[fallbackOption] != "false") {
+        throw new GradleException("Explicitly disable AGP default-debug signing fallback")
+    }
+    if (project.properties.keySet().any { it.toString().startsWith("android.injected.signing.") }) {
+        throw new GradleException("Injected signing credentials are forbidden")
+    }
+    if (androidComponents.pluginVersion.version != "8.12.0") {
+        throw new GradleException("Unsigned variant guard is reviewed for pinned AGP 8.12.0 only")
+    }
+    def checked = [:]
+    if (providers.gradleProperty("unsignedPhoneQa").orElse("false").get() != "false" ||
+            providers.gradleProperty("reactNativeArchitectures").orElse("").get() != "x86_64") {
+        throw new GradleException("Emulator QA requires x86_64 and cannot be combined with phone QA")
+    }
+    android {
+        defaultConfig {
+            testApplicationId "com.xmilo_at_your_side.sign_to_speak.qa.test"
+            testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        }
+        testBuildType "emulatorQa"
+        buildTypes {
+            emulatorQa {
+                initWith release
+                matchingFallbacks = ["release"]
+                applicationIdSuffix ".qa"
+                versionNameSuffix "-emulator-qa"
+                debuggable false
+                signingConfig = null
+                ndk { abiFilters "x86_64" }
+            }
+        }
+    }
+    dependencies {
+        androidTestImplementation("androidx.test:core:1.7.0")
+        androidTestImplementation("androidx.test:runner:1.7.0")
+        androidTestImplementation("androidx.test.ext:junit:1.3.0")
+        androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    }
+    def qaBuildInputs = project.extensions.extraProperties.get("emulatorQaBuildInputs")
+    def bundledVariants = qaBuildInputs.bundledVariants
+    androidComponents {
+        onVariants(selector().withBuildType("emulatorQa")) { variant ->
+            def merged = variant.artifacts.get(qaBuildInputs.mergedManifest)
+            def verifyTask = tasks.register("verifyUnsignedEmulatorQaIsolation") {
+                inputs.file(merged)
+                dependsOn("verifyEmulatorQaMergedPermissions")
+                doLast {
+                    def qa = android.buildTypes.getByName("emulatorQa")
+                    if (qa.signingConfig != null || qa.debuggable ||
+                            qa.applicationIdSuffix != ".qa" || qa.versionNameSuffix != "-emulator-qa" ||
+                            qa.ndk.abiFilters.toSet() != ["x86_64"].toSet() ||
+                            qa.matchingFallbacks != ["release"] ||
+                            bundledVariants.get().contains(variant.name) ||
+                            variant.applicationId.get() != "com.xmilo_at_your_side.sign_to_speak.qa" ||
+                            android.defaultConfig.applicationId != "com.xmilo_at_your_side.sign_to_speak" ||
+                            android.buildTypes.debug.signingConfig != null ||
+                            android.buildTypes.release.signingConfig != null ||
+                            android.buildTypes.debug.applicationIdSuffix != null ||
+                            android.buildTypes.release.applicationIdSuffix != null) {
+                        throw new GradleException("Unsigned emulator target lost isolation")
+                    }
+                    def factory = javax.xml.parsers.DocumentBuilderFactory.newInstance()
+                    factory.setNamespaceAware(true)
+                    factory.setFeature("http://apache.org/xml/features/disallow-doctype-decl", true)
+                    def document = factory.newDocumentBuilder().parse(merged.get().asFile)
+                    def app = document.getElementsByTagName("application").item(0)
+                    def ns = "http://schemas.android.com/apk/res/android"
+                    if (app == null || app.getAttributeNS(ns, "testOnly") != "true" ||
+                            !(app.getAttributeNS(ns, "debuggable") in ["", "false"])) {
+                        throw new GradleException("Emulator target must be test-only and non-debuggable")
+                    }
+                }
+            }
+            tasks.matching { it.name in ["packageEmulatorQa", "assembleEmulatorQa", "assembleEmulatorQaAndroidTest"] }.configureEach {
+                dependsOn(verifyTask)
+            }
+        }
+    }
+    androidComponents.finalizeDsl { dsl ->
+        if (dsl.testBuildType != "emulatorQa" ||
+                dsl.defaultConfig.applicationId != "com.xmilo_at_your_side.sign_to_speak" ||
+                dsl.buildTypes.emulatorQa.signingConfig != null ||
+                dsl.buildTypes.debug.signingConfig != null || dsl.buildTypes.release.signingConfig != null) {
+            throw new GradleException("Final DSL signing or identity changed")
+        }
+        checked.dsl = true
+    }
+    // Resolved variants can differ from the DSL because AGP has a debug-signing fallback.
+    gradle.projectsEvaluated {
+        android.applicationVariants.all { variant ->
+            if (variant.name == "emulatorQa") {
+                if (variant.applicationId != "com.xmilo_at_your_side.sign_to_speak.qa" ||
+                        variant.signingConfig != null || variant.isSigningReady()) {
+                    throw new GradleException("Resolved emulator app must be isolated and unsigned")
+                }
+                checked.app = [applicationId: variant.applicationId, signingConfig: null, signingReady: false]
+            }
+        }
+        android.testVariants.all { variant ->
+            if (variant.name == "emulatorQaAndroidTest") {
+                if (variant.applicationId != "com.xmilo_at_your_side.sign_to_speak.qa.test" ||
+                        variant.signingConfig != null || variant.isSigningReady()) {
+                    throw new GradleException("Resolved instrumentation must be isolated and unsigned")
+                }
+                checked.test = [applicationId: variant.applicationId, signingConfig: null, signingReady: false]
+            }
+        }
+    }
+    // write*SigningConfigVersions is harmless APK metadata, not a signer.
+    // Reject actual signing classes, key generation and device/release work before task execution.
+    gradle.taskGraph.whenReady { graph ->
+        if (!checked.dsl || !checked.app || !checked.test) {
+            throw new GradleException("Both resolved unsigned variant checks must complete")
+        }
+        def forbidden = graph.allTasks.findAll { task ->
+            def n = task.name.toLowerCase()
+            // This one AGP task prepares a local lint.jar; it does not publish over a network.
+            def localLintJar = task.path == ":react-native-safe-area-context:prepareLintJarForPublish" &&
+                    task.class.name in ["com.android.build.gradle.internal.tasks.PrepareLintJarForPublish",
+                        "com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated"]
+            n.contains("validatesigning") || n.contains("keystore") || n.contains("keytool") ||
+                    n ==~ /.*(create|generate).*key.*/ || n.startsWith("sign") ||
+                    n.startsWith("install") || n.startsWith("uninstall") || n.startsWith("connected") ||
+                    (n.contains("publish") && !localLintJar) || n.contains("upload") ||
+                    n in ["assemblerelease", "bundlerelease"] ||
+                    task.class.name.contains("ValidateSigningTask") ||
+                    task.class.name.contains("PublishToMaven") || task.class.name.contains("PublishToIvyRepository")
+        }
+        println("SIGN_EMULATOR_UNSIGNED_GRAPH=" + JsonOutput.toJson([
+            agp: "8.12.0", variants: checked, defaultDebugFallback: false,
+            tasks: graph.allTasks.collect { [path: it.path, type: it.class.name] },
+            dryRun: gradle.startParameter.dryRun
+        ]))
+        if (!forbidden.isEmpty()) throw new GradleException("Forbidden unsigned QA task graph: " + forbidden*.path)
+    }
+}

@@ -1,86 +1,15 @@
 # Sign To Speak
 
-Free ASL to speech app. Sign To Speak watches one hand through the phone camera, draws a 3D mesh on that hand, and speaks the fingerspelled line in a voice you pick.
+## Android-native development
 
-Android application id: `com.xmilo_at_your_side.sign_to_speak`
+The current development destination is the isolated [React Native Android app in `native/`](native/README.md). It implements home, the canonical Hatsu animation, a local thank-you page and camera **preview only**. It has no ASL recognition, translation, hand-mesh inference, TTS or system-voice fallback. It does not claim interpreter capability or HIPAA certification.
 
-## Install from GitHub
+Android application ID: `com.xmilo_at_your_side.sign_to_speak`. QA builds use a separate `.qa` identity.
 
-Paste this into Windows PowerShell 5.1 or PowerShell 7. It downloads the installer from GitHub `main`, runs it in a separate PowerShell process, then deletes that temporary script.
+See [native build and verification status](native/README.md), [capture protections and remaining capture gates](native/docs/CAPTURE_PRIVACY.md), and [development CI](native/scripts/CI.md). Native builds and hosted Android-unit tests passed at the exact checkpoint linked there; limited physical non-camera navigation and app-only screenshot exclusion were later observed on two phones. The full screen-recording, camera-runtime and audio-loopback gates remain pending. No verified installable release is recommended here.
 
-```powershell
-& {
-    $ErrorActionPreference = 'Stop'
-    $PSNativeCommandUseErrorActionPreference = $false
-    $PowerShellExe = if ($PSVersionTable.PSEdition -eq 'Core') {
-        Join-Path $PSHOME 'pwsh.exe'
-    } else {
-        Join-Path $PSHOME 'powershell.exe'
-    }
-    $Installer = Join-Path $env:TEMP ("install-sign-to-speak-" + [Guid]::NewGuid().ToString('N') + '.ps1')
-    try {
-        Invoke-WebRequest -UseBasicParsing `
-            -Uri 'https://raw.githubusercontent.com/Hatsunama/sign-to-speak/main/scripts/install-sign-to-speak.ps1' `
-            -OutFile $Installer
-        & $PowerShellExe -NoProfile -ExecutionPolicy Bypass -File $Installer
-        if ($LASTEXITCODE -ne 0) {
-            throw "Sign To Speak installer failed (exit $LASTEXITCODE)."
-        }
-    }
-    finally {
-        if (Test-Path -LiteralPath $Installer) {
-            try {
-                Remove-Item -LiteralPath $Installer -Force -ErrorAction Stop
-                Write-Host 'Temporary installer script removed.'
-            }
-            catch {
-                Write-Warning "Could not remove temporary installer ${Installer}: $($_.Exception.Message)"
-            }
-        }
-    }
-}
-```
+## Preserved browser prototype
 
-From a clone, the same bootstrap is `.\scripts\bootstrap-install.ps1`.
+The root `app/`, `components/`, `lib/`, `public/` and `scripts/` contain the historical Next.js/browser prototype. Its installer, browser model downloads, hand mapping and browser speech paths are preserved as source history; they have not migrated into Android and are not evidence of native capabilities or model-license rights.
 
-The bootstrap pulls [`scripts/install-sign-to-speak.ps1`](scripts/install-sign-to-speak.ps1). That script downloads the current `main` commit archive from GitHub, runs `npm ci`, places the app in `%LOCALAPPDATA%\SignToSpeak`, and deletes the temporary archive. A failed install leaves the previous copy in place.
-
-Start the installed app with `npm run dev --prefix "$env:LOCALAPPDATA\SignToSpeak"`. It listens on port 43123. On the phone, open that URL in Chrome, allow the camera, then Add to Home screen.
-
-## What a 1.5B Qwen model can and cannot do
-
-It cannot reliably understand ASL, or any other sign language. Caption Studio’s Qwen2.5-1.5B is a text model. It rewrites subtitle lines (`qwen2.5-caption-json-v2`) and ships on Android as a LiteRT-LM file of about 1.6 GB. It never sees a camera frame. A text model has no handshape, movement, or face channel, so “run Qwen 1.5B on the phone and it will translate signing” does not hold.
-
-Open conversation in ASL is still a research problem. A 2B vision model fine-tuned for ASL can sound fluent and still miss the words. This app does not claim that.
-
-## How the hand is mapped
-
-[InstantHMR](https://huggingface.co/momolesang/InstantHMR) (the model in Mohamed Adjel’s phone demo) recovers a 70-joint body pose from one 224×224 crop, including a full finger chain on each hand: wrist, three joints, and the tip. On a Galaxy S23 the native build is about 10 ms after the detector. This app uses that same ONNX file, downloaded from Hugging Face after install (about 81 MB).
-
-The body is not drawn. The signing hand is lifted out of those 70 joints, skinned into a mesh, and read as:
-
-- the ASL fingerspelling alphabet
-- J and Z as strokes
-- a few whole signs: open palm (space), thumbs up (yes), thumbs down (no), I love you
-
-Hold a shape until it locks. Drop the hand before repeating a letter. The mesh is the check: if the fingers look wrong on screen, the letter will be wrong too. InstantHMR was trained as a body model, and finger detail is the part its authors are still tightening, so this is a faithful hand mapping of that pipeline, not a certified interpreter.
-
-## Voices
-
-Speech is [Kokoro-82M](https://huggingface.co/onnx-community/Kokoro-82M-v1.0-ONNX), also downloaded from Hugging Face when you ask. Heart, Bella, Nicole, Sarah, Michael, Fenrir, Puck, Emma, Isabella, George, and Fable. Until that download finishes, preview falls back to the phone’s own voice.
-
-## Run it from a checkout
-
-```bash
-npm install
-npm run dev
-```
-
-The dev server listens on port 43123.
-
-```bash
-npm test
-npm run typecheck
-```
-
-The pose weights are under the SAM license because InstantHMR is distilled from `facebook/sam-3d-body-dinov3`. This app downloads them at runtime and does not redistribute the file.
+The [original prototype README at base `e52813a3`](https://github.com/Hatsunama/sign-to-speak/blob/e52813a3ccf34cb5e2df40548dfc68e9587e2225/README.md) preserves the earlier setup and capability descriptions for provenance. Those descriptions are not a current installation recommendation or verified Android behavior. Use the native documentation above for Android development.
