@@ -29,13 +29,9 @@ The source currently contains an InstantHMR WASM loader and hand-coded fingerspe
 
 ## Current evidence
 
-- React Native 0.86.3 shell, canonical Hatsu native renderer, local thank-you route, CameraX preview-only native view, secure Activity and native lifecycle cancellation are implemented but not Android-built.
-- `npm test`: 13/13 host tests pass, including actual React App interruption/Back/local-route checks with mocked RN/Android hosts. Initial session implementation was missing; structural checks initially caught a missing immediate preview hide and API-26 minimum. A later source check caught and corrected the template launcher label and explicitly disabled development-server support. Component test initially failed because of a circular-JSON test selector, corrected in the harness; that was not a product regression.
-- `npm run typecheck`: passes. Initial inherited Jest types were absent; the isolated TypeScript config now specifies React types.
-- `JAVA_HOME=... ./tests/run-java-tests.sh`: 8 checks pass against the actual native Java cancellation-token class after an initial missing-class compile failure.
-- Exact upstream Hatsu hashes pass. Existing tracked web files remain unchanged.
-- No APK, Android/Kotlin compilation, emulator camera/rotation verification, model integration, translation evaluation or speech test has run.
-- The foundation deliberately binds only CameraX Preview. ImageAnalysis and temporal landmark buffers are not added speculatively before model/license approval. No fake landmark bridge, model download, token or training job is present.
+See the [exact verified native checkpoint](../README.md#verified-checkpoint-2026-10-12) for completed hosted builds, manifest audits and 84 passing Android-unit tests. Host/component and structural tests remain distinct from actual compilation and from unexecuted emulator/device acceptance.
+
+The foundation binds only CameraX Preview. The analyzer/buffer requirements above are future integration gates: ImageAnalysis, temporal landmark buffers, ASL inference, speech and model downloads are not implemented. Existing browser source and the pinned canonical Hatsu renderer remain preserved. No translation evaluation, real device camera/rotation acceptance or screen/audio-loopback test is claimed.
 
 ## Official API references
 

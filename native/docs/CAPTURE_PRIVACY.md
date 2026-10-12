@@ -54,7 +54,7 @@ Expected evidence includes compositor frames/video, positive-control PCM, protec
 
 ## Verification labels and limits
 
-Host/component tests establish first-render gating and source boundaries. Robolectric tests establish production startup ordering, native failure handling and window/lifecycle flag behavior using controlled service/React boundaries. They do not exercise Android's compositor, real AudioFlinger mixing, a real TTS engine, screen recording or playback loopback. Exact CI red/green receipts must be recorded before claiming those tests passed.
+Host/component tests establish first-render gating and source boundaries. Robolectric tests establish production startup ordering, native failure handling and window/lifecycle flag behavior using controlled service/React boundaries. They do not exercise Android's compositor, real AudioFlinger mixing, a real TTS engine, screen recording or playback loopback. The exact hosted red/green checkpoints are recorded below; neither establishes real capture acceptance.
 
 These controls request Android's platform capture protections. They do not prevent a separate physical microphone/camera recording sound or light, a compromised OS, or a vendor path that ignores the policy. The app does not try to disable another app's microphone or change device-wide recording settings. Do not describe this as absolute prevention or a privacy/compliance certification.
 
@@ -62,4 +62,6 @@ These controls request Android's platform capture protections. They do not preve
 
 [Native CI run 38301427079](https://github.com/Hatsunama/sign-to-speak/actions/runs/38301427079), exact tests-only commit `d1b95ce77fd320fa7bf4190d006d16bd12ef1011`, compiled unchanged production and executed 61 tests. Exactly two failed: API 29/36 startup never called `setAllowedCapturePolicy(3)` before React bootstrap. The API 28 control and all three secure-window lifecycle cases passed. The separate unsigned emulator build passed; it did not run an emulator. The evidence artifact is `11771795911`, SHA-256 `d8cfc61b31c998be00a110f1b5c54c844eb0aff23cfc931e28d19b65c6130c11`.
 
-The repaired candidate's additional service-failure, capability, disposed-view and dialog cases are awaiting their own hosted run. No real screen/audio-loopback row has been executed.
+## Verified checkpoint (2026-10-12)
+
+At exact commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`, native CI passed 84 Android-unit tests with zero failures/errors/skips, actual APK compilation and manifest audits; the separate unsigned emulator-app/test build also passed. See the [canonical checkpoint and immutable run/artifact links](../README.md#verified-checkpoint-2026-10-12). Native Back is repaired. These are hosted Robolectric/JVM and build results, not real emulator/device, compositor or audio-loopback acceptance. ASL inference and TTS remain unavailable. No later documentation/code revision inherits this verification.

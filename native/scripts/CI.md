@@ -1,5 +1,9 @@
 # Android development CI
 
+## Verified checkpoint (2026-10-12)
+
+At exact commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`, native CI passed 84 Android-unit tests with zero failures/errors/skips, actual APK compilation and manifest audits; the separate unsigned emulator-app/test build also passed. See the [canonical checkpoint and immutable run/artifact links](../README.md#verified-checkpoint-2026-10-12). Native Back is repaired. These are hosted Robolectric/JVM and build results, not real emulator/device, compositor or audio-loopback acceptance. ASL inference and TTS remain unavailable. No later documentation/code revision inherits this verification.
+
 ## Scope and use
 
 `.github/workflows/sign-android.yml` is a development-only workflow triggered manually or by a same-repository PR whose head branch is exactly `fix/android-native-foundation`. Fork PRs and other branches do not run the job. Candidate publication requires coordinating review; opening or updating the approved PR then triggers CI. It runs on the standard `ubuntu-24.04` hosted runner, one job bounded to 30 minutes, without persistent caches. Artifacts expire after three days. The source repository is public; logs and artifacts must contain only repository/build/test data, never user media or keys.
@@ -14,11 +18,13 @@ The checkout is the exact PR head SHA (not a synthetic merge commit), or the dis
 4. `:app:verifyDebugMergedPermissions` and `:app:verifyReleaseMergedPermissions`, checking the actual merged manifests, including transitive permissions. `--continue` lets both independent variant checks report even if the first fails. No release APK/AAB is built.
 5. `:app:assembleDebug`, x86_64 only, with bundled JavaScript and an unsigned APK. Build success does not prove functional camera/UI behavior. Failed unit or manifest gates remain failures while other native evidence steps still run, provided host checks and SDK setup passed. APK upload requires overall success.
 
+6. Opt-in `-PunsignedPhoneQa=true -PreactNativeArchitectures=arm64-v8a`: `:app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa`, followed by `scripts/ci-phone-qa-audit.sh`. This produces an unsigned isolated test-only ARM64 APK, not a physical-device test. The separate [emulator build workflow](../../.github/workflows/sign-emulator-build.yml) produces/audits an unsigned x86_64 app/test pair without booting or installing.
+
 No signing configuration is changed by the workflow. No AAB, release publishing, production keys or app-store action is included.
 
 ## Remaining emulator gate and signing precondition
 
-An unsigned APK cannot be installed. Emulator instrumentation remains a required pending gate, not a skipped or simulated success. Before adding that stage, review an isolated test application ID distinct from `com.xmilo_at_your_side.sign_to_speak`, an ephemeral CI-only development signing key, compatible app/test APK signing, instrumentation runner/dependencies and a pinned emulator system image with already accepted terms. Never import user/private production keys or create a production signing identity. Use emulator-generated frames only; no personal camera feed, real phones, network user data or media artifacts.
+An unsigned APK cannot be installed. Emulator instrumentation remains a required pending gate, not a skipped or simulated success. The isolated `.qa` app and `.qa.test` instrumentation pair already build unsigned. Before runtime work, obtain authorization for compatible app/test signing using the existing development key on C, approved signed-artifact transfer and a pinned emulator system image with already accepted terms. Keys stay on C: never generate, import, download or export a signing key in cloud CI. Use emulator-generated frames only; no personal camera feed, real phones, network user data or media artifacts.
 
 ## Workflow actions
 
@@ -31,6 +37,10 @@ Immutable commits verified through each upstream repository on 2026-10-12:
 Node 24.19.0 was verified against the [official Node release commit](https://github.com/nodejs/node/commit/cdc1b38d40cb567b7ad0b39c86addf830a0af0ae), dated 2026-08-03.
 
 The [official Ubuntu runner inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md) was checked on 2026-10-12: SDK36, build-tools36.0.0 and CMake3.31.5 were present; NDK27.1 was absent. Runner images evolve, so runtime preflight is authoritative.
+
+## Historical implementation and run evidence
+
+The following checkpoints preserve the original preparation and repair sequence. Their test counts and “not performed”/“next candidate” language refer to those earlier revisions, superseded by the verified checkpoint above. They are not current blockers or authority to execute a build.
 
 ## Local regression checks
 

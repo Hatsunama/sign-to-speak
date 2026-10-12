@@ -1,4 +1,13 @@
-# Native Back regression: test-first candidate
+# Native Back regression: verification and test-first history
+
+## Verified checkpoint (2026-10-12)
+
+At exact commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`, native CI passed 84 Android-unit tests with zero failures/errors/skips, actual APK compilation and manifest audits; the separate unsigned emulator-app/test build also passed. See the [canonical checkpoint and immutable run/artifact links](../README.md#verified-checkpoint-2026-10-12). Native Back is repaired. These are hosted Robolectric/JVM and build results, not real emulator/device, compositor or audio-loopback acceptance. ASL inference and TTS remain unavailable. No later documentation/code revision inherits this verification.
+
+## Historical test-first record (superseded status)
+
+The sections below preserve the earlier defects, harness failures, fixture corrections and intermediate counts. Statements such as “pending”, “unchanged” or “not yet run” describe those earlier candidates, not the verified checkpoint above. Historical build commands are reference only and do not authorize execution.
+
 
 Status: initial hosted Kotlin/APK compilation passed; the native test harness failed before assertions because SDK 36 requires JDK 21. There is no verified Back runtime red or green yet. The merged debug permission gate genuinely failed, and a scoped permission repair is now prepared below. Production Back/camera code and the existing Back regression remain unchanged.
 

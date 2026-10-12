@@ -1,10 +1,10 @@
 # Sign To Speak emulator matrix proposal
 
-Status: prepared test design only; no emulator run, Gradle run, source publication, or workflow dispatch has occurred.
+Status: runtime matrix remains a proposal and has not executed. The unsigned x86_64 app/instrumentation pair has been built and audited in hosted CI at the [verified checkpoint](../README.md#verified-checkpoint-2026-10-12). Build success is not a guest boot or runtime pass.
 
 ## Source and representative matrix
 
-Production candidate: ac75886c449902f14019964425f24f7da877250e (tree e6d9fc86b9d32f5f60d1a74878ea45b3d1ec7a12). Preserve Kotlin/Java/React app implementation; additions restricted to test source, opt-in test variant, scripts and workflow.
+Original matrix-design base: ac75886c449902f14019964425f24f7da877250e (tree e6d9fc86b9d32f5f60d1a74878ea45b3d1ec7a12); this is historical provenance, not the current verified build SHA. Preserve Kotlin/Java/React app implementation; additions restricted to test source, opt-in test variant, scripts and workflow.
 
 - API26 Google APIs x86_64, compact phone profile, 4 KB expected. This is the application's actual minimum SDK.
 - API35 Google APIs x86_64, phone profile, 4 KB expected.
@@ -35,7 +35,7 @@ Only fixed assertion stage labels and bounded failure diagnostics are artifacts;
 
 ## Current blockers
 
-Unsigned pair generation, C signing and signed artifact input. Build/workflow publication is approved; signed artifact transfer and runtime execution remain separately gated. Current public-runner KVM access unverified; no successful Sign guest boot. No test result should be described as passed until an actual runtime produces it.
+Unsigned pair generation passed at the linked checkpoint; C signing and approved signed-artifact input remain pending. Build/workflow publication is approved; signed artifact transfer and runtime execution remain separately gated. Hosted runner diagnostics from [run 38298343204](https://github.com/Hatsunama/sign-to-speak/actions/runs/38298343204) and [run 38299467065](https://github.com/Hatsunama/sign-to-speak/actions/runs/38299467065) report `KVM_EXISTING_ACCESS=blocked`: runner UID 1001 has neither membership in the `kvm` group nor a granting ACL for root:kvm `/dev/kvm` mode 0660. A separately approved runner permission change remains pending; no permission workaround is authorized by this document. This is measured GitHub-hosted runner access, not the cloud workspace's Android SDK state. No successful Sign guest boot is established. No test result should be described as passed until an actual runtime produces it.
 
 Sources checked 2026-10-12:
 - https://developer.android.com/guide/practices/page-sizes
