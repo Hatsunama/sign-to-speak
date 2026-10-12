@@ -3,6 +3,7 @@ package com.xmilo_at_your_side.sign_to_speak
 import android.Manifest
 import android.content.pm.PackageManager
 import android.widget.FrameLayout
+import androidx.camera.core.CameraState
 import androidx.camera.core.CameraSelector
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
@@ -10,6 +11,8 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.LiveData
+import androidx.lifecycle.Observer
 import com.facebook.react.bridge.Arguments
 import com.facebook.react.bridge.LifecycleEventListener
 import com.facebook.react.uimanager.ThemedReactContext
@@ -28,6 +31,10 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     private var observing = false
     private var disposed = false
     private var cameraActivity: MainActivity? = null
+    private var cleanupFailed = false
+    private var streamObserver: Observer<PreviewView.StreamState>? = null
+    private var cameraStates: LiveData<CameraState>? = null
+    private var cameraObserver: Observer<CameraState>? = null
 
     init {
         registerWithActivity()
@@ -40,7 +47,7 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         if (!active) { stop(); return }
         if (disposed || requested) return
         registerWithActivity()
-        if ((cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+        if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
             reportCleanupFailure(); return
         }
         requested = true
@@ -50,10 +57,10 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     private fun start() {
         val owner = reactContext.currentActivity as? LifecycleOwner
         if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
-            stop(); status("stopped"); return
+            if (stop()) status("stopped"); return
         }
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-            stop(); status("permission_denied"); return
+            if (stop()) status("permission_denied"); return
         }
         val token = lease.begin(true, true)
         val future = ProcessCameraProvider.getInstance(context)
@@ -64,34 +71,101 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
                 val cameraProvider = future.get()
                 val camera = CameraSelector.DEFAULT_FRONT_CAMERA
                 if (!cameraProvider.hasCamera(camera)) {
-                    stop(); status("front_camera_unavailable"); return@addListener
+                    if (stop()) status("front_camera_unavailable"); return@addListener
                 }
+                val hadRetiredStream = previewView.previewStreamState.value == PreviewView.StreamState.STREAMING
                 val useCase = Preview.Builder().build()
-                useCase.setSurfaceProvider(previewView.surfaceProvider)
                 provider = cameraProvider
                 preview = useCase
-                cameraProvider.bindToLifecycle(owner, camera, useCase)
+                useCase.setSurfaceProvider(previewView.surfaceProvider)
+                val boundCamera = cameraProvider.bindToLifecycle(owner, camera, useCase)
                 previewView.visibility = VISIBLE
-                status("preview_only")
+                observeCamera(owner, token, boundCamera.cameraInfo.cameraState, hadRetiredStream)
             } catch (_: Exception) {
-                stop(); status("camera_unavailable")
+                if (stop()) status("camera_unavailable")
             }
         }, ContextCompat.getMainExecutor(context))
     }
 
-    private fun stop() {
+    private fun isCurrent(token: Long) = requested && !disposed &&
+        isAttachedToWindow && lease.isCurrent(token)
+
+    private fun observeCamera(
+        owner: LifecycleOwner, token: Long, states: LiveData<CameraState>, hadRetiredStream: Boolean,
+    ) {
+        // Opening/pending without an error is not proof of frames and may keep waiting.
+        val errors = Observer<CameraState> { state ->
+            if (isCurrent(token) && state.error != null) {
+                if (stop()) status("camera_unavailable")
+            }
+        }
+        cameraStates = states
+        cameraObserver = errors
+        states.observe(owner, errors)
+        if (!isCurrent(token)) return // observe may synchronously report an existing error.
+
+        var streamed = false
+        // LiveData may still cache STREAMING from a retired binding. Require its
+        // IDLE transition before accepting a new session's streaming signal.
+        var waitingForIdle = hadRetiredStream
+        val streams = Observer<PreviewView.StreamState> { state ->
+            if (isCurrent(token)) {
+                when (state) {
+                    PreviewView.StreamState.STREAMING -> if (!waitingForIdle && !streamed) {
+                        streamed = true
+                        status("preview_only")
+                    }
+                    PreviewView.StreamState.IDLE -> {
+                        waitingForIdle = false
+                        // Initial IDLE is expected. Once frames stop, stop claiming
+                        // a live preview; only an explicit user Start can retry.
+                        if (streamed && stop()) status("stopped")
+                    }
+                    else -> Unit
+                }
+            }
+        }
+        streamObserver = streams
+        previewView.previewStreamState.observe(owner, streams)
+    }
+
+    private fun stop(): Boolean {
         requested = false
         lease.stop()
         previewView.visibility = INVISIBLE
         val useCase = preview
         val cameraProvider = provider
+        val streams = streamObserver
+        val states = cameraStates
+        val errors = cameraObserver
         preview = null
         provider = null
+        streamObserver = null
+        cameraStates = null
+        cameraObserver = null
+        var failed = false
+        // Every owned action gets one attempt, even if a preceding action throws.
+        // No global unbind, blind retry, retained exception, or content logging.
+        fun release(action: () -> Unit) {
+            try { action() } catch (_: RuntimeException) { failed = true }
+        }
+        if (streams != null) release { previewView.previewStreamState.removeObserver(streams) }
+        if (errors != null) release { states?.removeObserver(errors) }
         if (useCase != null) {
-            try { useCase.setSurfaceProvider(null) }
-            finally { cameraProvider?.unbind(useCase) }
+            release { useCase.setSurfaceProvider(null) }
+            release { cameraProvider?.unbind(useCase) }
+        }
+        if (failed) {
+            cleanupFailed = true
+            cameraActivity?.recordCameraCleanupFailure()
+        }
+        if (cleanupFailed) {
+            // Disposal can suppress the view event; the Activity fault latch is
+            // authoritative and also rejects/explains a fresh view's next Start.
+            try { reportCleanupFailure() } catch (_: RuntimeException) { /* Keep the native latch. */ }
         }
         // No app-owned frame/landmark/transcript buffers exist in this milestone.
+        return !cleanupFailed
     }
 
     private fun registerWithActivity() {
@@ -102,7 +176,7 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         activity?.registerCameraView(this)
     }
 
-    internal fun cancelFromNativeBack() { stop(); status("stopped") }
+    internal fun cancelFromNativeBack() { if (stop()) status("stopped") }
     internal fun reportCleanupFailure() { status("camera_cleanup_failed") }
 
     fun dispose() {
@@ -129,13 +203,17 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     }
 
     override fun onDetachedFromWindow() {
-        stop()
-        if (observing) reactContext.removeLifecycleEventListener(this)
-        observing = false
-        super.onDetachedFromWindow()
+        try { stop() }
+        finally {
+            try { if (observing) reactContext.removeLifecycleEventListener(this) }
+            finally {
+                observing = false
+                super.onDetachedFromWindow()
+            }
+        }
     }
 
-    override fun onHostPause() { stop(); status("stopped") }
+    override fun onHostPause() { if (stop()) status("stopped") }
     override fun onHostDestroy() { dispose() }
     override fun onHostResume() = Unit // User must explicitly start again.
 

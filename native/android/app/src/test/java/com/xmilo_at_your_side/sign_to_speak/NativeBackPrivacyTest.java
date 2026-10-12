@@ -501,6 +501,45 @@ public class NativeBackPrivacyTest {
         assertFalse(streamStates().hasObservers());
     }
 
+    @Test public void retiredCachedStreamingCannotClaimNewBindingIsLive() throws Exception {
+        startBoundPreview();
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        view.setActive(false);
+        assertFalse(streamStates().hasObservers());
+        statuses.clear();
+        view.setActive(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(requested());
+        assertTrue("Cached old STREAMING cannot publish a new live claim", statuses.isEmpty());
+        streamStates().setValue(PreviewView.StreamState.IDLE);
+        assertTrue("Initial idle for the new binding may wait", requested());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void cameraErrorCleanupFailureHasPriorityAndIsCountedOnce() throws Exception {
+        Preview owned = startBoundPreview();
+        long token = leaseToken(view);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        statuses.clear();
+        doThrow(new UnsupportedOperationException("Injected async-error cleanup failure"))
+            .when(provider).unbind(owned);
+        injectedUnbindFaults = new Preview[] {owned};
+        cameraStates.setValue(CameraState.create(CameraState.Type.PENDING_OPEN,
+            CameraState.StateError.create(CameraState.ERROR_CAMERA_IN_USE)));
+        assertNativeCanceled(view, token);
+        assertEquals(1, cleanupFailures());
+        assertFalse(statuses.contains("camera_unavailable"));
+        assertFalse(statuses.contains("stopped"));
+        assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+        view.onHostPause();
+        view.dispose();
+        assertEquals("Repeated exits do not double-account the same failed cleanup", 1, cleanupFailures());
+        verify(provider, times(1)).unbind(owned);
+        assertFalse(cameraStates.hasObservers());
+        assertFalse(streamStates().hasObservers());
+    }
+
     @SuppressWarnings("unchecked")
     private <T> Observer<T> observer(androidx.lifecycle.LiveData<T> data) throws Exception {
         Field observers = androidx.lifecycle.LiveData.class.getDeclaredField("mObservers");

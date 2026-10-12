@@ -19,7 +19,7 @@ class MainActivity : ReactActivity() {
         if (dispose) view.dispose() else view.cancelFromNativeBack()
       } catch (_: RuntimeException) {
         // Payload-free, in-memory accounting. Release is not confirmed; fail closed.
-        cameraCleanupFailures++
+        recordCameraCleanupFailure()
         try { view.reportCleanupFailure() } catch (_: RuntimeException) {
           // A stalled/broken JS notification must not skip another native cleanup.
           // The failure remains recorded and new starts remain blocked.
@@ -27,6 +27,8 @@ class MainActivity : ReactActivity() {
       }
     }
   }
+
+  internal fun recordCameraCleanupFailure() { cameraCleanupFailures++ }
 
   internal fun registerCameraView(view: PrivateCameraView) { cameraViews.add(view) }
   internal fun unregisterCameraView(view: PrivateCameraView) { cameraViews.remove(view) }

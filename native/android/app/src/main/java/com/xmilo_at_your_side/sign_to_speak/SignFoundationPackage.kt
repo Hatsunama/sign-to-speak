@@ -33,7 +33,7 @@ class CameraViewManager : SimpleViewManager<PrivateCameraView>() {
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
         mutableMapOf("topStatus" to mapOf("registrationName" to "onStatus"))
     override fun onDropViewInstance(view: PrivateCameraView) {
-        view.dispose()
-        super.onDropViewInstance(view)
+        try { view.dispose() }
+        finally { super.onDropViewInstance(view) }
     }
 }
