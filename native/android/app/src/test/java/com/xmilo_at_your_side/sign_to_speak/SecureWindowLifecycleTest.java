@@ -11,6 +11,8 @@ import android.os.Looper;
 import org.robolectric.Shadows;
 import android.view.WindowManager;
 import com.facebook.react.bridge.ReactApplicationContext;
+import com.facebook.react.bridge.queue.MessageQueueThread;
+import com.facebook.react.bridge.queue.ReactQueueConfiguration;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.views.modal.ReactModalHostView;
@@ -68,6 +70,16 @@ public class SecureWindowLifecycleTest {
         ReactApplicationContext react = mock(ReactApplicationContext.class);
         when(react.getCurrentActivity()).thenReturn(activity);
         ThemedReactContext themed = new ThemedReactContext(react, new ContextWrapper(activity), "PrivacyModal", 1);
+        // Supply only the RN scheduling boundary; keep the real modal, layout and windows.
+        // The modal's layout callback otherwise needs an unstarted Hermes/native-module queue.
+        MessageQueueThread queue = mock(MessageQueueThread.class);
+        doAnswer(call -> { ((Runnable) call.getArgument(0)).run(); return true; })
+            .when(queue).runOnQueue(any(Runnable.class));
+        ReactQueueConfiguration queues = mock(ReactQueueConfiguration.class);
+        when(queues.getUIQueueThread()).thenReturn(queue);
+        when(queues.getNativeModulesQueueThread()).thenReturn(queue);
+        when(queues.getJSQueueThread()).thenReturn(queue);
+        themed.initializeMessageQueueThreads(queues);
         DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(activity);
         // Replace unrelated JNI feature-flag access, not Dialog/window security behavior.
         try (MockedStatic<ReactNativeFeatureFlags> flags = mockStatic(ReactNativeFeatureFlags.class)) {
