@@ -124,18 +124,23 @@ if (emulatorQaEnabled) {
         }
         def forbidden = graph.allTasks.findAll { task ->
             def n = task.name.toLowerCase()
+            // This one AGP task prepares a local lint.jar; it does not publish over a network.
+            def localLintJar = task.path == ":react-native-safe-area-context:prepareLintJarForPublish" &&
+                    task.class.name in ["com.android.build.gradle.internal.tasks.PrepareLintJarForPublish",
+                        "com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated"]
             n.contains("validatesigning") || n.contains("keystore") || n.contains("keytool") ||
                     n ==~ /.*(create|generate).*key.*/ || n.startsWith("sign") ||
                     n.startsWith("install") || n.startsWith("uninstall") || n.startsWith("connected") ||
-                    n.contains("publish") || n.contains("upload") ||
+                    (n.contains("publish") && !localLintJar) || n.contains("upload") ||
                     n in ["assemblerelease", "bundlerelease"] ||
-                    task.class.name.contains("ValidateSigningTask")
+                    task.class.name.contains("ValidateSigningTask") ||
+                    task.class.name.contains("PublishToMaven") || task.class.name.contains("PublishToIvyRepository")
         }
-        if (!forbidden.isEmpty()) throw new GradleException("Forbidden unsigned QA task graph: " + forbidden*.path)
         println("SIGN_EMULATOR_UNSIGNED_GRAPH=" + JsonOutput.toJson([
             agp: "8.12.0", variants: checked, defaultDebugFallback: false,
             tasks: graph.allTasks.collect { [path: it.path, type: it.class.name] },
             dryRun: gradle.startParameter.dryRun
         ]))
+        if (!forbidden.isEmpty()) throw new GradleException("Forbidden unsigned QA task graph: " + forbidden*.path)
     }
 }

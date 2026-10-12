@@ -10,14 +10,28 @@ class Graph(unittest.TestCase):
   r=record()
   for n in ['writeEmulatorQaSigningConfigVersions','writeEmulatorQaAndroidTestSigningConfigVersions']:r['tasks'].append({'path':':app:'+n,'type':'SigningConfigVersionsWriterTask'})
   m.verify(output(r)+'\n:app:writeEmulatorQaSigningConfigVersions SKIPPED\n:app:writeEmulatorQaAndroidTestSigningConfigVersions SKIPPED')
+ def test_exact_local_lint_jar_is_not_network_publication(self):
+  r=record();path=':react-native-safe-area-context:prepareLintJarForPublish'
+  r['tasks'].append({'path':path,'type':'com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated'})
+  m.verify(output(r)+'\n'+path+' SKIPPED')
+  r['tasks'][-1]['type']='UntrustedReplacementTask'
+  with self.assertRaises(AssertionError):m.verify(output(r)+'\n'+path+' SKIPPED')
+  r['tasks'][-1]['type']='com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated'
+  r['tasks'][-1]['path']=':unrelated:prepareLintJarForPublish'
+  with self.assertRaises(AssertionError):m.verify(output(r))
  def test_empty(self):
   with self.assertRaises(AssertionError):m.verify('BUILD SUCCESSFUL')
  def test_reject_forbidden_tasks(self):
   for task in ['validateSigningEmulatorQaAndroidTest','installEmulatorQa','connectedEmulatorQaAndroidTest','publish','assembleRelease','bundleRelease','assembleDebug','assembleQa','keytool','generateDebugKey','signApk']:
-   with self.subTest(task=task),self.assertRaises(AssertionError):m.verify(output()+'\n:app:'+task+' SKIPPED')
+   r=record();r['tasks'].append({'path':':app:'+task,'type':'DefaultTask'})
+   with self.subTest(task=task),self.assertRaises(AssertionError):m.verify(output(r)+'\n:app:'+task+' SKIPPED')
  def test_reject_signing_task_class(self):
   r=record();r['tasks'].append({'path':':app:innocentName','type':'com.android.build.gradle.internal.tasks.ValidateSigningTask_Decorated'})
   with self.assertRaises(AssertionError):m.verify(output(r))
+ def test_reject_renamed_publishing_task_class(self):
+  for kind in ['org.gradle.api.publish.maven.tasks.PublishToMavenRepository_Decorated','org.gradle.api.publish.ivy.tasks.PublishToIvyRepository_Decorated']:
+   r=record();r['tasks'].append({'path':':app:innocentName','type':kind})
+   with self.subTest(kind=kind),self.assertRaises(AssertionError):m.verify(output(r))
  def test_reject_default_signer(self):
   r=record();r['variants']['test']['signingConfig']='debug'
   with self.assertRaises(AssertionError):m.verify(output(r))
