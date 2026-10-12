@@ -8,6 +8,16 @@ import android.app.Application;
 import android.content.Context;
 import android.content.ContextWrapper;
 import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraInfo;
+import androidx.camera.core.CameraState;
+import androidx.lifecycle.MutableLiveData;
+import androidx.lifecycle.Observer;
+import com.facebook.react.uimanager.UIManagerHelper;
+import com.facebook.react.uimanager.events.EventDispatcher;
+import org.mockito.MockedStatic;
 import android.os.Looper;
 import android.view.View;
 import android.widget.FrameLayout;
@@ -57,6 +67,10 @@ public class NativeBackPrivacyTest {
     private ProcessCameraProvider provider;
     private SettableFuture<ProcessCameraProvider> future;
     private Preview[] injectedUnbindFaults;
+    private MutableLiveData<CameraState> cameraStates;
+    private final List<String> statuses = new ArrayList<>();
+    private MockedStatic<UIManagerHelper> uiManager;
+
 
     @Before public void setUp() throws Exception {
         // Do not bootstrap Hermes or load the app's native libraries in a JVM test.
@@ -78,6 +92,26 @@ public class NativeBackPrivacyTest {
         assertTrue("Fixture must attach the actual native view", view.isAttachedToWindow());
         provider = mock(ProcessCameraProvider.class);
         when(provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)).thenReturn(true);
+        Camera camera = mock(Camera.class);
+        CameraInfo cameraInfo = mock(CameraInfo.class);
+        cameraStates = new MutableLiveData<>(CameraState.create(CameraState.Type.OPENING));
+        when(camera.getCameraInfo()).thenReturn(cameraInfo);
+        when(cameraInfo.getCameraState()).thenReturn(cameraStates);
+        when(provider.bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
+            eq(CameraSelector.DEFAULT_FRONT_CAMERA), any(Preview.class))).thenReturn(camera);
+        when(reactContext.hasActiveCatalystInstance()).thenReturn(true); // ThemedReactContext delegates here in RN 0.86.3.
+        view.setId(101);
+        EventDispatcher dispatcher = mock(EventDispatcher.class);
+        uiManager = mockStatic(UIManagerHelper.class);
+        uiManager.when(() -> UIManagerHelper.getEventDispatcherForReactTag(any(), anyInt()))
+            .thenReturn(dispatcher);
+        doAnswer(call -> {
+            Object event = call.getArgument(0);
+            Field value = event.getClass().getDeclaredField("value");
+            value.setAccessible(true);
+            statuses.add((String) value.get(event));
+            return null;
+        }).when(dispatcher).dispatchEvent(any());
         future = SettableFuture.create();
         ProviderCompanionShadow.nextFuture = future;
         ProviderCompanionShadow.acquisitionCount = 0;
@@ -92,6 +126,7 @@ public class NativeBackPrivacyTest {
         if (view != null) view.dispose();
         if (controller != null) controller.pause().stop().destroy();
         if (delegates != null) delegates.close();
+        if (uiManager != null) uiManager.close();
     }
 
     @Test public void backInvalidatesPendingProviderBeforeReactNavigation() throws Exception {
@@ -292,6 +327,188 @@ public class NativeBackPrivacyTest {
         assertStopped();
         verify(provider, times(1)).unbind(owned);
         verify(reactContext, times(1)).removeLifecycleEventListener(view);
+    }
+
+    // These exercise real production cleanup entry points, not a parallel policy helper.
+    @Test public void sharedCleanupFailureOnHostPauseIsAccountedAndBlocksFreshView() throws Exception {
+        assertCleanupBoundary("pause");
+    }
+    @Test public void sharedCleanupFailureOnActualDetachFinalizesAndBlocksFreshView() throws Exception {
+        assertCleanupBoundary("detach");
+    }
+    @Test public void sharedCleanupFailureOnManagerDropFinalizesAndBlocksFreshView() throws Exception {
+        // React unmount uses this same native boundary for both Stop and Hatsu navigation.
+        assertCleanupBoundary("drop");
+    }
+    @Test public void sharedCleanupFailureOnDirectDisposeIsAccountedAndBlocksFreshView() throws Exception {
+        assertCleanupBoundary("dispose");
+    }
+    @Test public void sharedCleanupFailureOnInactivePropIsAccountedAndBlocksFreshView() throws Exception {
+        assertCleanupBoundary("inactive");
+    }
+    @Test public void sharedCleanupFailureOnHostDestroyIsAccountedAndBlocksFreshView() throws Exception {
+        assertCleanupBoundary("hostDestroy");
+    }
+
+    private void assertCleanupBoundary(String entry) throws Exception {
+        Preview owned = startBoundPreview();
+        long token = leaseToken(view);
+        doThrow(new UnsupportedOperationException("Injected owned cleanup failure")).when(provider).unbind(owned);
+        injectedUnbindFaults = new Preview[] {owned};
+        statuses.clear();
+        RuntimeException escaped = null;
+        try {
+            switch (entry) {
+                case "pause": view.onHostPause(); break;
+                case "detach": root.removeView(view); break;
+                case "drop": new CameraViewManager().onDropViewInstance(view); break;
+                case "dispose": view.dispose(); break;
+                case "inactive": view.setActive(false); break;
+                case "hostDestroy": view.onHostDestroy(); break;
+                default: throw new AssertionError(entry);
+            }
+        } catch (RuntimeException error) { escaped = error; }
+        assertNull(entry + " must contain cleanup failure", escaped);
+        assertNativeCanceled(view, token);
+        verify(provider).unbind(owned);
+        assertEquals(entry + " must record the Activity-wide fault", 1, cleanupFailures());
+        assertFalse("Never publish ordinary stopped after uncertain release", statuses.contains("stopped"));
+        if (!entry.equals("pause") && !entry.equals("inactive")) {
+            assertFalse("Listener finalization must run", (Boolean) field("observing"));
+            verify(reactContext).removeLifecycleEventListener(view);
+        }
+        if (entry.equals("drop") || entry.equals("dispose") || entry.equals("hostDestroy")) {
+            assertFalse(registeredViews(activity).contains(view));
+        }
+        if (entry.equals("detach")) assertFalse(view.isAttachedToWindow());
+        // A second stop cannot clear the fault or hide it from a newly created view.
+        view.setActive(false);
+        PrivateCameraView fresh = new PrivateCameraView(
+            new ThemedReactContext(reactContext, new ContextWrapper(activity), "FreshAfterFault", 4));
+        fresh.setId(102);
+        root.addView(fresh);
+        fresh.setActive(true);
+        assertFalse((Boolean) field(fresh, "requested"));
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+        fresh.dispose();
+    }
+
+    @Test public void sharedCleanupFailureDuringBindErrorRetainsFaultStatus() throws Exception {
+        doAnswer(call -> {
+            Preview owned = call.getArgument(2);
+            assertNotNull(owned);
+            leaseToken(view);
+            doThrow(new UnsupportedOperationException("Injected cleanup failure")).when(provider).unbind(owned);
+            injectedUnbindFaults = new Preview[] {owned};
+            throw new IllegalArgumentException("Injected bind failure");
+        }).when(provider).bindToLifecycle(eq(activity), eq(CameraSelector.DEFAULT_FRONT_CAMERA), any(Preview.class));
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertStopped();
+        assertEquals(1, cleanupFailures());
+        assertFalse(statuses.contains("camera_unavailable"));
+        assertTrue(statuses.contains("camera_cleanup_failed"));
+    }
+
+    @Test public void surfaceDetachFailureStillAttemptsOwnedUnbind() throws Exception {
+        Preview original = startBoundPreview();
+        long token = leaseToken(view);
+        // Only the exceptional surface-detach operation is replaced. The real start
+        // and bound Preview preconditions above must succeed before injection.
+        Preview faulty = spy(original);
+        doThrow(new IllegalStateException("Injected surface failure")).when(faulty)
+            .setSurfaceProvider((Preview.SurfaceProvider) null);
+        Field previewField = PrivateCameraView.class.getDeclaredField("preview");
+        previewField.setAccessible(true);
+        previewField.set(view, faulty);
+        RuntimeException escaped = null;
+        try { view.onHostPause(); } catch (RuntimeException error) { escaped = error; }
+        assertNull("Surface failure must be accounted at shared cleanup boundary", escaped);
+        assertNativeCanceled(view, token);
+        verify(provider).unbind(faulty);
+        assertEquals(1, cleanupFailures());
+        assertFalse(statuses.contains("stopped"));
+    }
+
+    @SuppressWarnings("unchecked")
+    private MutableLiveData<PreviewView.StreamState> streamStates() throws Exception {
+        return (MutableLiveData<PreviewView.StreamState>) previewView().getPreviewStreamState();
+    }
+
+    @Test public void bindingIdleDoesNotClaimStreamingAndCurrentStreamingDoes() throws Exception {
+        startBoundPreview();
+        assertEquals(PreviewView.StreamState.IDLE, streamStates().getValue());
+        assertFalse("Bind success and View.VISIBLE do not prove streaming", statuses.contains("preview_only"));
+        assertTrue(cameraStates.hasObservers());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void asynchronousCameraErrorCancelsCurrentLeaseAndRemovesObservers() throws Exception {
+        Preview owned = startBoundPreview();
+        long token = leaseToken(view);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        statuses.clear();
+        cameraStates.setValue(CameraState.create(CameraState.Type.PENDING_OPEN,
+            CameraState.StateError.create(CameraState.ERROR_CAMERA_IN_USE)));
+        assertNativeCanceled(view, token);
+        verify(provider).unbind(owned);
+        assertEquals("camera_unavailable", statuses.get(statuses.size() - 1));
+        assertFalse(cameraStates.hasObservers());
+        assertFalse(streamStates().hasObservers());
+        view.onHostResume();
+        assertFalse(requested());
+    }
+
+    @Test public void initialIdleCanWaitButIdleAfterStreamingStopsTruthfully() throws Exception {
+        Preview owned = startBoundPreview();
+        cameraStates.setValue(CameraState.create(CameraState.Type.PENDING_OPEN));
+        streamStates().setValue(PreviewView.StreamState.IDLE);
+        assertTrue(requested());
+        assertFalse(statuses.contains("preview_only"));
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        long token = leaseToken(view);
+        streamStates().setValue(PreviewView.StreamState.IDLE);
+        assertNativeCanceled(view, token);
+        verify(provider).unbind(owned);
+        assertEquals("stopped", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void lateOldStreamAndErrorCallbacksCannotAffectNewLease() throws Exception {
+        startBoundPreview();
+        // Keep the registered observers to simulate callbacks already queued before Stop.
+        Observer<PreviewView.StreamState> oldStream = observer(streamStates());
+        Observer<CameraState> oldError = observer(cameraStates);
+        view.setActive(false);
+        assertFalse(cameraStates.hasObservers());
+        assertFalse(streamStates().hasObservers());
+        statuses.clear();
+        view.setActive(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        long token = leaseToken(view);
+        oldStream.onChanged(PreviewView.StreamState.STREAMING);
+        oldError.onChanged(CameraState.create(CameraState.Type.PENDING_OPEN,
+            CameraState.StateError.create(CameraState.ERROR_CAMERA_IN_USE)));
+        assertTrue(((PreviewLease) field("lease")).isCurrent(token));
+        assertTrue(requested());
+        assertTrue("Old callbacks cannot publish or stop a new session", statuses.isEmpty());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+        view.dispose();
+        assertFalse(cameraStates.hasObservers());
+        assertFalse(streamStates().hasObservers());
+    }
+
+    @SuppressWarnings("unchecked")
+    private <T> Observer<T> observer(androidx.lifecycle.LiveData<T> data) throws Exception {
+        Field observers = androidx.lifecycle.LiveData.class.getDeclaredField("mObservers");
+        observers.setAccessible(true);
+        Iterable<?> entries = (Iterable<?>) observers.get(data);
+        java.util.Iterator<?> iterator = entries.iterator();
+        assertTrue("Production must register a current-lease observer", iterator.hasNext());
+        return (Observer<T>) ((java.util.Map.Entry<?, ?>) iterator.next()).getKey();
     }
 
     private void committedBack() { committedBack(activity); }
