@@ -50,7 +50,7 @@ Run API 29, 30, 31/32, 34 and 36; retain API 28 as a screen-only/legacy compatib
 6. **Future TTS:** after a real reviewed engine exists, repeat using synthetic text and the **engine/actual producer UID**, not only the Sign UID. Include queue/cancel, pause/Back, engine failure/change, reinitialization and every fallback. This row is currently not applicable because no engine is implemented; it is not a pass.
 7. **Teardown:** revoke projection and verify recorder cleanup. Keep only bounded synthetic artifacts. No monitoring, microphone recording or screen/audio recording of the user is authorized by this test plan.
 
-Expected evidence includes compositor frames/video, positive-control PCM, protected-probe PCM, objective comparison output and a per-row pass/fail/inconclusive record. None exists yet for this change.
+The full matrix still requires compositor video, positive-control PCM, protected-probe PCM, objective comparison output and per-row pass/fail/inconclusive records. It has not executed. The limited physical app-only screenshot observations below do not complete this matrix.
 
 ## Verification labels and limits
 
@@ -65,3 +65,11 @@ These controls request Android's platform capture protections. They do not preve
 ## Verified checkpoint (2026-10-12)
 
 At exact commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`, native CI passed 84 Android-unit tests with zero failures/errors/skips, actual APK compilation and manifest audits; the separate unsigned emulator-app/test build also passed. See the [canonical checkpoint and immutable run/artifact links](../README.md#verified-checkpoint-2026-10-12). Native Back is repaired. These are hosted Robolectric/JVM and build results, not real emulator/device, compositor or audio-loopback acceptance. ASL inference and TTS remain unavailable. No later documentation/code revision inherits this verification.
+
+## Limited physical screenshot checkpoint (2026-10-12)
+
+At exact tested source `482605debdbd7fa465105ea6edbe07b2bdcb01a7`, six app-only screenshots sampled Home portrait, Hatsu/thank-you portrait and Home landscape on Seeker and Galaxy S24. Every RGB channel had minimum and maximum zero: 11,003,904 black pixels in total. Seeker images were 960×2136 or 2136×960; S24 images were 864×1872 or 1872×864.
+
+Black images alone would be inconclusive. Independent live UI hierarchies showed the Home → Thank you/Back to Home → Home transitions, while window diagnostics showed a surface ready for display. Seeker explicitly reported `SECURE`; S24 flags `0x81812100` include `FLAG_SECURE` (`0x2000`), with `mHasSurface=true` and `isReadyForDisplay=true`. Together, this supports app-only screenshot exclusion in these sampled states while the app was responsive. It does not reveal or validate visual design or animation.
+
+The [canonical physical checkpoint](../README.md#limited-physical-qa-checkpoint-2026-10-12) records exact source, public green CI, signed APK/certificate hashes and matching installed-byte provenance. CAMERA stayed denied and no camera or microphone was used. Neither real camera-preview capture exclusion nor the broader screen-recording matrix was tested. No playback-loopback test or TTS output exists; black screenshots say nothing about audio capture. This result does not certify every device, recorder or future output, and does not make a later documentation revision device-tested.

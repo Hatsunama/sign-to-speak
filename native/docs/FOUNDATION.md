@@ -29,9 +29,9 @@ The source currently contains an InstantHMR WASM loader and hand-coded fingerspe
 
 ## Current evidence
 
-See the [exact verified native checkpoint](../README.md#verified-checkpoint-2026-10-12) for completed hosted builds, manifest audits and 84 passing Android-unit tests. Host/component and structural tests remain distinct from actual compilation and from unexecuted emulator/device acceptance.
+See the [exact verified native checkpoint](../README.md#verified-checkpoint-2026-10-12) for completed hosted builds, manifest audits and 84 passing Android-unit tests. Host/component and structural tests remain distinct from actual compilation and from broader emulator/device acceptance. The [limited physical checkpoint](../README.md#limited-physical-qa-checkpoint-2026-10-12) covers non-camera navigation, rotation/background-return and sampled app-only screenshot exclusion.
 
-The foundation binds only CameraX Preview. The analyzer/buffer requirements above are future integration gates: ImageAnalysis, temporal landmark buffers, ASL inference, speech and model downloads are not implemented. Existing browser source and the pinned canonical Hatsu renderer remain preserved. No translation evaluation, real device camera/rotation acceptance or screen/audio-loopback test is claimed.
+The foundation binds only CameraX Preview. The analyzer/buffer requirements above are future integration gates: ImageAnalysis, temporal landmark buffers, ASL inference, speech and model downloads are not implemented. Existing browser source and the pinned canonical Hatsu renderer remain preserved. No translation evaluation, camera-runtime acceptance, full screen-recording matrix or playback-loopback test is claimed. Visual animation remains unverified.
 
 ## Official API references
 

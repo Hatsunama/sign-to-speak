@@ -36,7 +36,21 @@ At exact [commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`](https://github.com/
 - [Unsigned emulator-artifact CI 38306178700](https://github.com/Hatsunama/sign-to-speak/actions/runs/38306178700) passed building/auditing the isolated x86_64 app/instrumentation pair. It did not boot an emulator. The actual ARM64 phone-QA and x86_64 emulator-app binary manifests both opt out of audio playback capture.
 - Evidence artifacts: [native 11772393858](https://github.com/Hatsunama/sign-to-speak/actions/runs/38306178707/artifacts/11772393858) and [emulator build 11772233933](https://github.com/Hatsunama/sign-to-speak/actions/runs/38306178700/artifacts/11772233933). Artifact retention is three days; run/commit links identify the immutable checkpoint even after downloads expire.
 
-Native Back cancellation is implemented and covered by the passing suite. Real emulator/device camera, screen-compositor and playback-loopback acceptance remain unexecuted. ASL inference and TTS remain unavailable. These results apply only to the exact commit above, not to a later documentation or code revision. Unsigned artifacts are test inputs, not an install recommendation or release.
+Native Back cancellation is implemented and covered by the passing suite. That checkpoint did not include real emulator/device camera, screen-compositor or playback-loopback acceptance. Limited later physical evidence is recorded below. ASL inference and TTS remain unavailable. These results apply only to the exact commit above, not to a later documentation or code revision. Unsigned artifacts are test inputs, not an install recommendation or release.
+
+## Limited physical QA checkpoint (2026-10-12)
+
+Exact tested source: [482605debdbd7fa465105ea6edbe07b2bdcb01a7](https://github.com/Hatsunama/sign-to-speak/commit/482605debdbd7fa465105ea6edbe07b2bdcb01a7), tree `7b0a4eed8551c4dc06f16ae2c5f7080210a74a53`. Its [native CI 38310944788](https://github.com/Hatsunama/sign-to-speak/actions/runs/38310944788) and [unsigned emulator-artifact CI 38310944780](https://github.com/Hatsunama/sign-to-speak/actions/runs/38310944780) passed; the native XML again reports 84 tests with zero failures/errors/skips. Neither workflow ran an emulator.
+
+The isolated ARM64 `.qa` APK was subsequently signed locally with the existing approved development identity and its installed bytes matched on Seeker and Galaxy S24:
+- Signed APK SHA-256: `c53ec92f4e5e3ef9b2aa009315dbbaa7577fc2a9217aec93c27f166ca36576ff`
+- Signing certificate SHA-256: `2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21`
+
+Cold starts were 253 ms on Seeker and 152 ms on S24 in this bounded check. Home/Hatsu-page navigation, page Back, system Back, portrait/landscape and background/return were responsive. Live hierarchies changed Home → Thank you/Back to Home → Home; background/return retained the same process. Bounded QA logs contained no fatal crash or ANR. CAMERA remained denied; neither camera nor microphone was invoked.
+
+Six app-only screenshots across those devices were entirely black while independent live hierarchies and ready secure windows established active app content. This supports **screenshot capture exclusion for those sampled states**, not visual appearance or animation correctness. See [physical screenshot evidence and limits](docs/CAPTURE_PRIVACY.md#limited-physical-screenshot-checkpoint-2026-10-12).
+
+This limited physical result belongs only to the exact tested source and signed APK above. A later documentation commit is not itself device-tested. Actual visual animation, camera runtime, emulator runtime matrix, screen-recording matrix, playback loopback, ASL/TTS and release acceptance remain unverified or unavailable. Black screenshots do not establish audio protection.
 
 Host/structural tests alone do not prove APK compilation or native camera/rendering behavior. Obtain the coordinated build slot and resource approval before downloading tooling or running Gradle. Approved hosted CI uses JDK 21 for Robolectric API 36; the standalone Java check can use JDK 17.
 
@@ -55,11 +69,11 @@ All variants bundle JavaScript and have null signing configuration. No key is in
 - Existing web source retained unchanged at base `e52813a3ccf34cb5e2df40548dfc68e9587e2225`.
 - Android shell adapted from official npm `@react-native-community/template@0.86.3`; dependencies pinned by `package-lock.json`.
 - Canonical `Hatsunama/Hatsu-Animation` commit `0f4bb7512a074eabd704481fb06725e1b84ac928`. Both upstream files are exact copies, checked by SHA-256 tests. No license is invented; owner-directed reuse is the authority.
-- Hatsu lifecycle host adapted from the verified Caption Action workspace implementation. The native React lifecycle listener is new and still requires Android runtime tests.
+- Hatsu lifecycle host adapted from the verified Caption Action workspace implementation. Limited physical background/return behavior is recorded above; full lifecycle and visual-animation acceptance remains pending.
 - Local thank-you/button pattern verified against Caption Action commit `6ecc3377d10b5ce32aa41c1fa7ca4735bd513cb5`. App name and one app-specific body sentence are adapted to Sign To Speak. Patreon text is local, non-clickable text; no payment flow is created.
 
 See [the foundation design](docs/FOUNDATION.md) for the remaining test gates and model requirements.
 
 ## Native Back regression
 
-Native Back synchronously cancels owned camera requests before React delegation, including stalled JavaScript. Hosted Robolectric coverage passes at the exact checkpoint above; hardware release and actual OS gesture behavior still need emulator/device validation. See [current status and preserved test-first history](docs/NATIVE_BACK_REGRESSION.md).
+Native Back synchronously cancels owned camera requests before React delegation, including stalled JavaScript. Hosted Robolectric coverage passes at the exact checkpoint above; camera hardware release and predictive-gesture edge cases still need emulator/device validation. Limited non-camera system-Back navigation is recorded above. See [current status and preserved test-first history](docs/NATIVE_BACK_REGRESSION.md).

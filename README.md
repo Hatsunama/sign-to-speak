@@ -6,7 +6,7 @@ The current development destination is the isolated [React Native Android app in
 
 Android application ID: `com.xmilo_at_your_side.sign_to_speak`. QA builds use a separate `.qa` identity.
 
-See [native build and verification status](native/README.md), [capture protections and unexecuted real capture gates](native/docs/CAPTURE_PRIVACY.md), and [development CI](native/scripts/CI.md). Native builds and hosted Android-unit tests passed at the exact checkpoint linked there; real emulator/device screen and audio-loopback validation remains pending. No verified installable release is recommended here.
+See [native build and verification status](native/README.md), [capture protections and remaining capture gates](native/docs/CAPTURE_PRIVACY.md), and [development CI](native/scripts/CI.md). Native builds and hosted Android-unit tests passed at the exact checkpoint linked there; limited physical non-camera navigation and app-only screenshot exclusion were later observed on two phones. The full screen-recording, camera-runtime and audio-loopback gates remain pending. No verified installable release is recommended here.
 
 ## Preserved browser prototype
 
