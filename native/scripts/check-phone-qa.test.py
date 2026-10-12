@@ -4,7 +4,7 @@ qa=importlib.util.module_from_spec(spec);spec.loader.exec_module(qa)
 class PhoneQaApkTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
-  self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
+  self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
   self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture'}
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
@@ -42,5 +42,17 @@ class PhoneQaApkTest(unittest.TestCase):
   with self.assertRaises(AssertionError):self.verify()
  def test_wrong_sdk_rejected(self):
   self.xml=self.xml.replace('targetSdkVersion="36"','targetSdkVersion="35"')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_missing_playback_capture_policy_rejected(self):
+  self.xml=self.xml.replace(' android:allowAudioPlaybackCapture="false"','')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_playback_capture_allowed_rejected(self):
+  self.xml=self.xml.replace('allowAudioPlaybackCapture="false"','allowAudioPlaybackCapture="true"')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_wrong_playback_capture_namespace_rejected(self):
+  self.xml=self.xml.replace('android:allowAudioPlaybackCapture','allowAudioPlaybackCapture')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_duplicate_applications_rejected(self):
+  self.xml=self.xml.replace('</manifest>','<application android:allowAudioPlaybackCapture="true"/></manifest>')
   with self.assertRaises(AssertionError):self.verify()
 if __name__=='__main__':unittest.main()

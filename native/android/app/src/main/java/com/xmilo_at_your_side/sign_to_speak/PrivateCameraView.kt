@@ -47,6 +47,11 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         if (!active) { stop(); return }
         if (disposed || requested) return
         registerWithActivity()
+        if (cameraActivity?.capturePrivacyReady != true) {
+            stop()
+            status("capture_privacy_unavailable")
+            return
+        }
         if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
             reportCleanupFailure(); return
         }

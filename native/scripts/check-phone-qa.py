@@ -20,7 +20,9 @@ def verify(manifest, apk):
     declarations=root.findall('permission')
     assert len(declarations)==1 and declarations[0].get(ANDROID+'name')==internal
     assert declarations[0].get(ANDROID+'protectionLevel') in ('signature','0x2','0x00000002')
-    app=root.find('application');assert app is not None
+    apps=root.findall('application');assert len(apps)==1
+    app=apps[0]
+    assert app.get(ANDROID+'allowAudioPlaybackCapture')=='false'
     assert app.get(ANDROID+'testOnly')=='true'
     assert app.get(ANDROID+'debuggable') in (None,'false')
     assert app.get(ANDROID+'allowBackup')=='false' and app.get(ANDROID+'usesCleartextTraffic')=='false'

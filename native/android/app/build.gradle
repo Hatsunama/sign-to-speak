@@ -120,6 +120,11 @@ class MergedPermissionPolicy {
                 document.documentElement.getAttribute("package") != applicationId) {
             throw new GradleException("Merged manifest must belong to ${applicationId}")
         }
+        def applications = document.getElementsByTagName("application")
+        if (applications.length != 1 ||
+                applications.item(0).getAttributeNS(ANDROID_NS, "allowAudioPlaybackCapture") != "false") {
+            throw new GradleException("Merged application must explicitly disable audio playback capture")
+        }
         def permissions = new ArrayList<String>()
         ["uses-permission", "uses-permission-sdk-23", "uses-permission-sdk-m"].each { tag ->
             def nodes = document.getElementsByTagName(tag)
@@ -186,6 +191,7 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
             def app = MergedPermissionPolicy.APPLICATION_ID + (isQa ? ".qa" : "")
             def internal = app + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
             def valid = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${app}">
+                <application android:allowAudioPlaybackCapture="false" />
                 <uses-permission android:name="android.permission.CAMERA" />
                 <permission android:name="${internal}" android:protectionLevel="signature" />
                 <uses-permission android:name="${internal}" />
@@ -198,6 +204,11 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
             verify(valid)
             def otherApp = MergedPermissionPolicy.APPLICATION_ID + (isQa ? "" : ".qa")
             def rejected = [
+                missingCaptureOptOut: valid.replace('android:allowAudioPlaybackCapture="false"', ''),
+                enabledCapture: valid.replace('allowAudioPlaybackCapture="false"', 'allowAudioPlaybackCapture="true"'),
+                wrongCaptureNamespace: valid.replace('android:allowAudioPlaybackCapture', 'allowAudioPlaybackCapture'),
+                missingApplication: valid.replace('<application android:allowAudioPlaybackCapture="false" />', ''),
+                duplicateApplication: valid.replace('</manifest>', '<application android:allowAudioPlaybackCapture="false" /></manifest>'),
                 crossVariantIdentity: valid.replace(app, otherApp),
                 productionReceiverInQa: valid.replace(internal, otherApp + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"),
                 wrongXmlNamespace: valid.replace("http://schemas.android.com/apk/res/android", "https://wrong.example/android"),

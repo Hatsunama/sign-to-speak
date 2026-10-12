@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 report="$RUNNER_TEMP/sign-evidence/isolation-baseline"
 mkdir -p "$report"
 patch=native/tests/fixtures/pre-isolation.patch
-printf '%s  %s\n' 'a4c61a960fea8b214bdd9e250e559986d744a6a8acfb552fe1b3feb65e4a4e4c' "$patch" | sha256sum --check
+printf '%s  %s\n' 'e20c2ed7b48fb63571a74f5ee2b59866024393984db950b7b08322864a0b926f' "$patch" | sha256sum --check
 files=(native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/{MainActivity,PrivateCameraView}.kt)
 sha256sum "${files[@]}" > "$report/candidate-source.sha256"
 # Baseline must start from the exact checked-out candidate, not additional edits.

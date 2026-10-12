@@ -6,6 +6,9 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
+  internal val capturePrivacyReady: Boolean
+    get() = (application as? MainApplication)?.capturePrivacyReady == true
+
   // Register views before attachment too: a queued active prop must be canceled by Back.
   private val cameraViews = java.util.Collections.newSetFromMap(
       java.util.WeakHashMap<PrivateCameraView, Boolean>())

@@ -7,11 +7,16 @@ import android.app.Application;
 import android.content.ContextWrapper;
 import android.content.Intent;
 import android.os.Bundle;
+import android.os.Looper;
+import org.robolectric.Shadows;
 import android.view.WindowManager;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
 import com.facebook.react.uimanager.ThemedReactContext;
 import com.facebook.react.views.modal.ReactModalHostView;
+import com.facebook.react.uimanager.DisplayMetricsHolder;
+import com.facebook.react.internal.featureflags.ReactNativeFeatureFlags;
+import org.mockito.MockedStatic;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -25,7 +30,7 @@ import org.robolectric.annotation.LooperMode;
 
 /** Window flags only. This is deliberately not a compositor/screenshot or audio-loopback test. */
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = {28, 29, 36}, application = Application.class)
+@Config(sdk = {28, 29, 36}, application = MainApplication.class, shadows = {ReactBootstrapShadow.class, CaptureAudioManagerShadow.class})
 @LooperMode(LooperMode.Mode.PAUSED)
 public class SecureWindowLifecycleTest {
     private MockedConstruction<DefaultReactActivityDelegate> delegates;
@@ -57,6 +62,34 @@ public class SecureWindowLifecycleTest {
         controller.recreate();
         activity = controller.get();
         assertSecure(activity);
+    }
+
+    @Test public void actualPinnedReactModalCopiesSecureFlagBeforeShowAndAfterRecreation() {
+        ReactApplicationContext react = mock(ReactApplicationContext.class);
+        when(react.getCurrentActivity()).thenReturn(activity);
+        ThemedReactContext themed = new ThemedReactContext(react, new ContextWrapper(activity), "PrivacyModal", 1);
+        DisplayMetricsHolder.initDisplayMetricsIfNotInitialized(activity);
+        // Replace unrelated JNI feature-flag access, not Dialog/window security behavior.
+        try (MockedStatic<ReactNativeFeatureFlags> flags = mockStatic(ReactNativeFeatureFlags.class)) {
+        ReactModalHostView modal = new ReactModalHostView(themed);
+        final int[] shown = {0};
+        modal.setOnShowListener(dialog -> {
+            assertTrue((((android.app.Dialog) dialog).getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+            shown[0]++;
+        });
+        try {
+            modal.showOrUpdate();
+            assertNotNull(modal.getDialog());
+            assertTrue(modal.getDialog().isShowing());
+            assertTrue((modal.getDialog().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+            modal.setAnimationType("fade");
+            modal.showOrUpdate();
+            assertTrue(modal.getDialog().isShowing());
+            assertTrue((modal.getDialog().getWindow().getAttributes().flags & WindowManager.LayoutParams.FLAG_SECURE) != 0);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertEquals("Both dialog creations must deliver the secured show event", 2, shown[0]);
+        } finally { modal.onDropInstance(); }
+        }
     }
 
     private static void assertSecure(MainActivity activity) {

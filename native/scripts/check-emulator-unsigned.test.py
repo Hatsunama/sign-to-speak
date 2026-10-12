@@ -3,7 +3,7 @@ p=pathlib.Path(__file__).with_name('check-emulator-unsigned.py');s=importlib.uti
 class Unsigned(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
-  self.app=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{m.QA}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{m.QA}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{m.QA}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:testOnly="true" android:debuggable="false" android:allowBackup="false" android:usesCleartextTraffic="false"/></manifest>'''
+  self.app=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{m.QA}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{m.QA}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{m.QA}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:testOnly="true" android:debuggable="false" android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false"/></manifest>'''
   self.test=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{m.QA}.test"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.REORDER_TASKS"/><application android:testOnly="true"/><instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="{m.QA}"/></manifest>'''
   self.files={'AndroidManifest.xml':b'x','classes.dex':b'x','lib/x86_64/libappmodules.so':b'x','assets/index.android.bundle':b'x'}
  def verify(self):
@@ -54,5 +54,17 @@ class Unsigned(unittest.TestCase):
   with self.assertRaises(AssertionError):self.verify()
  def test_reject_wrong_test_sdk(self):
   self.test=self.test.replace('targetSdkVersion="36"','targetSdkVersion="35"')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_missing_playback_capture_policy(self):
+  self.app=self.app.replace(' android:allowAudioPlaybackCapture="false"','')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_playback_capture_allowed(self):
+  self.app=self.app.replace('allowAudioPlaybackCapture="false"','allowAudioPlaybackCapture="true"')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_wrong_playback_capture_namespace(self):
+  self.app=self.app.replace('android:allowAudioPlaybackCapture','allowAudioPlaybackCapture')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_duplicate_applications(self):
+  self.app=self.app.replace('</manifest>','<application android:allowAudioPlaybackCapture="true"/></manifest>')
   with self.assertRaises(AssertionError):self.verify()
 if __name__=='__main__':unittest.main()

@@ -54,8 +54,8 @@ import org.robolectric.annotation.Implements;
  * This is not a physical-camera, Hermes, or end-to-end predictive-gesture test.
  */
 @RunWith(RobolectricTestRunner.class)
-@Config(sdk = {28, 36}, application = Application.class,
-    shadows = NativeBackPrivacyTest.ProviderCompanionShadow.class)
+@Config(sdk = {28, 36}, application = MainApplication.class,
+    shadows = {NativeBackPrivacyTest.ProviderCompanionShadow.class, ReactBootstrapShadow.class, CaptureAudioManagerShadow.class})
 @LooperMode(LooperMode.Mode.PAUSED)
 public class NativeBackPrivacyTest {
     private MockedConstruction<DefaultReactActivityDelegate> delegates;
@@ -127,6 +127,49 @@ public class NativeBackPrivacyTest {
         if (controller != null) controller.pause().stop().destroy();
         if (delegates != null) delegates.close();
         if (uiManager != null) uiManager.close();
+    }
+
+    @Test public void lateActiveOnDisposedViewNeverReregisters() throws Exception {
+        view.dispose();
+        assertFalse(registeredViews(activity).contains(view));
+        int events = statuses.size();
+        view.setActive(true);
+        assertFalse("Late active prop must not re-register a retired view", registeredViews(activity).contains(view));
+        assertStopped();
+        assertEquals(events, statuses.size());
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+        verifyNoInteractions(provider);
+    }
+
+    @Test public void lateActiveOnDisposedViewNeverEmitsPrivacyFailure() throws Exception {
+        view.dispose();
+        Field readiness = MainApplication.class.getDeclaredField("capturePrivacyReady");
+        readiness.setAccessible(true);
+        readiness.setBoolean(activity.getApplication(), false);
+        int events = statuses.size();
+        view.setActive(true);
+        assertEquals("Retired view must stay silent even when privacy is unavailable", events, statuses.size());
+        assertFalse(registeredViews(activity).contains(view));
+        assertStopped();
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+        verifyNoInteractions(provider);
+    }
+
+    @Test public void nativeCameraRefusesPolicyFailureEvenIfJavaScriptRequestsStart() throws Exception {
+        Field readiness = MainApplication.class.getDeclaredField("capturePrivacyReady");
+        readiness.setAccessible(true);
+        readiness.setBoolean(activity.getApplication(), false);
+        view.setActive(true);
+        assertStopped();
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+        assertTrue(statuses.contains("capture_privacy_unavailable"));
+        view.onHostResume();
+        root.removeView(view);
+        root.addView(view);
+        view.setActive(true);
+        assertStopped();
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+        verifyNoInteractions(provider);
     }
 
     @Test public void backInvalidatesPendingProviderBeforeReactNavigation() throws Exception {

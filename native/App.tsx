@@ -1,6 +1,6 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
-  AppState, BackHandler, PermissionsAndroid, Pressable, requireNativeComponent,
+  AppState, BackHandler, NativeModules, PermissionsAndroid, Pressable, requireNativeComponent,
   ScrollView, StyleSheet, Text, useWindowDimensions, View,
   type NativeSyntheticEvent, type ViewProps,
 } from 'react-native';
@@ -162,8 +162,22 @@ function Home() {
   </View>;
 }
 
+function capturePrivacyReady(): boolean {
+  // Read the synchronous native constant before Home is ever mounted. Missing,
+  // failed or throwing bridges fail closed; no optimistic async/loading frame.
+  try { return NativeModules.CapturePrivacy?.ready === true; }
+  catch { return false; }
+}
+
 export default function App() {
-  return <SafeAreaProvider><Home /></SafeAreaProvider>;
+  return <SafeAreaProvider>{capturePrivacyReady() ? <Home /> :
+    <View style={styles.screen}><SafeAreaView style={styles.safe}>
+      <View style={styles.card}>
+        <Text accessibilityRole="header" style={styles.sectionTitle}>Privacy protection is unavailable</Text>
+        <Text style={styles.body}>The camera is off. Close and reopen the app to try again.</Text>
+      </View>
+    </SafeAreaView></View>
+  }</SafeAreaProvider>;
 }
 
 const styles = StyleSheet.create({

@@ -18,12 +18,14 @@ const compiled = ts.transpileModule(source, {compilerOptions: {
 }}).outputText;
 
 // Execute the actual App.tsx and session gate, mocking only React Native boundaries.
-async function renderHome(t) {
+async function renderHome(t, privacy = {ready: true}) {
   const stateListeners = new Set();
   const backListeners = new Set();
   const permissions = [];
   const starts = [];
+  let homeRenders = 0;
   const native = {
+    NativeModules: privacy === null ? {} : {CapturePrivacy: privacy},
     AppState: {currentState: 'active', addEventListener(_, fn) {stateListeners.add(fn); return {remove: () => stateListeners.delete(fn)};}},
     BackHandler: {addEventListener(_, fn) {backListeners.add(fn); return {remove: () => backListeners.delete(fn)};}},
     PermissionsAndroid: {
@@ -34,7 +36,7 @@ async function renderHome(t) {
     Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View',
     requireNativeComponent: name => name,
     StyleSheet: {create: styles => styles, absoluteFill: {}},
-    useWindowDimensions: () => ({width: 1000, height: 600}),
+    useWindowDimensions: () => { homeRenders++; return {width: 1000, height: 600}; },
   };
   const exports = {};
   vm.runInNewContext(compiled, {exports, require(name) {
@@ -69,7 +71,7 @@ async function renderHome(t) {
     return results;
   };
   const status = async (handler, value) => {await act(() => handler({nativeEvent: {status: value}}));};
-  return {app, native, stateListeners, backListeners, permissions, starts, text, button, press, cameras, notice, grant, resolve, reject, state, back, status};
+  return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, notice, grant, resolve, reject, state, back, status};
 }
 
 test('actual React home handles permission cancellation, native stop, local thanks and Back', async t => {
@@ -346,5 +348,30 @@ for (const result of ['denied', 'granted', 'error']) {
     assert.equal(h.starts.length, 0, 'unmount invalidates the request before it can start a session');
     assert.equal(h.stateListeners.size, 0);
     assert.equal(h.backListeners.size, 0);
+  });
+}
+
+for (const [label, capability] of [
+  ['missing', undefined], ['uninitialized', {}], ['failed', {ready: false}],
+  ['invalid truthy', {ready: 'true'}],
+  ['native error', {get ready() { throw new Error('native capability unavailable'); }}],
+]) {
+  test(`privacy ${label} blocks first render and lifecycle without permission requests`, async t => {
+    const app = await renderHome(t, capability === undefined ? null : capability);
+    assert.equal(app.homeRenders(), 0, "Private Home was never rendered, even transiently");
+    assert.match(app.text(), /Privacy protection is unavailable/);
+    assert.equal(app.app.root.findAllByType('Pressable').length, 0);
+    assert.equal(app.cameras().length, 0);
+    assert.equal(app.permissions.length, 0);
+    assert.equal(app.starts.length, 0);
+    assert.doesNotMatch(app.text(), /Your hands|Start local preview|Translation is not available yet/);
+    await app.state('background');
+    await app.state('active');
+    await app.back();
+    assert.equal(app.homeRenders(), 0, "Private Home was never rendered, even transiently");
+    assert.match(app.text(), /Privacy protection is unavailable/);
+    assert.equal(app.app.root.findAllByType('Pressable').length, 0);
+    assert.equal(app.permissions.length, 0);
+    assert.equal(app.starts.length, 0);
   });
 }

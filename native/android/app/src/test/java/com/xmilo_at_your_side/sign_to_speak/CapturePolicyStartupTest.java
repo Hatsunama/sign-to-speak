@@ -33,6 +33,7 @@ public class CapturePolicyStartupTest {
                     order.verify(audio).setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE);
                     order.verify(audio).getAllowedCapturePolicy();
                 } else verifyNoInteractions(audio);
+                assertTrue(app.getCapturePrivacyReady());
                 return null;
             });
             app.onCreate();
@@ -40,4 +41,63 @@ public class CapturePolicyStartupTest {
         }
     }
 
+    @Test @Config(sdk = {29, 36}) public void serviceFailureLatchesUnavailableBeforeReactStartup() {
+        MainApplication app = spy(new MainApplication());
+        AudioManager audio = mock(AudioManager.class);
+        doReturn(audio).when(app).getSystemService(Context.AUDIO_SERVICE);
+        doThrow(new IllegalStateException("test service failure")).when(audio)
+            .setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE);
+        try (MockedStatic<ReactNativeApplicationEntryPoint> entry = mockStatic(ReactNativeApplicationEntryPoint.class)) {
+            entry.when(() -> ReactNativeApplicationEntryPoint.loadReactNative(app)).thenAnswer(call -> {
+                assertFalse(app.getCapturePrivacyReady()); return null;
+            });
+            app.onCreate();
+            assertFalse(app.getCapturePrivacyReady());
+            entry.verify(() -> ReactNativeApplicationEntryPoint.loadReactNative(app));
+        }
+    }
+
+    @Test @Config(sdk = {29, 36}) public void missingServiceLatchesUnavailableBeforeReactStartup() {
+        MainApplication app = spy(new MainApplication());
+        doReturn(null).when(app).getSystemService(Context.AUDIO_SERVICE);
+        try (MockedStatic<ReactNativeApplicationEntryPoint> entry = mockStatic(ReactNativeApplicationEntryPoint.class)) {
+            entry.when(() -> ReactNativeApplicationEntryPoint.loadReactNative(app)).thenAnswer(call -> {
+                assertFalse(app.getCapturePrivacyReady()); return null;
+            });
+            app.onCreate();
+            assertFalse(app.getCapturePrivacyReady());
+            entry.verify(() -> ReactNativeApplicationEntryPoint.loadReactNative(app));
+        }
+    }
+
+    @Test @Config(sdk = {29, 36}) public void rejectedPolicyLatchesUnavailableBeforeReactStartup() {
+        for (int policy : new int[] {AudioAttributes.ALLOW_CAPTURE_BY_ALL, AudioAttributes.ALLOW_CAPTURE_BY_SYSTEM}) {
+            MainApplication app = spy(new MainApplication());
+            AudioManager audio = mock(AudioManager.class);
+            doReturn(audio).when(app).getSystemService(Context.AUDIO_SERVICE);
+            when(audio.getAllowedCapturePolicy()).thenReturn(policy);
+            try (MockedStatic<ReactNativeApplicationEntryPoint> entry = mockStatic(ReactNativeApplicationEntryPoint.class)) {
+                entry.when(() -> ReactNativeApplicationEntryPoint.loadReactNative(app)).thenAnswer(call -> {
+                    assertFalse(app.getCapturePrivacyReady()); return null;
+                });
+                app.onCreate();
+                assertFalse(app.getCapturePrivacyReady());
+                entry.verify(() -> ReactNativeApplicationEntryPoint.loadReactNative(app));
+            }
+        }
+    }
+
+    @Test @Config(sdk = {29, 36}) public void readbackFailureAlsoLatchesUnavailable() {
+        MainApplication app = spy(new MainApplication());
+        assertFalse("A fresh Application starts unavailable", app.getCapturePrivacyReady());
+        AudioManager audio = mock(AudioManager.class);
+        doReturn(audio).when(app).getSystemService(Context.AUDIO_SERVICE);
+        when(audio.getAllowedCapturePolicy()).thenThrow(new IllegalStateException("test readback failure"));
+        try (MockedStatic<ReactNativeApplicationEntryPoint> entry = mockStatic(ReactNativeApplicationEntryPoint.class)) {
+            app.onCreate();
+            assertFalse(app.getCapturePrivacyReady());
+            verify(audio).setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE);
+            entry.verify(() -> ReactNativeApplicationEntryPoint.loadReactNative(app));
+        }
+    }
 }

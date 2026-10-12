@@ -1,6 +1,6 @@
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
 +++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
-@@ -10,26 +10,6 @@
+@@ -13,26 +13,6 @@
    private val cameraViews = java.util.Collections.newSetFromMap(
        java.util.WeakHashMap<PrivateCameraView, Boolean>())
  
@@ -27,7 +27,7 @@
    internal fun registerCameraView(view: PrivateCameraView) { cameraViews.add(view) }
    internal fun unregisterCameraView(view: PrivateCameraView) { cameraViews.remove(view) }
  
-@@ -37,16 +17,14 @@
+@@ -40,16 +20,14 @@
    override fun onBackPressed() {
      // RN 0.86.3 also routes committed predictive Back here for targetSdk 36.
      // Do this before RN can emit a JS event; JS may never process that event.
@@ -78,17 +78,17 @@
  
      init {
          registerWithActivity()
-@@ -47,9 +40,6 @@
-         if (!active) { stop(); return }
-         if (disposed || requested) return
-         registerWithActivity()
+@@ -52,9 +45,6 @@
+             status("capture_privacy_unavailable")
+             return
+         }
 -        if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
 -            reportCleanupFailure(); return
 -        }
          requested = true
          if (isAttachedToWindow) start()
      }
-@@ -57,10 +47,10 @@
+@@ -62,10 +52,10 @@
      private fun start() {
          val owner = reactContext.currentActivity as? LifecycleOwner
          if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -101,7 +101,7 @@
          }
          val token = lease.begin(true, true)
          val future = ProcessCameraProvider.getInstance(context)
-@@ -71,101 +61,34 @@
+@@ -76,101 +66,34 @@
                  val cameraProvider = future.get()
                  val camera = CameraSelector.DEFAULT_FRONT_CAMERA
                  if (!cameraProvider.hasCamera(camera)) {
@@ -211,7 +211,7 @@
      }
  
      private fun registerWithActivity() {
-@@ -176,21 +99,15 @@
+@@ -181,21 +104,15 @@
          activity?.registerCameraView(this)
      }
  
@@ -239,7 +239,7 @@
      }
  
      override fun onAttachedToWindow() {
-@@ -203,17 +120,13 @@
+@@ -208,17 +125,13 @@
      }
  
      override fun onDetachedFromWindow() {

@@ -9,7 +9,8 @@ import com.facebook.react.uimanager.ViewManager
 import com.facebook.react.uimanager.annotations.ReactProp
 
 class SignFoundationPackage : ReactPackage {
-    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> = emptyList()
+    override fun createNativeModules(context: ReactApplicationContext): List<NativeModule> =
+        listOf(CapturePrivacyModule(context))
     override fun createViewManagers(context: ReactApplicationContext): List<ViewManager<*, *>> =
         listOf(HatsuViewManager(), CameraViewManager())
 }

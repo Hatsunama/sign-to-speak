@@ -7,7 +7,7 @@ An isolated **React Native Android app**, not a wrapper around the existing web 
 - Camera permission is requested only when Start is tapped. No microphone, network, storage or recording permission is declared.
 - The native camera view stops on Activity pause, detach, disposal and explicit Stop. Late camera-provider callbacks are invalidated. Returning to foreground does not restart it.
 - No signing frames, landmarks, transcripts or session history are saved or uploaded. This build has no analyzer/model and creates no app-owned image buffers. It also has no speech engine or system-voice fallback.
-- The Activity uses Android's secure-window flag. Screen capture/recents previews are blocked by the platform where supported; the app itself has no recording feature.
+- The Activity sets Android's secure-window flag before content. Audio capture is controlled separately: the manifest opts out and API 29+ requests `ALLOW_CAPTURE_BY_NONE` before React startup. If policy setup/readback fails, the first render shows only an unavailable state and native camera start is denied. API 26–28 remain preview-only with documented platform limits. See [capture protections and the required independent audio-loopback matrix](docs/CAPTURE_PRIVACY.md). No real screen/audio capture acceptance or future TTS protection is claimed.
 - The canonical Hatsu renderer stores only its existing local visual seed. Its static animation diagnostic is not signing/session content. Neither is transmitted.
 - Future model and speech integration is blocked on licensing, owner-hosted pinned artifacts and offline/privacy validation. A voice's “offline” flag alone is not enough.
 
