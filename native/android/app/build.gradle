@@ -30,6 +30,19 @@ android {
         unitTests.all {
             maxHeapSize = "1g"
             maxParallelForks = 1
+            // RN keeps production compilation on Java 17. Robolectric SDK 36 needs
+            // a Java 21 test process, independently of JAVA_HOME/the compile toolchain.
+            javaLauncher.set(javaToolchains.launcherFor {
+                languageVersion = JavaLanguageVersion.of(21)
+            })
+            doFirst {
+                def launcher = javaLauncher.get()
+                if (launcher.metadata.languageVersion.asInt() != 21) {
+                    throw new GradleException("Android unit tests require a Java 21 launcher")
+                }
+                logger.lifecycle("Android unit-test launcher: ${launcher.executablePath.asFile} " +
+                    "(Java ${launcher.metadata.languageVersion})")
+            }
         }
     }
     buildTypes {
