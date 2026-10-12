@@ -1,4 +1,5 @@
 import com.android.build.api.artifact.SingleArtifact
+import com.facebook.react.ReactExtension
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
@@ -21,6 +22,9 @@ react {
     debuggableVariants = []
     autolinkLibrariesWithApp()
 }
+// Capture the live project provider before task closures can resolve a different `react` binding.
+def reactDebuggableVariants = project.extensions.getByType(ReactExtension).getDebuggableVariants()
+
 android {
     // Pinned to the CMake already present on the approved standard Ubuntu CI image.
     externalNativeBuild { cmake { version "3.31.5" } }
@@ -251,7 +255,7 @@ androidComponents {
                             qa.ndk.abiFilters.toSet() != ["arm64-v8a"].toSet() ||
                             qa.matchingFallbacks != ["release"] ||
                             variant.applicationId.get() != expectedApp ||
-                            react.debuggableVariants.get().contains(variant.name)) {
+                            reactDebuggableVariants.get().contains(variant.name)) {
                         throw new GradleException("Unsigned phone QA configuration lost its required isolation")
                     }
                     if (android.defaultConfig.applicationId != MergedPermissionPolicy.APPLICATION_ID ||

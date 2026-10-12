@@ -136,7 +136,7 @@ test('unsigned QA isolation checks actual merged output and gates packaging', ()
     /qa\.signingConfig != null/, /qa\.debuggable/,
     /qa\.applicationIdSuffix != "\.qa"/, /qa\.versionNameSuffix != "-phone-qa"/,
     /qa\.ndk\.abiFilters\.toSet\(\) != \["arm64-v8a"\]\.toSet\(\)/,
-    /react\.debuggableVariants\.get\(\)\.contains\(variant\.name\)/,
+    /reactDebuggableVariants\.get\(\)\.contains\(variant\.name\)/,
     /variant\.applicationId\.get\(\) != expectedApp/,
     /android\.defaultConfig\.applicationId != MergedPermissionPolicy\.APPLICATION_ID/,
     /android\.buildTypes\.debug\.signingConfig != null/,
@@ -146,4 +146,24 @@ test('unsigned QA isolation checks actual merged output and gates packaging', ()
   ]) assert.match(guard, required);
   assert.match(build, /it\.name == "packageQa" \|\| it\.name == "assembleQa"/);
   assert.match(build, /dependsOn\(isolationTask\)/);
+});
+
+
+test('QA bundling guard captures the typed project React provider outside task closures', () => {
+  const build = read('android/app/build.gradle');
+  const capture = 'def reactDebuggableVariants = project.extensions.getByType(ReactExtension).getDebuggableVariants()';
+  const verifyCapture = source => {
+    assert.match(source, /^import com\.facebook\.react\.ReactExtension$/m);
+    assert.match(source, /^def reactDebuggableVariants = project\.extensions\.getByType\(ReactExtension\)\.getDebuggableVariants\(\)$/m);
+    assert.ok(source.indexOf(capture) < source.indexOf('androidComponents {'));
+    const guard = block(source, 'tasks.register("verifyUnsignedPhoneQaIsolation")');
+    assert.match(guard, /reactDebuggableVariants\.get\(\)\.contains\(variant\.name\)/);
+    assert.doesNotMatch(guard, /\breact\.|\bproject\.extensions/);
+  };
+  verifyCapture(build);
+  for (const mutation of [
+    build.replace('reactDebuggableVariants.get()', 'react.debuggableVariants.get()'),
+    build.replace(capture, capture + '.get()'),
+    build.replace('project.extensions.getByType(ReactExtension)', 'react'),
+  ]) assert.throws(() => verifyCapture(mutation), {name: 'AssertionError'});
 });
