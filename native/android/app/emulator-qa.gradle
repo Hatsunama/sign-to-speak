@@ -46,10 +46,11 @@ if (emulatorQaEnabled) {
         androidTestImplementation("androidx.test.ext:junit:1.3.0")
         androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
     }
-    def bundledVariants = project.extensions.getByType(com.facebook.react.ReactExtension).getDebuggableVariants()
+    def qaBuildInputs = project.extensions.extraProperties.get("emulatorQaBuildInputs")
+    def bundledVariants = qaBuildInputs.bundledVariants
     androidComponents {
         onVariants(selector().withBuildType("emulatorQa")) { variant ->
-            def merged = variant.artifacts.get(com.android.build.api.artifact.SingleArtifact.MERGED_MANIFEST.INSTANCE)
+            def merged = variant.artifacts.get(qaBuildInputs.mergedManifest)
             def verifyTask = tasks.register("verifyUnsignedEmulatorQaIsolation") {
                 inputs.file(merged)
                 dependsOn("verifyEmulatorQaMergedPermissions")

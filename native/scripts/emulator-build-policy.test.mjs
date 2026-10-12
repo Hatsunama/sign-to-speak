@@ -61,3 +61,24 @@ test('test harness proves runtime pages, loaded libraries and both orientations 
  for(const token of ['Os.sysconf(OsConstants._SC_PAGESIZE)','Build.SUPPORTED_ABIS[0]','/proc/self/maps','libhermesvm.so','libreactnative.so','libappmodules.so','startingOrientation','cycle < 2','repeat < 3','permission_deny_button','STREAMING'])assert.ok(source.includes(token),token);
  assert.doesNotMatch(source,/takeScreenshot|screenrecord|screencap|Bitmap\.compress|ImageCapture|VideoCapture/);
 });
+test('applied script receives typed provider and artifact from the compiled main build script',()=>{
+ const main=read('../android/app/build.gradle');
+ const verifyCapture=(m,b)=>{
+  assert.match(m,/ext\.emulatorQaBuildInputs = \[bundledVariants: reactDebuggableVariants,\s*mergedManifest: SingleArtifact\.MERGED_MANIFEST\.INSTANCE\]/);
+  assert.ok(m.indexOf('ext.emulatorQaBuildInputs')<m.indexOf('apply from: "emulator-qa.gradle"'));
+  assert.match(b,/def qaBuildInputs = project\.extensions\.extraProperties\.get\("emulatorQaBuildInputs"\)/);
+  assert.match(b,/def bundledVariants = qaBuildInputs\.bundledVariants/);
+  assert.match(b,/variant\.artifacts\.get\(qaBuildInputs\.mergedManifest\)/);
+  assert.doesNotMatch(b,/com\.facebook\.react\.ReactExtension|com\.android\.build\.api\.artifact\.SingleArtifact/);
+ };
+ verifyCapture(main,build);
+ assert.throws(()=>verifyCapture(main.replace('bundledVariants: reactDebuggableVariants','bundledVariants: react.debuggableVariants'),build));
+ assert.throws(()=>verifyCapture(main,build.replace('qaBuildInputs.bundledVariants','react.debuggableVariants')));
+});
+
+test('runner diagnostics only inspect access and ACL-tool availability',()=>{
+ const diagnostics=read('./ci-emulator-diagnostics.sh');
+ assert.match(diagnostics,/command -v setfacl/);
+ assert.match(diagnostics,/getfacl -p \/dev\/kvm/);
+ assert.doesNotMatch(diagnostics.split("\n").filter(line=>!line.trim().startsWith("#")).join("\n"),/sudo|chmod|usermod|udev|setfacl\s+-[mbx]/);
+});
