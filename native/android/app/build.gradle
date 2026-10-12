@@ -229,6 +229,8 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
     }
 }
 
+apply from: "emulator-qa.gradle"
+
 androidComponents {
     onVariants(selector().all()) { variant ->
         def variantTitle = variant.name.capitalize()
@@ -237,6 +239,7 @@ androidComponents {
             description = "Verify CAMERA plus exact app-owned signature receiver protection in ${variant.name}."
             dependsOn(permissionPolicyTests)
             phoneQa.set(variant.buildType == "qa")
+            if (variant.buildType == "emulatorQa") phoneQa.set(true)
             mergedManifest.set(variant.artifacts.get(SingleArtifact.MERGED_MANIFEST.INSTANCE))
         }
         tasks.named("check").configure { dependsOn(verifyTask) }

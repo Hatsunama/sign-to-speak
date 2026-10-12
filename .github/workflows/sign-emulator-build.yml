@@ -1,0 +1,103 @@
+name: Sign unsigned emulator test artifacts
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - native/**
+      - .github/workflows/sign-emulator-build.yml
+permissions:
+  contents: read
+concurrency:
+  group: sign-emulator-build-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+jobs:
+  unsigned:
+    if: >-
+      github.event.repository.private == false &&
+      (github.event_name == 'workflow_dispatch' ||
+       (github.event.pull_request.head.repo.full_name == github.repository &&
+        github.head_ref == 'fix/android-native-foundation'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    env:
+      CI: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+      TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+      - name: Verify exact source and read current runner acceleration access
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/sign-emulator-build"
+          git rev-parse HEAD > "$RUNNER_TEMP/sign-emulator-build/tested-sha.txt"
+          bash scripts/ci-emulator-diagnostics.sh
+      - name: Host and unsigned build policy checks
+        run: |
+          set -euo pipefail
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run typecheck
+          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
+          python3 scripts/check-emulator-unsigned.test.py
+          python3 scripts/check-emulator-task-graph.test.py
+      - name: Verify official pinned build inputs without accepting terms
+        run: bash scripts/ci-sdk.sh
+      - name: Inspect exact opt-in task graph before any build task executes
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 -PunsignedEmulatorQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:verifyUnsignedEmulatorQaIsolation :app:assembleEmulatorQa :app:assembleEmulatorQaAndroidTest \
+            --dry-run | tee "$RUNNER_TEMP/sign-emulator-build/task-graph.txt"
+          cd ..
+          python3 scripts/check-emulator-task-graph.py "$RUNNER_TEMP/sign-emulator-build/task-graph.txt"
+      - name: Build unsigned test-only app and instrumentation, never install
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 -PunsignedEmulatorQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:verifyUnsignedEmulatorQaIsolation :app:assembleEmulatorQa :app:assembleEmulatorQaAndroidTest
+          cd ..
+          bash scripts/ci-emulator-unsigned-audit.sh
+      - name: Preserve bounded evidence, including blockers
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-emulator-build-evidence-${{ env.TESTED_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: ${{ runner.temp }}/sign-emulator-build/
+      - name: Preserve unsigned test-only pair for C development signing
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-emulator-UNSIGNED-x86_64-${{ env.TESTED_SHA }}
+          retention-days: 3
+          if-no-files-found: error
+          compression-level: 0
+          path: |
+            native/android/app/build/outputs/apk/emulatorQa/*.apk
+            native/android/app/build/outputs/apk/androidTest/emulatorQa/*.apk
