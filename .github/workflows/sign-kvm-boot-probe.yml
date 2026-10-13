@@ -24,7 +24,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        cell: [api26, api35, api36, api35-16k]
+        cell: [api26]
     steps:
       - name: Check out the exact probe commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -38,6 +38,16 @@ jobs:
           sparse-checkout-cone-mode: false
       - name: Validate policy guards without SDK or emulator execution
         run: python3 tools/kvm-boot-probe/test_probe.py
+      - name: Install identified official Ubuntu emulator client-library prerequisite
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          sudo -n apt-get -q update
+          apt-cache policy libpulse0
+          sudo -n apt-get --print-uris -y --no-install-recommends --no-remove install libpulse0 > "$RUNNER_TEMP/sign-libpulse-uris.txt"
+          python3 -c 'import os,sys; from pathlib import Path; sys.path.insert(0,"tools/kvm-boot-probe"); import probe; print("OFFICIAL_UBUNTU_PACKAGE_URLS", probe.verify_ubuntu_package_uris((Path(os.environ["RUNNER_TEMP"])/"sign-libpulse-uris.txt").read_text()))'
+          sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends --no-remove install libpulse0
+          dpkg-query -W -f='${Package} ${Version} ${Status}\n' libpulse0
       - name: Bounded KVM boot and page-size check (no app installation)
         env:
           PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}

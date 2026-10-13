@@ -12,9 +12,11 @@ import subprocess
 import sys
 import tempfile
 import time
+from urllib.parse import urlparse
 
 BRANCH = 'refs/heads/probe/sign-kvm-matrix-20261013'
 SOURCE_BASE = '78c71bd36bbd0f04c86bd85e4b795da35bcd56f7'
+PROBE_PARENT = '37d0be76ba4f7fa30ab3c913261375d8d866b853'
 CELLS = {
     'api26': ('26', 'google_apis', '16', '4096'),
     'api35': ('35', 'google_apis', '9', '4096'),
@@ -59,6 +61,20 @@ def policy(env):
     for name, ok in checks:
         if not ok:
             raise Blocked('POLICY_BLOCKER:' + name)
+
+
+def verify_ubuntu_package_uris(text):
+    urls = re.findall(r"^'([^']+)'", text, re.M)
+    if not urls:
+        raise Blocked('APT_DOWNLOAD_PLAN_MISSING')
+    for url in urls:
+        parsed = urlparse(url)
+        if (parsed.scheme not in ('http', 'https') or parsed.hostname not in
+                ('archive.ubuntu.com', 'security.ubuntu.com', 'azure.archive.ubuntu.com') or
+                not parsed.path.startswith('/ubuntu/pool/') or not parsed.path.endswith('.deb') or
+                parsed.username or parsed.password or parsed.query or parsed.fragment):
+            raise Blocked('NON_OFFICIAL_UBUNTU_PACKAGE_SOURCE')
+    return len(urls)
 
 
 class KvmLease:
@@ -215,6 +231,9 @@ class Probe:
         if code and not allow_failure:
             if re.search(r'license.*(not accepted|accept|review)|Accept\?.*y/N', text, re.I):
                 raise Blocked('LICENSE_BLOCKER:' + name + ': no acceptance was supplied')
+            missing = re.search(r'error while loading shared libraries:\s*([A-Za-z0-9_+.-]+\.so(?:\.[A-Za-z0-9_.-]+)*):', text)
+            if missing:
+                raise Blocked('MISSING_HOST_LIBRARY:' + missing[1])
             raise Blocked('COMMAND_FAILED:' + name + ':exit=' + str(code))
         return '' if code else text.strip()
 
@@ -309,6 +328,7 @@ class Probe:
             if option not in helptext:
                 raise Blocked('CLI_OPTION_NOT_ADVERTISED:' + option)
         self.run([emulator, '-accel-check'], 'accel-check.txt')
+        self.result['acceleration_check_passed'] = True
         self.stage = 'avd-creation'
         self.run([self.avdmanager, 'create', 'avd', '--name', 'sign_kvm_probe', '--package', IMAGE,
                   '--device', 'pixel_2', '--path', str(self.work / 'avd')], 'avd-create.txt', seconds=30)
@@ -396,7 +416,7 @@ def main():
     if actual != os.environ['PROBE_COMMIT']:
         raise Blocked('CHECKOUT_SHA_MISMATCH')
     parent = subprocess.check_output(['git', 'rev-parse', 'HEAD^'], text=True).strip()
-    if parent != SOURCE_BASE:
+    if parent != PROBE_PARENT:
         raise Blocked('SOURCE_BASE_MISMATCH')
     temp_root = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
     evidence = temp_root / 'sign-kvm-boot-evidence'

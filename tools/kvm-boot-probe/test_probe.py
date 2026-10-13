@@ -142,6 +142,23 @@ class Guards(unittest.TestCase):
             self.assertEqual(cmd.call_args_list[2].args[0], ['sudo', '-n', 'setfacl', '--set', 'u::rw-,g::rw-,o::---', '/dev/kvm'])
             self.assertFalse(lease.changed)
 
+    def test_only_official_ubuntu_dependency_downloads(self):
+        for host in ('archive.ubuntu.com', 'security.ubuntu.com', 'azure.archive.ubuntu.com'):
+            self.assertEqual(probe.verify_ubuntu_package_uris("'https://" + host + "/ubuntu/pool/main/p/pulseaudio/libpulse0.deb' x 123 SHA256:abc"), 1)
+        for url in ('https://evil.example/ubuntu/pool/test.deb', 'https://archive.ubuntu.com.evil.test/ubuntu/pool/test.deb',
+                    'https://user:password@archive.ubuntu.com/ubuntu/pool/test.deb', 'file:///tmp/test.deb'):
+            with self.assertRaises(probe.Blocked):
+                probe.verify_ubuntu_package_uris("'" + url + "' file 123 hash")
+        with self.assertRaisesRegex(probe.Blocked, 'PLAN_MISSING'):
+            probe.verify_ubuntu_package_uris('')
+
+    def test_missing_loader_library_is_safely_classified(self):
+        with tempfile.TemporaryDirectory() as td:
+            p = probe.Probe(Path(td), Path(td))
+            with self.assertRaisesRegex(probe.Blocked, '^MISSING_HOST_LIBRARY:libpulse.so.0$'):
+                p.run([sys.executable, '-c', "print('/private/path: error while loading shared libraries: libpulse.so.0: missing'); raise SystemExit(127)"], 'loader.txt')
+            p.cleanup()
+
     def test_explicit_license_failure_classification(self):
         with tempfile.TemporaryDirectory() as td:
             p = probe.Probe(Path(td), Path(td))
@@ -270,9 +287,10 @@ class Guards(unittest.TestCase):
         text = wf.read_text()
         for phrase in ('runs-on: ubuntu-24.04', 'timeout-minutes: 25', 'contents: read',
                        'persist-credentials: false', 'max-parallel: 1',
+                       '--no-install-recommends --no-remove install libpulse0',
                        "github.event.repository.private == false", "github.event.repository.visibility == 'public'",
                        'branches: [probe/sign-kvm-matrix-20261013]',
-                       'cell: [api26, api35, api36, api35-16k]'):
+                       'cell: [api26]'):
             self.assertIn(phrase, text)
         for phrase in ('workflow_dispatch:', 'pull_request:', 'secrets.', 'id-token:',
                        'cache@', 'upload-artifact@', 'android-emulator-runner'):
