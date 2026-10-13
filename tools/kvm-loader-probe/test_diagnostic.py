@@ -15,4 +15,9 @@ class Diagnostics(unittest.TestCase):
         for key in env:
             bad=dict(env);bad[key]='unexpected'
             with self.subTest(key=key),self.assertRaises(d.probe.Blocked): d.policy(bad)
+    def test_adb_diagnostics_emit_only_categories_and_source_locations(self):
+        value=d.classify_adb('adb F 123 auth.cpp:417] Failed to load user key TOP_SECRET_MATERIAL /private/home/adbkey\nmain.cpp:167] could not install listener: Address already in use')
+        self.assertEqual(value, {'categories':['socket-listener-failed','address-in-use','authentication-initialization-failed'], 'source_locations':['auth.cpp:417','main.cpp:167'], 'missing_libraries':[]})
+        self.assertNotIn('SECRET', str(value))
+        self.assertNotIn('/private', str(value))
 if __name__=='__main__':unittest.main(verbosity=2)

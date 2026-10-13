@@ -1,4 +1,4 @@
-name: Sign emulator loader diagnosis
+name: Sign isolated ADB startup diagnosis
 on:
   push:
     branches: [probe/sign-kvm-loader-20261013]
@@ -31,7 +31,7 @@ jobs:
             tools/kvm-loader-probe
       - name: Test diagnostic guards and redaction
         run: python3 tools/kvm-loader-probe/test_diagnostic.py
-      - name: Diagnose official emulator loader without boot or KVM changes
+      - name: Diagnose isolated ADB startup without emulator or KVM changes
         env:
           PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
           PROBE_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}

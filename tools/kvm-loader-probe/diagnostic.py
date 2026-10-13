@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'kvm-boot-probe'))
 import probe
 
 BRANCH = 'refs/heads/probe/sign-kvm-loader-20261013'
-PARENT = '37d0be76ba4f7fa30ab3c913261375d8d866b853'
+PARENT = 'ae2947458daa5f41b7330645a2432dd8d732d91c'
 
 
 def policy(env):
@@ -35,6 +35,23 @@ def classify(text):
     return {'missing_libraries': sorted(set(missing)), 'missing_versions': sorted(set(versions))}
 
 
+def classify_adb(text):
+    patterns = {
+        'socket-listener-failed': r'could not install|cannot bind|failed to bind',
+        'address-in-use': r'address already in use',
+        'permission-denied': r'permission denied|operation not permitted',
+        'invalid-listener-argument': r'incompatible with|bad.*socket|invalid.*socket',
+        'authentication-initialization-failed': r'failed to.*(?:key|auth)|unable to create key',
+        'usb-initialization-failed': r'(?:usb|libusb).*(?:fail|error|abort)|(?:fail|error).*usb',
+        'mdns-initialization-failed': r'(?:mdns|openscreen).*(?:fail|error|abort)|(?:fail|error).*mdns',
+        'missing-file': r'no such file or directory',
+        'unsupported-argument': r'unknown (?:option|command)|unrecognized|usage:',
+    }
+    return {'categories': [k for k, pattern in patterns.items() if re.search(pattern, text, re.I)],
+            'source_locations': sorted(set(re.findall(r'\b[A-Za-z0-9_-]+\.(?:cpp|cc):[0-9]+', text))),
+            'missing_libraries': classify(text)['missing_libraries']}
+
+
 class NoDeviceLease:
     def acquire(self):
         return {'mode': 'diagnostic-only-no-kvm-access'}
@@ -47,14 +64,14 @@ def main():
     for ref, expected in [('HEAD', os.environ['PROBE_COMMIT']), ('HEAD^', PARENT)]:
         if subprocess.check_output(['git', 'rev-parse', ref], text=True).strip() != expected:
             raise probe.Blocked('DIAGNOSTIC_SOURCE_MISMATCH')
-    probe.PACKAGES = {'emulator': '37.2.12'}
+    probe.PACKAGES = {'platform-tools': '37.0.1'}
     probe.TOTAL_SECONDS = 8 * 60
     root = Path(os.environ['RUNNER_TEMP']).resolve(strict=True)
     evidence = root / 'sign-kvm-loader-evidence'
     evidence.mkdir(exist_ok=False)
     p = probe.Probe(evidence, root)
     p.kvm = NoDeviceLease()
-    facts = {'scope': 'loader-diagnostic-only', 'commit': os.environ['PROBE_COMMIT'], 'status': 'blocked'}
+    facts = {'scope': 'isolated-adb-startup-diagnostic-only', 'commit': os.environ['PROBE_COMMIT'], 'status': 'blocked'}
     def interrupted(signum, frame):
         raise probe.Blocked('INTERRUPTED:' + str(signum))
     signal.signal(signal.SIGINT, interrupted)
@@ -64,28 +81,32 @@ def main():
         p.stage = 'package-metadata'
         listing = p.run([p.sdkmanager, '--list', '--channel=0', '--sdk_root=' + str(p.sdk)], 'available.txt', seconds=90)
         probe.parse_available(listing)
-        p.stage = 'emulator-installation'
-        p.run([p.sdkmanager, '--channel=0', '--sdk_root=' + str(p.sdk), 'emulator'], 'sdk-install.txt', seconds=180)
-        props = probe.properties(p.sdk / 'emulator/source.properties')
-        if props.get('Pkg.Revision') != '37.2.12':
-            raise probe.Blocked('EMULATOR_REVISION_DRIFT')
+        p.stage = 'platform-tools-installation'
+        p.run([p.sdkmanager, '--channel=0', '--sdk_root=' + str(p.sdk), 'platform-tools'], 'sdk-install.txt', seconds=180)
+        props = probe.properties(p.sdk / 'platform-tools/source.properties')
+        if props.get('Pkg.Revision') != '37.0.1':
+            raise probe.Blocked('PLATFORM_TOOLS_REVISION_DRIFT')
         before = json.loads((evidence / 'runner-license-marker-hashes.json').read_text())
         after = {f.name: hashlib.sha256(f.read_bytes()).hexdigest() for f in (p.sdk / 'licenses').glob('*') if f.is_file()}
         if before != after:
             raise probe.Blocked('LICENSE_MARKERS_CHANGED')
-        p.stage = 'read-only-loader-inspection'
-        binaries = ['emulator', 'qemu/linux-x86_64/qemu-system-x86_64']
-        facts['binaries'] = {}
-        for index, relative in enumerate(binaries):
-            binary = p.sdk / 'emulator' / relative
-            if not binary.is_file():
-                raise probe.Blocked('EXPECTED_OFFICIAL_BINARY_MISSING')
-            p.run(['ldd', str(binary)], f'ldd-{index}.txt', allow_failure=True)
-            detail = classify((evidence / f'ldd-{index}.txt').read_text(errors='replace'))
-            detail['sha256'] = hashlib.sha256(binary.read_bytes()).hexdigest()
-            facts['binaries'][relative] = detail
-        p.run([str(p.sdk / 'emulator/emulator'), '-version'], 'emulator-version.txt', allow_failure=True)
-        facts['version_diagnostic'] = classify((evidence / 'emulator-version.txt').read_text(errors='replace'))
+        p.stage = 'isolated-adb-startup'
+        binary = str(p.sdk / 'platform-tools/adb')
+        facts['adb_sha256'] = hashlib.sha256(Path(binary).read_bytes()).hexdigest()
+        server, log = p.spawn([binary, '-L', 'tcp:127.0.0.1:5038', 'server', 'nodaemon'], 'adb-server.txt')
+        probe.time.sleep(2)
+        facts['server_exit'] = server.poll()
+        facts['startup_diagnostic'] = classify_adb(log.read_text(errors='replace'))
+        p.stop(server)
+        # Current AOSP explicitly disables USB and mDNS with these flags.
+        # Compare on the same disposable host; keep the loopback listener unchanged.
+        p.env.update(ADB_USB='0', ADB_MDNS='0')
+        p.env.pop('ADB_LIBUSB', None)
+        server, log = p.spawn([binary, '-L', 'tcp:127.0.0.1:5038', 'server', 'nodaemon'], 'adb-isolated.txt')
+        probe.time.sleep(2)
+        facts['isolated_server_exit'] = server.poll()
+        facts['isolated_startup_diagnostic'] = classify_adb(log.read_text(errors='replace'))
+        p.stop(server)
         facts['status'] = 'diagnosis-collected'
     except Exception as e:
         facts.update(status='blocked', stage=p.stage, reason=str(e))
