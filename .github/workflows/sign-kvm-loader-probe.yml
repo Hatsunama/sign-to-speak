@@ -1,0 +1,39 @@
+name: Sign emulator loader diagnosis
+on:
+  push:
+    branches: [probe/sign-kvm-loader-20261013]
+    paths:
+      - .github/workflows/sign-kvm-loader-probe.yml
+      - tools/kvm-loader-probe/**
+permissions:
+  contents: read
+concurrency:
+  group: sign-kvm-loader-probe
+  cancel-in-progress: false
+jobs:
+  diagnose:
+    if: >-
+      github.event.repository.private == false &&
+      github.event.repository.visibility == 'public' &&
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/probe/sign-kvm-loader-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          sparse-checkout: |
+            tools/kvm-boot-probe
+            tools/kvm-loader-probe
+      - name: Test diagnostic guards and redaction
+        run: python3 tools/kvm-loader-probe/test_diagnostic.py
+      - name: Diagnose official emulator loader without boot or KVM changes
+        env:
+          PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          PROBE_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          PROBE_COMMIT: ${{ github.sha }}
+        run: python3 tools/kvm-loader-probe/diagnostic.py
