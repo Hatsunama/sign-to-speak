@@ -1,0 +1,37 @@
+{
+  "schema": 1,
+  "output_name": "Sign-phoneQa-unsigned.apk",
+  "bytes": 23682746,
+  "sha256": "60d255d02a3b44520e024796eda455dd0670af5b3b6aab06aa964dbb9aceaefc",
+  "parts": [
+    {
+      "name": "Sign-phoneQa-unsigned.apk.part001",
+      "bytes": 8388608,
+      "sha256": "eb702440a55d881f4a64ef81caf79b7c2baf76c312d9b85d9a12df190d6e98bd",
+      "git_blob_sha": "dc8ca2cd3a03b726d354241c4bc59f95155abadb"
+    },
+    {
+      "name": "Sign-phoneQa-unsigned.apk.part002",
+      "bytes": 8388608,
+      "sha256": "be5e65c32ba63c2f3713fee33ba21655d0bfd2b77d78743df207a550e0682f4a",
+      "git_blob_sha": "9cd9cb27e2c39fcc363d39ad84eb379843fd4f4e"
+    },
+    {
+      "name": "Sign-phoneQa-unsigned.apk.part003",
+      "bytes": 6905530,
+      "sha256": "1302b316b33485f059dc417e35de94176933b5a1f6c9a62514bbd1f7d9de5778",
+      "git_blob_sha": "584848c215ea08d16cb1280ecd63cdc0775b317e"
+    }
+  ],
+  "unsigned": true,
+  "abi": "arm64-v8a",
+  "built_source_baseline": "78c71bd36bbd0f04c86bd85e4b795da35bcd56f7",
+  "candidate_source_inventory_sha256": "d38aa2515a33447893328680274665ae76ceb181016f11b67e2ed871855a8a5e",
+  "candidate_changes": "Previously reviewed unpublished candidate changes, not identical to published baseline",
+  "quality_gates": [
+    "73/74 source tests; deliberate no-audio privacy alarm remains failing",
+    "Continuous ASL not integrated",
+    "API26-28 playback deliberately denied",
+    "signed phone runtime/privacy/audiofocus/lifecycle/voice acceptance pending"
+  ]
+}
