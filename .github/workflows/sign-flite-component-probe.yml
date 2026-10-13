@@ -1,0 +1,70 @@
+name: Sign native Flite component probe
+on:
+  push:
+    branches: [probe/sign-flite-component-20261013]
+    paths:
+      - .github/workflows/sign-flite-component-probe.yml
+      - tools/flite-component-probe/**
+permissions:
+  contents: read
+concurrency:
+  group: sign-flite-component-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: >-
+      github.event.repository.private == false &&
+      github.event.repository.visibility == 'public' &&
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/probe/sign-flite-component-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        cell: [api26, api35-16k]
+    steps:
+      - name: Check out the exact probe commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          sparse-checkout: |
+            tools/kvm-boot-probe
+            tools/flite-component-probe
+            .github/workflows/sign-kvm-boot-probe.yml
+            .github/workflows/sign-flite-component-probe.yml
+          sparse-checkout-cone-mode: false
+      - name: Validate policy guards without SDK or emulator execution
+        run: |
+          python3 tools/kvm-boot-probe/test_probe.py
+          python3 tools/flite-component-probe/test_component.py
+      - name: Fail closed unless final reviewed artifacts are present and exact
+        env:
+          PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          PROBE_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          PROBE_COMMIT: ${{ github.sha }}
+          PROBE_CELL: ${{ matrix.cell }}
+        run: python3 tools/flite-component-probe/component_probe.py --preflight
+      - name: Install identified official Ubuntu emulator client-library prerequisite
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          sudo -n apt-get -q update
+          apt-cache policy libpulse0
+          sudo -n apt-get --print-uris -y --no-install-recommends --no-remove install libpulse0 > "$RUNNER_TEMP/sign-libpulse-uris.txt"
+          python3 -c 'import os,sys; from pathlib import Path; sys.path.insert(0,"tools/kvm-boot-probe"); import probe; print("OFFICIAL_UBUNTU_PACKAGE_URLS", probe.verify_ubuntu_package_uris((Path(os.environ["RUNNER_TEMP"])/"sign-libpulse-uris.txt").read_text()))'
+          sudo -n env DEBIAN_FRONTEND=noninteractive apt-get -y --no-install-recommends --no-remove install libpulse0
+          dpkg-query -W -f='${Package} ${Version} ${Status}\n' libpulse0
+      - name: Bounded native component check (no application or audio playback)
+        env:
+          PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          PROBE_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          PROBE_COMMIT: ${{ github.sha }}
+          PROBE_CELL: ${{ matrix.cell }}
+        run: python3 tools/flite-component-probe/component_probe.py
+      # Deliberately no caches, artifact upload, app build or signing.
+      # Only validated scalar environment/component evidence is printed to job logs.
