@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 BRANCH = 'refs/heads/probe/sign-kvm-matrix-20261013'
 SOURCE_BASE = '78c71bd36bbd0f04c86bd85e4b795da35bcd56f7'
-PROBE_PARENT = '37d0be76ba4f7fa30ab3c913261375d8d866b853'
+PROBE_PARENT = 'b1abfec4d353a3f0719beb282c55171ede82fbd0'
 CELLS = {
     'api26': ('26', 'google_apis', '16', '4096'),
     'api35': ('35', 'google_apis', '9', '4096'),
@@ -63,16 +63,37 @@ def policy(env):
             raise Blocked('POLICY_BLOCKER:' + name)
 
 
-def verify_ubuntu_package_uris(text):
+def verify_ubuntu_package_uris(text, mirror_text=None):
     urls = re.findall(r"^'([^']+)'", text, re.M)
     if not urls:
         raise Blocked('APT_DOWNLOAD_PLAN_MISSING')
+    hosts = ('archive.ubuntu.com', 'security.ubuntu.com', 'azure.archive.ubuntu.com')
+    mirror_prefix = '/etc/apt/apt-mirrors.txt/'
     for url in urls:
         parsed = urlparse(url)
-        if (parsed.scheme not in ('http', 'https') or parsed.hostname not in
-                ('archive.ubuntu.com', 'security.ubuntu.com', 'azure.archive.ubuntu.com') or
-                not parsed.path.startswith('/ubuntu/pool/') or not parsed.path.endswith('.deb') or
-                parsed.username or parsed.password or parsed.query or parsed.fragment):
+        if parsed.username or parsed.password or parsed.query or parsed.fragment:
+            raise Blocked('NON_OFFICIAL_UBUNTU_PACKAGE_SOURCE')
+        if parsed.scheme == 'mirror+file':
+            if parsed.netloc or not parsed.path.startswith(mirror_prefix + 'pool/') or not parsed.path.endswith('.deb'):
+                raise Blocked('UNEXPECTED_APT_MIRROR_FILE')
+            if mirror_text is None:
+                path = Path('/etc/apt/apt-mirrors.txt')
+                info = path.lstat()
+                if not stat.S_ISREG(info.st_mode) or info.st_uid != 0:
+                    raise Blocked('UNTRUSTED_APT_MIRROR_FILE')
+                mirror_text = path.read_text()
+            mirrors = [line.split('#', 1)[0].strip().split()[0] for line in mirror_text.splitlines()
+                       if line.split('#', 1)[0].strip()]
+            if not mirrors:
+                raise Blocked('APT_MIRROR_LIST_EMPTY')
+            for mirror in mirrors:
+                origin = urlparse(mirror)
+                if (origin.scheme not in ('http', 'https') or origin.hostname not in hosts or
+                        origin.path.rstrip('/') != '/ubuntu' or origin.username or origin.password or
+                        origin.query or origin.fragment):
+                    raise Blocked('NON_OFFICIAL_UBUNTU_MIRROR')
+        elif (parsed.scheme not in ('http', 'https') or parsed.hostname not in hosts or
+              not parsed.path.startswith('/ubuntu/pool/') or not parsed.path.endswith('.deb')):
             raise Blocked('NON_OFFICIAL_UBUNTU_PACKAGE_SOURCE')
     return len(urls)
 

@@ -152,6 +152,18 @@ class Guards(unittest.TestCase):
         with self.assertRaisesRegex(probe.Blocked, 'PLAN_MISSING'):
             probe.verify_ubuntu_package_uris('')
 
+    def test_exact_runner_mirror_file_resolves_only_official_hosts(self):
+        plan="'mirror+file:/etc/apt/apt-mirrors.txt/pool/main/p/pulseaudio/libpulse0.deb' file 123 hash"
+        mirrors='http://azure.archive.ubuntu.com/ubuntu priority:1\nhttps://archive.ubuntu.com/ubuntu priority:2\n'
+        self.assertEqual(probe.verify_ubuntu_package_uris(plan, mirrors), 1)
+        for bad in ('https://evil.example/ubuntu', 'https://archive.ubuntu.com.evil.test/ubuntu',
+                    'https://user:secret@archive.ubuntu.com/ubuntu', ''):
+            with self.assertRaises(probe.Blocked):
+                probe.verify_ubuntu_package_uris(plan, bad)
+        for bad in (plan.replace('apt-mirrors.txt', 'other.txt'), plan.replace('/pool/', '/../pool/')):
+            with self.assertRaises(probe.Blocked):
+                probe.verify_ubuntu_package_uris(bad, mirrors)
+
     def test_missing_loader_library_is_safely_classified(self):
         with tempfile.TemporaryDirectory() as td:
             p = probe.Probe(Path(td), Path(td))
