@@ -1,0 +1,49 @@
+name: Sign KVM emulator environment matrix
+on:
+  push:
+    branches: [probe/sign-kvm-matrix-20261013]
+    paths:
+      - .github/workflows/sign-kvm-boot-probe.yml
+      - tools/kvm-boot-probe/**
+permissions:
+  contents: read
+concurrency:
+  group: sign-kvm-boot-probe
+  cancel-in-progress: false
+jobs:
+  probe:
+    if: >-
+      github.event.repository.private == false &&
+      github.event.repository.visibility == 'public' &&
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/probe/sign-kvm-matrix-20261013'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        cell: [api26, api35, api36, api35-16k]
+    steps:
+      - name: Check out the exact probe commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+          fetch-depth: 2
+          sparse-checkout: |
+            tools/kvm-boot-probe
+            .github/workflows/sign-kvm-boot-probe.yml
+          sparse-checkout-cone-mode: false
+      - name: Validate policy guards without SDK or emulator execution
+        run: python3 tools/kvm-boot-probe/test_probe.py
+      - name: Bounded KVM boot and page-size check (no app installation)
+        env:
+          PROBE_REPOSITORY_PRIVATE: ${{ github.event.repository.private }}
+          PROBE_REPOSITORY_VISIBILITY: ${{ github.event.repository.visibility }}
+          PROBE_COMMIT: ${{ github.sha }}
+          PROBE_CELL: ${{ matrix.cell }}
+        run: python3 tools/kvm-boot-probe/probe.py
+      # Deliberately no caches, artifact upload, app build or signing.
+      # Curated bounded evidence is printed to ordinary job logs.
