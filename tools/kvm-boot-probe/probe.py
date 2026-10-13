@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 BRANCH = 'refs/heads/probe/sign-kvm-matrix-20261013'
 SOURCE_BASE = '78c71bd36bbd0f04c86bd85e4b795da35bcd56f7'
-PROBE_PARENT = 'b1abfec4d353a3f0719beb282c55171ede82fbd0'
+PROBE_PARENT = '78c10e767df5277bf1727f03a2bf9c3b995d492a'
 CELLS = {
     'api26': ('26', 'google_apis', '16', '4096'),
     'api35': ('35', 'google_apis', '9', '4096'),
@@ -96,6 +96,24 @@ def verify_ubuntu_package_uris(text, mirror_text=None):
               not parsed.path.startswith('/ubuntu/pool/') or not parsed.path.endswith('.deb')):
             raise Blocked('NON_OFFICIAL_UBUNTU_PACKAGE_SOURCE')
     return len(urls)
+
+
+def adb_server_args(adb):
+    # ADB's listener parser accepts literal localhost, not numeric 127.0.0.1.
+    return [adb, '-L', 'tcp:localhost:5038', 'server', 'nodaemon']
+
+
+def verify_loopback_listener(ipv4, ipv6):
+    found = []
+    for family, table in ((4, ipv4), (6, ipv6)):
+        for row in table.splitlines()[1:]:
+            fields = row.split()
+            if len(fields) >= 4 and fields[3] == '0A':
+                address, port = fields[1].split(':')
+                if int(port, 16) == 5038:
+                    found.append((family, address))
+    if found != [(4, '0100007F')]:
+        raise Blocked('ADB_LISTENER_NOT_EXCLUSIVELY_IPV4_LOOPBACK')
 
 
 class KvmLease:
@@ -303,8 +321,8 @@ class Probe:
                         ANDROID_EMULATOR_HOME=str(android), ANDROID_AVD_HOME=str(android / 'avd'),
                         ANDROID_HOME=str(sdk), ANDROID_SDK_ROOT=str(sdk),
                         TMPDIR=str(self.work / 'tmp'),
-                        ADB_SERVER_SOCKET='tcp:127.0.0.1:5038', ANDROID_ADB_SERVER_PORT='5038',
-                        ADB_MDNS_AUTO_CONNECT='0', ADB_LIBUSB='0')
+                        ADB_SERVER_SOCKET='tcp:localhost:5038', ANDROID_ADB_SERVER_PORT='5038',
+                        ADB_MDNS_AUTO_CONNECT='0', ADB_USB='0', ADB_MDNS='0')
         self.sdk = sdk
         self.sdkmanager = str(sdk / 'cmdline-tools/latest/bin/sdkmanager')
         self.avdmanager = str(sdk / 'cmdline-tools/latest/bin/avdmanager')
@@ -363,10 +381,12 @@ class Probe:
         self.resources(4, 5)
         self.stage = 'adb-server'
         # Foreground server on a probe-only port so cleanup owns its process group.
-        server, serverlog = self.spawn([adb, '-L', 'tcp:127.0.0.1:5038', 'server', 'nodaemon'], 'adb-server.txt')
+        server, serverlog = self.spawn(adb_server_args(adb), 'adb-server.txt')
         time.sleep(1)
         if server.poll() is not None:
             raise Blocked('ADB_SERVER_EXITED')
+        verify_loopback_listener(Path('/proc/net/tcp').read_text(), Path('/proc/net/tcp6').read_text())
+        self.result['adb_loopback_verified'] = True
         self.stage = 'emulator-boot'
         args = [emulator, '-avd', 'sign_kvm_probe', '-accel', 'on', '-gpu', 'software',
                 '-no-window', '-no-audio', '-no-snapshot', '-no-boot-anim',

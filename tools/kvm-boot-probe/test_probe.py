@@ -164,6 +164,18 @@ class Guards(unittest.TestCase):
             with self.assertRaises(probe.Blocked):
                 probe.verify_ubuntu_package_uris(bad, mirrors)
 
+    def test_adb_uses_supported_exclusively_loopback_listener(self):
+        self.assertEqual(probe.adb_server_args('/sdk/adb'), ['/sdk/adb', '-L', 'tcp:localhost:5038', 'server', 'nodaemon'])
+        good='header\n0: 0100007F:13AE 00000000:0000 0A'
+        probe.verify_loopback_listener(good, 'header')
+        for table4,table6 in [('header','header'), (good.replace('0100007F','00000000'),'header'),
+                             (good,'header\n0: 00000000000000000000000000000000:13AE 0000:0000 0A')]:
+            with self.assertRaisesRegex(probe.Blocked, 'LOOPBACK'):
+                probe.verify_loopback_listener(table4,table6)
+        source=Path(probe.__file__).read_text()
+        self.assertIn("ADB_USB='0', ADB_MDNS='0'", source)
+        self.assertNotIn('ADB_LIBUSB=', source)
+
     def test_missing_loader_library_is_safely_classified(self):
         with tempfile.TemporaryDirectory() as td:
             p = probe.Probe(Path(td), Path(td))
@@ -216,7 +228,8 @@ class Guards(unittest.TestCase):
                 return Mock(poll=Mock(return_value=None)), path
             with patch.object(p, 'setup'), patch.object(p, 'resources'), \
                  patch.object(p, 'run', side_effect=fake_run), patch.object(p, 'spawn', side_effect=fake_spawn), \
-                 patch.object(probe, 'BOOT_SECONDS', boot_seconds), patch('probe.time.sleep'):
+                 patch.object(probe, 'BOOT_SECONDS', boot_seconds), patch('probe.time.sleep'), \
+                 patch.object(probe, 'verify_loopback_listener'):
                 try:
                     p.execute()
                     return p.result, None
