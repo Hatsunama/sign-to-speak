@@ -16,7 +16,7 @@ from urllib.parse import urlparse
 
 BRANCH = 'refs/heads/probe/sign-kvm-matrix-20261013'
 SOURCE_BASE = '78c71bd36bbd0f04c86bd85e4b795da35bcd56f7'
-PROBE_PARENT = '78c10e767df5277bf1727f03a2bf9c3b995d492a'
+PROBE_PARENT = '23fa50de38a11841b9488feae08417223d84a49f'
 CELLS = {
     'api26': ('26', 'google_apis', '16', '4096'),
     'api35': ('35', 'google_apis', '9', '4096'),
@@ -179,6 +179,14 @@ def parse_available(text):
 def properties(path):
     return dict(line.strip().split('=', 1) for line in path.read_text().splitlines()
                 if '=' in line and not line.lstrip().startswith('#'))
+
+
+def api26_smaps_page_size(text):
+    kernel = re.findall(r'^KernelPageSize:\s+(\d+) kB$', text, re.M)
+    mmu = re.findall(r'^MMUPageSize:\s+(\d+) kB$', text, re.M)
+    if not kernel or len(kernel) != len(mmu) or set(kernel) != {'4'} or set(mmu) != {'4'}:
+        raise Blocked('API26_SMAPS_PAGE_SIZE_INCONCLUSIVE')
+    return str(int(kernel[0]) * 1024)
 
 
 def validate_runtime(facts):
@@ -415,6 +423,12 @@ class Probe:
                                   'abilist': 'ro.product.cpu.abilist',
                                   'fingerprint': 'ro.build.fingerprint'}.items():
                     facts[key] = shell(['getprop', prop], key + '.txt')
+                facts['page_size_source'] = 'getconf PAGE_SIZE'
+                if facts['page_size'] == '' and facts.get('sdk') == '26' and EXPECTED_SDK == '26':
+                    smaps = shell(['cat', '/proc/self/smaps'], 'api26-self-smaps.txt')
+                    facts['page_size'] = api26_smaps_page_size(smaps)
+                    facts['page_size_source'] = '/proc/self/smaps KernelPageSize and MMUPageSize (API26 fallback)'
+                    facts['getconf_returned_no_page_size'] = True
                 self.write('runtime-facts.json', json.dumps(facts, indent=2))
                 validate_runtime(facts)
                 self.result.update(status='environment-boot-verified', page_size_verified=True)

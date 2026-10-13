@@ -176,6 +176,16 @@ class Guards(unittest.TestCase):
         self.assertIn("ADB_USB='0', ADB_MDNS='0'", source)
         self.assertNotIn('ADB_LIBUSB=', source)
 
+    def test_api26_actual_smaps_page_sizes_required(self):
+        good='KernelPageSize:        4 kB\nMMUPageSize:           4 kB\n' * 3
+        self.assertEqual(probe.api26_smaps_page_size(good), '4096')
+        for bad in ('', good.replace('4 kB','16 kB'), good.replace('MMUPageSize','UnusedField'),
+                    good + 'KernelPageSize: 16 kB\nMMUPageSize: 16 kB\n'):
+            with self.assertRaisesRegex(probe.Blocked, 'INCONCLUSIVE'):
+                probe.api26_smaps_page_size(bad)
+        source=Path(probe.__file__).read_text()
+        self.assertIn("facts.get('sdk') == '26' and EXPECTED_SDK == '26'", source)
+
     def test_missing_loader_library_is_safely_classified(self):
         with tempfile.TemporaryDirectory() as td:
             p = probe.Probe(Path(td), Path(td))
@@ -315,7 +325,7 @@ class Guards(unittest.TestCase):
                        '--no-install-recommends --no-remove install libpulse0',
                        "github.event.repository.private == false", "github.event.repository.visibility == 'public'",
                        'branches: [probe/sign-kvm-matrix-20261013]',
-                       'cell: [api26]'):
+                       'cell: [api26, api35, api36, api35-16k]'):
             self.assertIn(phrase, text)
         for phrase in ('workflow_dispatch:', 'pull_request:', 'secrets.', 'id-token:',
                        'cache@', 'upload-artifact@', 'android-emulator-runner'):
