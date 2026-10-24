@@ -28,6 +28,15 @@ class Unsigned(unittest.TestCase):
  def test_reject_no_bundle(self):
   del self.files['assets/index.android.bundle']
   with self.assertRaises(AssertionError):self.verify()
+ def test_reject_empty_app_bundle(self):
+  self.files['assets/index.android.bundle']=b''
+  with self.assertRaisesRegex(AssertionError,'nonempty bundled JavaScript'):self.verify()
+ def test_instrumentation_without_bundle(self):
+  apk=self.root/'instrumentation.apk'
+  with zipfile.ZipFile(apk,'w') as z:
+   z.writestr('AndroidManifest.xml',b'x')
+   z.writestr('classes.dex',b'x')
+  m.unsigned(apk)
  def test_reject_debuggable(self):
   self.app=self.app.replace('debuggable="false"','debuggable="true"')
   with self.assertRaises(AssertionError):self.verify()
