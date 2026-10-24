@@ -16,7 +16,6 @@ import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.lifecycle.Lifecycle;
-import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.By;
@@ -43,11 +42,11 @@ public final class PhonePreviewIntegrationTest {
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
     private final UiDevice device = UiDevice.getInstance(instrumentation);
-    private ActivityScenario<MainActivity> scenario;
+    private PhoneActivityDriver driver;
     private MainActivity activity;
 
-    @After public void close() {
-        if (scenario != null) scenario.close();
+    @After public void close() throws Exception {
+        if (driver != null) driver.close();
     }
 
     @Test(timeout = 150000) public void uiStartStreamsAndEveryExitReleasesPreview() throws Exception {
@@ -58,8 +57,8 @@ public final class PhonePreviewIntegrationTest {
                 || Build.MODEL.toLowerCase().contains("emulator"));
         assertEquals("Grant CAMERA before the run; this test never changes permissions",
                 PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
-        scenario = ActivityScenario.launch(MainActivity.class);
-        scenario.onActivity(a -> activity = a);
+        driver = new PhoneActivityDriver(instrumentation);
+        activity = driver.launch();
         assertTrue("Capture privacy must be ready before mounting Home",
                 ((MainApplication) activity.getApplication()).getCapturePrivacyReady());
         findLabel(START);

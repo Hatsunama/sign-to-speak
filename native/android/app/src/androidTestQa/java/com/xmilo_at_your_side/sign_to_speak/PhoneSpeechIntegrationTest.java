@@ -9,7 +9,6 @@ import android.media.AudioTrack;
 import android.os.Build;
 import android.os.SystemClock;
 import androidx.lifecycle.Lifecycle;
-import androidx.test.core.app.ActivityScenario;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
 import androidx.test.uiautomator.UiDevice;
@@ -41,7 +40,7 @@ public final class PhoneSpeechIntegrationTest {
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
     private final UiDevice device = UiDevice.getInstance(instrumentation);
-    private ActivityScenario<MainActivity> scenario;
+    private PhoneActivityDriver driver;
     private MainActivity activity;
     private LocalSpeechModule module;
 
@@ -49,8 +48,8 @@ public final class PhoneSpeechIntegrationTest {
         assertTrue("Run on a physical ARM64 phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
         assertFalse("Emulators cannot certify phone audio", Build.FINGERPRINT.contains("generic")
                 || Build.MODEL.toLowerCase().contains("emulator"));
-        scenario = ActivityScenario.launch(MainActivity.class);
-        scenario.onActivity(a -> activity = a);
+        driver = new PhoneActivityDriver(instrumentation);
+        activity = driver.launch();
         await("real ReactContext and production module", () -> {
             ReactHost host = ((MainApplication) activity.getApplication()).getReactHost();
             if (!(host.getCurrentReactContext() instanceof ReactApplicationContext)) return false;
@@ -64,8 +63,8 @@ public final class PhoneSpeechIntegrationTest {
         assertTrue(((MainApplication) activity.getApplication()).getCapturePrivacyReady());
     }
 
-    @After public void close() {
-        if (scenario != null) scenario.close();
+    @After public void close() throws Exception {
+        if (driver != null) driver.close();
     }
 
     @Test public void realFlitePcmProtectedPlaybackAndInputBoundaries() throws Exception {
@@ -135,8 +134,8 @@ public final class PhoneSpeechIntegrationTest {
         CompletableFuture<Object> destroySpeech = speak(destroyToken, LONG_TEXT);
         PlaybackObservation destroyAudio = awaitPlaybackStarted(destroySpeech);
         MainActivity old = activity;
-        scenario.close();
-        scenario = null;
+        driver.close();
+        driver = null;
         await("real Activity destruction", old::isDestroyed);
         assertEquals("CANCELLED", destroySpeech.get(WAIT_MS, TimeUnit.MILLISECONDS));
         assertCleaned(destroyAudio.pcm, destroyAudio.player);
@@ -153,9 +152,9 @@ public final class PhoneSpeechIntegrationTest {
     }
 
     private void relaunch() throws Exception {
-        if (scenario != null) scenario.close();
-        scenario = ActivityScenario.launch(MainActivity.class);
-        scenario.onActivity(a -> activity = a);
+        if (driver != null) driver.close();
+        driver = new PhoneActivityDriver(instrumentation);
+        activity = driver.launch();
         await("new real ReactContext current Activity", () -> {
             ReactHost host = ((MainApplication) activity.getApplication()).getReactHost();
             if (!(host.getCurrentReactContext() instanceof ReactApplicationContext)) return false;

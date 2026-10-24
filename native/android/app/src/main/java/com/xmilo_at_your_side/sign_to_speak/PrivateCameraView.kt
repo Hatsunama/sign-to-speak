@@ -2,6 +2,7 @@ package com.xmilo_at_your_side.sign_to_speak
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.view.View
 import android.widget.FrameLayout
 import androidx.camera.core.CameraState
 import androidx.camera.core.CameraSelector
@@ -35,6 +36,22 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     private var streamObserver: Observer<PreviewView.StreamState>? = null
     private var cameraStates: LiveData<CameraState>? = null
     private var cameraObserver: Observer<CameraState>? = null
+    private var previewLayoutPosted = false
+    private val layoutPreview = Runnable {
+        try {
+            if (isAttachedToWindow && !disposed && width > 0 && height > 0) {
+                // Fabric does not lay out children again when CameraX adds its TextureView.
+                // Use the bounds Fabric already assigned to this native host.
+                previewView.measure(
+                    View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(height, View.MeasureSpec.EXACTLY),
+                )
+                previewView.layout(0, 0, width, height)
+            }
+        } finally {
+            previewLayoutPosted = false
+        }
+    }
 
     init {
         registerWithActivity()
@@ -190,6 +207,7 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
 
     fun dispose() {
         disposed = true
+        cancelPreviewLayout()
         try { stop() }
         finally {
             try {
@@ -200,6 +218,20 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
                 cameraActivity = null
             }
         }
+    }
+
+    override fun requestLayout() {
+        super.requestLayout()
+        // The React parent intentionally ignores a child's native layout request.
+        // CameraX can add or resize its preview child after Fabric's layout pass.
+        if (!isAttachedToWindow || disposed || width <= 0 || height <= 0 || previewLayoutPosted) return
+        previewLayoutPosted = true
+        if (!post(layoutPreview)) previewLayoutPosted = false
+    }
+
+    private fun cancelPreviewLayout() {
+        removeCallbacks(layoutPreview)
+        previewLayoutPosted = false
     }
 
     override fun onAttachedToWindow() {
@@ -217,6 +249,7 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
             try { if (observing) reactContext.removeLifecycleEventListener(this) }
             finally {
                 observing = false
+                cancelPreviewLayout()
                 super.onDetachedFromWindow()
             }
         }
