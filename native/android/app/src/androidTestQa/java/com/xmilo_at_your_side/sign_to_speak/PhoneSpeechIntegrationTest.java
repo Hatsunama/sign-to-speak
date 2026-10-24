@@ -90,6 +90,48 @@ public final class PhoneSpeechIntegrationTest {
         assertNull("Worker releases completed job", currentJob());
     }
 
+    @Test public void cancelStopsOwnedRealTrackBeforeReturning() throws Exception {
+        String token = begin();
+        assertNotNull("Explicit begin must work on resumed real Activity", token);
+        CompletableFuture<Object> result = speak(token, LONG_TEXT);
+        final AudioTrack[] ownedTrack = new AudioTrack[1];
+        final short[][] pcm = new short[1][];
+        final Object[] player = new Object[1];
+        await("real AudioTrack playing with advancing playback head", () -> {
+            assertFalse("Speech finished before cancellation precondition", result.isDone());
+            Object job = currentJob();
+            if (job == null) return false;
+            Object candidatePlayer = value(job, "player");
+            short[] candidatePcm = (short[]) value(job, "pcm");
+            if (candidatePlayer == null || candidatePcm == null) return false;
+            synchronized (value(candidatePlayer, "lock")) {
+                AudioTrack candidate = (AudioTrack) value(candidatePlayer, "activeTrack");
+                if (candidate == null || candidate.getPlayState() != AudioTrack.PLAYSTATE_PLAYING
+                        || (candidate.getPlaybackHeadPosition() & 0xffffffffL) == 0) return false;
+                ownedTrack[0] = candidate;
+                pcm[0] = candidatePcm;
+                player[0] = candidatePlayer;
+                return true;
+            }
+        });
+        module.cancel(token);
+        assertTrue("Owned AudioTrack must stop before cancel returns",
+                ownedTrack[0].getState() == AudioTrack.STATE_UNINITIALIZED
+                        || ownedTrack[0].getPlayState() != AudioTrack.PLAYSTATE_PLAYING);
+        assertEquals("CANCELLED", result.get(WAIT_MS, TimeUnit.MILLISECONDS));
+        assertCleaned(pcm[0], player[0]);
+        assertNull("Worker releases cancelled job", currentJob());
+        assertEquals("UNAVAILABLE", speak(token, "Cancelled session.").get(5, TimeUnit.SECONDS));
+
+        String recovered = begin();
+        assertNotNull("Recovery requires explicit new begin", recovered);
+        CompletableFuture<Object> recoveredSpeech = speak(recovered, "Recovery is explicit.");
+        AudioEvidence recoveredAudio = observeRealPlayback(recoveredSpeech);
+        assertTrue(recoveredAudio.nonzeroPcm && recoveredAudio.maxHead > 0);
+        assertEquals("COMPLETED", recoveredSpeech.get(WAIT_MS, TimeUnit.MILLISECONDS));
+        assertCleaned(recoveredAudio.pcm, recoveredAudio.player);
+    }
+
     @Test public void staleTokenCannotCancelNewSession() throws Exception {
         String stale = begin();
         String current = begin();

@@ -46,6 +46,8 @@ public class ProtectedPcmPlayerTest {
             focusRequest.set(call.getArgument(0));
             return AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         });
+        when(audio.abandonAudioFocusRequest(any(AudioFocusRequest.class)))
+            .thenReturn(AudioManager.AUDIOFOCUS_REQUEST_GRANTED);
         when(track.getState()).thenReturn(AudioTrack.STATE_INITIALIZED);
         if (Build.VERSION.SDK_INT >= 29)
             when(track.getAudioAttributes()).thenAnswer(call -> createdAttributes.get());
@@ -375,5 +377,132 @@ public class ProtectedPcmPlayerTest {
         verify(track, times(1)).stop();
         verify(track, times(1)).release();
         verify(audio, times(1)).abandonAudioFocusRequest(focusRequest.get());
+    }
+
+    @Test public void privacyAbortSilencesQueuedAudioBeforeStop() {
+        AtomicBoolean ready = new AtomicBoolean(true);
+        AtomicBoolean queuedPlaying = new AtomicBoolean();
+        AtomicBoolean queuedAtStop = new AtomicBoolean();
+        when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
+            .thenAnswer(call -> {
+                queuedPlaying.set(true);
+                ready.set(false);
+                return call.getArgument(2);
+            });
+        doAnswer(call -> {
+            queuedAtStop.set(queuedPlaying.get());
+            queuedPlaying.set(false);
+            return null;
+        }).when(track).stop();
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).pause();
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).flush();
+        ProtectedPcmPlayer player = new ProtectedPcmPlayer(context, ready::get,
+            invalidations::incrementAndGet, (attributes, format, bufferBytes) -> {
+                createdAttributes.set(attributes);
+                return track;
+            });
+        assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
+        verify(track).write(any(short[].class), eq(0), eq(160), eq(AudioTrack.WRITE_NON_BLOCKING));
+        verify(track).stop();
+        assertFalse("privacy loss must silence queued PCM before stop starts", queuedAtStop.get());
+        assertFalse(queuedPlaying.get());
+    }
+
+    @Test public void cancelSilencesQueueWhilePrivacyAbortIsInsideStop() throws Exception {
+        AtomicBoolean ready = new AtomicBoolean(true);
+        AtomicBoolean queuedPlaying = new AtomicBoolean();
+        AtomicBoolean playingWhenCancelReturned = new AtomicBoolean(true);
+        CountDownLatch stopEntered = new CountDownLatch(1);
+        CountDownLatch allowStop = new CountDownLatch(1);
+        CountDownLatch cancelReturned = new CountDownLatch(1);
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        AtomicReference<Throwable> cancelFailure = new AtomicReference<>();
+        when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
+            .thenAnswer(call -> {
+                queuedPlaying.set(true);
+                ready.set(false);
+                return call.getArgument(2);
+            });
+        doAnswer(call -> {
+            stopEntered.countDown();
+            if (!allowStop.await(5, TimeUnit.SECONDS))
+                throw new IllegalStateException("stop barrier timed out");
+            queuedPlaying.set(false);
+            return null;
+        }).when(track).stop();
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).pause();
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).flush();
+        ProtectedPcmPlayer player = new ProtectedPcmPlayer(context, ready::get,
+            invalidations::incrementAndGet, (attributes, format, bufferBytes) -> {
+                createdAttributes.set(attributes);
+                return track;
+            });
+        Thread worker = new Thread(() -> {
+            try { player.play(new short[160], () -> false); }
+            catch (Throwable failure) { workerFailure.set(failure); }
+        });
+        Thread canceller = new Thread(() -> {
+            try { player.cancel(); }
+            catch (Throwable failure) { cancelFailure.set(failure); }
+            finally {
+                playingWhenCancelReturned.set(queuedPlaying.get());
+                cancelReturned.countDown();
+            }
+        });
+        worker.setDaemon(true);
+        canceller.setDaemon(true);
+        worker.start();
+        try {
+            assertTrue("worker never reached stop with queued PCM", stopEntered.await(2, TimeUnit.SECONDS));
+            verify(track).write(any(short[].class), eq(0), eq(160), eq(AudioTrack.WRITE_NON_BLOCKING));
+            canceller.start();
+            assertTrue("cancellation did not return while stop was parked",
+                cancelReturned.await(1, TimeUnit.SECONDS));
+            assertNull(cancelFailure.get());
+            assertFalse("cancel returned while queued audio was still playing",
+                playingWhenCancelReturned.get());
+        } finally {
+            allowStop.countDown();
+            worker.join(2000);
+            if (canceller.isAlive()) canceller.join(2000);
+        }
+        assertFalse(worker.isAlive());
+        assertFalse(canceller.isAlive());
+        assertTrue(workerFailure.get() instanceof IllegalStateException);
+        verify(track).release();
+    }
+
+    @Test public void failedFocusAbandonFaultsSessionAndBlocksAnotherBegin() throws Exception {
+        when(audio.abandonAudioFocusRequest(any(AudioFocusRequest.class)))
+            .thenReturn(AudioManager.AUDIOFOCUS_REQUEST_FAILED);
+        SpeechSession.Request request = new SpeechSession.Request() {
+            @Override public short[] synthesize(byte[] ascii) { return new short[160]; }
+            @Override public void cancel() { }
+            @Override public void close() { }
+        };
+        SpeechSession session = new SpeechSession(new SpeechSession.Factory() {
+            @Override public SpeechSession.Request newRequest() { return request; }
+            @Override public SpeechSession.Player newPlayer() {
+                return ProtectedPcmPlayerTest.this.player();
+            }
+        });
+        CountDownLatch completed = new CountDownLatch(1);
+        AtomicReference<SpeechSession.Result> result = new AtomicReference<>();
+        try {
+            long token = session.begin(true);
+            assertTrue(token > 0);
+            session.speak(token, new byte[] { 'h', 'i' }, value -> {
+                result.set(value);
+                completed.countDown();
+            });
+            assertTrue("session did not complete", completed.await(2, TimeUnit.SECONDS));
+            verify(track).play();
+            verify(audio).abandonAudioFocusRequest(focusRequest.get());
+            assertEquals(SpeechSession.Result.CLEANUP_FAILED, result.get());
+            assertTrue(session.isFaulted());
+            assertEquals(0, session.begin(true));
+        } finally {
+            session.close();
+        }
     }
 }
