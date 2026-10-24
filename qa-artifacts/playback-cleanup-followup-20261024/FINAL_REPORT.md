@@ -1,4 +1,4 @@
-# Playback cleanup follow-up â€” 24 October 2026
+# Playback cleanup follow-up - 24 October 2026
 
 ## Verification status
 
@@ -6,7 +6,7 @@ Implementation code commit: `d6ff1cb3e994cf0accf55fec2844f897a87fd08a`.
 
 Final required CI run: [40132971778](https://github.com/Hatsunama/sign-to-speak/actions/runs/40132971778) passed. Independently downloaded raw XML contains **122 Android tests, zero failures/errors/skips**. The full host suite, TypeScript, Java checks, two native tests, 344 JNI checks, permission/isolation gates, and unsigned APK builds passed. The deliberate cleanup counterfactual still produced its four expected failures and restored exact candidate bytes.
 
-**Required two-phone verification is blocked:** Samsung passed the exact final QA artifact; Seeker disconnected and could not be tested. A reconnect/Home request was sent while independent work continued. No Seeker device action was taken. Production release remains blocked, and no release or installation recommendation is made. Store builds remain deferred.
+**Required two-phone verification is complete for this QA artifact:** Samsung S24 and Seeker both cold-started the exact signed app/test hashes and passed five portrait integration tests plus the landscape camera test. The user reconnected Seeker and Home readiness was independently verified before use. Both phones returned Home after their tests and their original rotation settings were restored. Production release remains blocked by the commercial-readiness items below; no shipping release or installation recommendation is made. Store builds remain deferred.
 
 ## Exact final artifact and physical evidence
 
@@ -16,7 +16,7 @@ Final required CI run: [40132971778](https://github.com/Hatsunama/sign-to-speak/
 - Existing debug certificate SHA-256: `2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21`. Key bytes were checked unchanged; no key was generated, copied, exported or uploaded. Signed ZIP payloads match unsigned payloads, signatures verify, and APK/ELF alignment checks pass. This does not establish full-app 16 KiB runtime.
 - Packaged manifest is `.qa`, testOnly, non-debuggable, with no INTERNET permission. Bundled JavaScript, voice/native library and notices are present. The native speech library is byte-identical to the previously inspected library; its diagnostics documentation change did not alter native behavior.
 - Samsung S24 (API 36, 4096-byte pages) installed app/test hashes match the signed receipts. A COLD start passed; **five portrait integration tests and the landscape camera test passed**. These exercise real registered bridge/JNI synthesis, protected AudioTrack progress/drain, immediate track state after cancellation, stale/input/lifecycle cancellation, and explicit recovery. No audio volume was changed; human audibility was not separately certified. Rotation was restored and the phone returned Home.
-- Seeker's exact final artifact remains **unverified**. Its previous artifact's results cannot be transferred to this one. Resume only after connection and Home readiness; do not interrupt another app/agent.
+- Seeker (API 36, 4096-byte pages) was independently checked connected and at Home, then installed the same exact signed app/test hashes. Its COLD start, **five portrait integration tests and landscape camera test passed**. This includes the new real AudioTrack cancellation-return check and recovery. Original rotation was restored and final foreground was Home. `evidence/final/phones/seeker-verification.json` and raw instrumentation output supersede the earlier disconnection blocker; `seeker-readiness.json` is retained as a historical observation of that interruption.
 - Raw receipts are under `evidence/final/`; CI metadata is `evidence/ci-run.json`. No application/build/runtime-test source changed after the tested code commit. Later report/evidence commits do not create a different app artifact.
 
 The packaged JS bundle, manifest and ordinary appearance assets match the old QA APK. The comparison found two generated entries changed: ART baseline profile and the resource table. A decoded resource-table comparison shows only React Native's generated developer-server IP changed; development support is disabled and the package has no INTERNET permission. This is build metadata, not a new active network path or UI change. `resources-diff.txt` records the comparison. A Windows default-encoding error in the ad hoc comparison was corrected by decoding/writing UTF-8; no application or artifact was modified.
