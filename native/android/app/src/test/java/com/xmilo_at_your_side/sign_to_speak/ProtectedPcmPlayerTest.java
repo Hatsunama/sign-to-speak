@@ -96,17 +96,25 @@ public class ProtectedPcmPlayerTest {
         assertEquals(AudioAttributes.USAGE_MEDIA, attributes.getUsage());
         assertEquals(AudioAttributes.CONTENT_TYPE_SPEECH, attributes.getContentType());
         verify(track).play();
+        verify(track, never()).pause();
+        verify(track, never()).flush();
         verify(track).release();
         verify(audio).abandonAudioFocusRequest(focusRequest.get());
     }
 
     @Test public void deniedFocusNeverCreatesTrack() {
-        when(audio.requestAudioFocus(any(AudioFocusRequest.class)))
+        when(audio.requestAudioFocus(any(AudioFocusRequest.class))).thenAnswer(call -> {
+            focusRequest.set(call.getArgument(0));
+            return AudioManager.AUDIOFOCUS_REQUEST_FAILED;
+        });
+        when(audio.abandonAudioFocusRequest(any(AudioFocusRequest.class)))
             .thenReturn(AudioManager.AUDIOFOCUS_REQUEST_FAILED);
         ProtectedPcmPlayer player = player();
         assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
         assertNull(createdAttributes.get());
         verify(track, never()).play();
+        verify(audio).abandonAudioFocusRequest(focusRequest.get());
+        player.close();
     }
 
     @Test public void appAndTrackCapturePolicyAreReadBack() {
@@ -470,6 +478,75 @@ public class ProtectedPcmPlayerTest {
         assertFalse(canceller.isAlive());
         assertTrue(workerFailure.get() instanceof IllegalStateException);
         verify(track).release();
+    }
+
+    @Test public void focusLossWhilePrivacyAbortWaitsForLockSilencesQueuedAudio() throws Exception {
+        AtomicBoolean written = new AtomicBoolean();
+        AtomicBoolean queuedPlaying = new AtomicBoolean();
+        AtomicBoolean queuedAtStop = new AtomicBoolean();
+        CountDownLatch checkEntered = new CountDownLatch(1);
+        CountDownLatch allowCheck = new CountDownLatch(1);
+        AtomicReference<Throwable> workerFailure = new AtomicReference<>();
+        when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
+            .thenAnswer(call -> {
+                queuedPlaying.set(true);
+                written.set(true);
+                return call.getArgument(2);
+            });
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).pause();
+        doAnswer(call -> { queuedPlaying.set(false); return null; }).when(track).flush();
+        doAnswer(call -> {
+            queuedAtStop.set(queuedPlaying.get());
+            queuedPlaying.set(false);
+            return null;
+        }).when(track).stop();
+        ProtectedPcmPlayer player = new ProtectedPcmPlayer(context, () -> {
+            if (written.get()) {
+                checkEntered.countDown();
+                try {
+                    if (!allowCheck.await(5, TimeUnit.SECONDS))
+                        throw new AssertionError("privacy check barrier timed out");
+                } catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
+            return !written.get();
+        }, invalidations::incrementAndGet, (attributes, format, bufferBytes) -> {
+            createdAttributes.set(attributes);
+            return track;
+        });
+        Thread worker = new Thread(() -> {
+            try { player.play(new short[160], () -> false); }
+            catch (Throwable failure) { workerFailure.set(failure); }
+        });
+        worker.setDaemon(true);
+        worker.start();
+        try {
+            assertTrue("worker never entered the post-write privacy check",
+                checkEntered.await(2, TimeUnit.SECONDS));
+            java.lang.reflect.Field lockField = ProtectedPcmPlayer.class.getDeclaredField("lock");
+            lockField.setAccessible(true);
+            Object playerLock = lockField.get(player);
+            synchronized (playerLock) {
+                allowCheck.countDown();
+                long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+                while (worker.getState() != Thread.State.BLOCKED && System.nanoTime() < deadline)
+                    Thread.sleep(1);
+                assertEquals("worker did not reach cleanup lock", Thread.State.BLOCKED, worker.getState());
+                assertTrue("queued PCM was not playing before focus loss", queuedPlaying.get());
+                player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
+                assertFalse("focus loss returned with queued PCM playing", queuedPlaying.get());
+                assertEquals(1, invalidations.get());
+            }
+        } finally {
+            allowCheck.countDown();
+            worker.join(2000);
+        }
+        assertFalse(worker.isAlive());
+        assertTrue(workerFailure.get() instanceof IllegalStateException);
+        assertFalse("stop began before queued PCM was silenced", queuedAtStop.get());
+        verify(track, times(1)).release();
     }
 
     @Test public void failedFocusAbandonFaultsSessionAndBlocksAnotherBegin() throws Exception {

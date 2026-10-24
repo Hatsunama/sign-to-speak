@@ -59,6 +59,9 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
         }
         AudioManager manager = null;
         AudioFocusRequest focus = null;
+        boolean focusGranted = false;
+        boolean playbackStarted = false;
+        boolean trackDrained = false;
         try {
             requireReady(sessionCancelled);
             manager = (AudioManager) context.getSystemService(Context.AUDIO_SERVICE);
@@ -76,6 +79,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
             focusActive = true;
             if (manager.requestAudioFocus(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED)
                 throw new IllegalStateException("Audio focus unavailable");
+            focusGranted = true;
             requireReady(sessionCancelled);
             AudioFormat format = new AudioFormat.Builder()
                 .setSampleRate(SAMPLE_RATE)
@@ -98,6 +102,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
             requireReady(sessionCancelled);
             synchronized (lock) {
                 requireNotCancelled(sessionCancelled);
+                playbackStarted = true;
                 created.play();
             }
             int offset = 0;
@@ -131,7 +136,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
                     requireNotCancelled(sessionCancelled);
                     head = created.getPlaybackHeadPosition() & 0xffffffffL;
                 }
-                if (head >= pcm.length) break;
+                if (head >= pcm.length) { trackDrained = true; break; }
                 long now = SystemClock.elapsedRealtime();
                 if (head != lastHead) { lastHead = head; lastHeadAt = now; }
                 if (now - lastHeadAt > STALL_MS || now - drainStart > pcm.length / 16L + STALL_MS)
@@ -143,15 +148,21 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
         } finally {
             focusActive = false;
             AudioTrack releasing;
-            synchronized (lock) { releasing = activeTrack; activeTrack = null; }
+            synchronized (lock) {
+                if (playbackStarted && !trackDrained) silenceQueuedAudioLocked();
+                releasing = activeTrack;
+                activeTrack = null;
+            }
             boolean cleanupFailed = false;
             if (releasing != null) {
                 try { releasing.stop(); } catch (RuntimeException failure) { cleanupFailed = true; }
                 try { releasing.release(); } catch (RuntimeException failure) { cleanupFailed = true; }
             }
             if (focus != null && manager != null) {
-                try { manager.abandonAudioFocusRequest(focus); }
-                catch (RuntimeException failure) { cleanupFailed = true; }
+                try {
+                    if (manager.abandonAudioFocusRequest(focus) != AudioManager.AUDIOFOCUS_REQUEST_GRANTED
+                        && focusGranted) cleanupFailed = true;
+                } catch (RuntimeException failure) { cleanupFailed = true; }
             }
             if (cleanupFailed) cleanupFault = true;
             if (cleanupFault) throw new IllegalStateException("Protected playback cleanup failed");
@@ -179,14 +190,17 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
 
     @Override public void cancel() {
         cancelled = true;
-        synchronized (lock) {
-            if (activeTrack != null && !cancelCleanupAttempted) {
-                cancelCleanupAttempted = true;
-                try { activeTrack.pause(); } catch (RuntimeException failure) { cleanupFault = true; }
-                try { activeTrack.flush(); } catch (RuntimeException failure) { cleanupFault = true; }
-            }
-        }
+        synchronized (lock) { silenceQueuedAudioLocked(); }
         if (cleanupFault) throw new IllegalStateException("Protected playback cancellation failed");
+    }
+
+    /** Called only while holding lock, before playback gives up ownership of its track. */
+    private void silenceQueuedAudioLocked() {
+        if (activeTrack != null && !cancelCleanupAttempted) {
+            cancelCleanupAttempted = true;
+            try { activeTrack.pause(); } catch (RuntimeException failure) { cleanupFault = true; }
+            try { activeTrack.flush(); } catch (RuntimeException failure) { cleanupFault = true; }
+        }
     }
 
     @Override public void close() {
