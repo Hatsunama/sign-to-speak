@@ -8,10 +8,13 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.graphics.Rect;
 import android.os.SystemClock;
+import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.TextureView;
+import android.view.ViewParent;
+import android.widget.TextView;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -61,21 +64,21 @@ public final class PhonePreviewIntegrationTest {
         activity = driver.launch();
         assertTrue("Capture privacy must be ready before mounting Home",
                 ((MainApplication) activity.getApplication()).getCapturePrivacyReady());
-        findLabel(START);
+        findActionButton(START);
         assertCameraOff("Launch");
 
         CameraSnapshot first = startAndAwaitStreaming();
-        UiObject2 stop = findLabel(STOP);
+        UiObject2 stop = findActionButton(STOP);
         assertStreaming("Before Stop", first);
         stop.click();
         assertReleased("Stop", first);
-        findLabel(START);
+        findActionButton(START);
         assertNoAutomaticRestart();
 
         CameraSnapshot back = startAndAwaitStreaming();
         assertTrue("OS Back injection succeeds", device.pressBack());
         assertReleased("Back", back);
-        findLabel(START);
+        findActionButton(START);
         assertNoAutomaticRestart();
 
         CameraSnapshot home = startAndAwaitStreaming();
@@ -86,13 +89,19 @@ public final class PhonePreviewIntegrationTest {
         assertNotNull("QA launcher exists", reopen);
         target.startActivity(reopen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));
         await("Launcher resumes Activity", 10000, () -> snapshot().resumed);
-        findLabel(START);
+        findActionButton(START);
         assertNoAutomaticRestart();
     }
 
     private CameraSnapshot startAndAwaitStreaming() throws Exception {
         assertCameraOff("Before Start");
-        findLabel(START).click();
+        findActionButton(START).click();
+        try {
+            await("Start accepted (Stop camera shown)", 5000,
+                    () -> device.hasObject(By.pkg(QA_PACKAGE).text(STOP)));
+        } catch (AssertionError timeout) {
+            throw new AssertionError(timeout.getMessage() + "; QA labels=" + uiLabels(), timeout);
+        }
         final CameraSnapshot[] streamed = new CameraSnapshot[1];
         final CameraSnapshot[] lastMounted = new CameraSnapshot[1];
         try {
@@ -229,6 +238,88 @@ public final class PhonePreviewIntegrationTest {
             }
         }
         return null;
+    }
+
+    private UiObject2 findActionButton(String label) throws Exception {
+        long end = SystemClock.elapsedRealtime() + 15000;
+        boolean downward = true;
+        String last = "label absent";
+        while (SystemClock.elapsedRealtime() < end) {
+            UiObject2 text = device.findObject(By.pkg(QA_PACKAGE).text(label));
+            if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+            UiObject2 button = text;
+            while (button != null && !button.isClickable()) button = button.getParent();
+            UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
+            if (button != null && scroll != null) {
+                Rect visible = button.getVisibleBounds();
+                Rect viewport = scroll.getVisibleBounds();
+                Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
+                ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+                last = "clickable=" + button.isClickable() + ",enabled=" + button.isEnabled()
+                        + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
+                        + ",scrollViewport=" + viewport + ",screen=" + screen;
+                if (button.isEnabled() && nativeBounds != null && !visible.isEmpty()
+                        && visible.equals(nativeBounds.full) && nativeBounds.localVisible.equals(new Rect(0, 0, nativeBounds.full.width(),
+                                nativeBounds.full.height()))
+                        && viewport.contains(nativeBounds.full) && screen.contains(nativeBounds.full)) {
+                    // Regression guard: never tap the offscreen label or a clipped Pressable.
+                    return button;
+                }
+            } else {
+                last = "label=" + (text != null) + ",clickableAncestor=" + (button != null)
+                        + ",scroll=" + (scroll != null);
+            }
+            if (scroll == null) SystemClock.sleep(100);
+            else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+        }
+        throw new AssertionError("QA button '" + label + "' never fully visible; " + last
+                + "; QA labels=" + uiLabels() + "; " + snapshot());
+    }
+
+    private String uiLabels() {
+        StringBuilder labels = new StringBuilder("[");
+        for (UiObject2 node : device.findObjects(By.pkg(QA_PACKAGE))) {
+            String value = node.getText();
+            if (value == null || value.isEmpty()) value = node.getContentDescription();
+            if (value == null || value.isEmpty()) continue;
+            if (labels.length() > 1) labels.append("; ");
+            labels.append(value);
+            if (labels.length() > 600) { labels.append("..."); break; }
+        }
+        return labels.append(']').toString();
+    }
+
+    private static ButtonGeometry buttonGeometry(View root, String label) {
+        if (root instanceof TextView && label.contentEquals(((TextView) root).getText())) {
+            View candidate = root;
+            while (candidate != null && !candidate.isClickable()) {
+                ViewParent parent = candidate.getParent();
+                candidate = parent instanceof View ? (View) parent : null;
+            }
+            if (candidate != null) {
+                int[] position = new int[2];
+                candidate.getLocationOnScreen(position);
+                Rect full = new Rect(position[0], position[1], position[0] + candidate.getWidth(),
+                        position[1] + candidate.getHeight());
+                Rect localVisible = new Rect();
+                candidate.getLocalVisibleRect(localVisible);
+                return new ButtonGeometry(full, localVisible);
+            }
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                ButtonGeometry found = buttonGeometry(group.getChildAt(i), label);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static final class ButtonGeometry {
+        final Rect full, localVisible;
+        ButtonGeometry(Rect full, Rect localVisible) { this.full = full; this.localVisible = localVisible; }
+        @Override public String toString() { return "{full=" + full + ",localVisible=" + localVisible + "}"; }
     }
 
     private UiObject2 findLabel(String label) throws Exception {
