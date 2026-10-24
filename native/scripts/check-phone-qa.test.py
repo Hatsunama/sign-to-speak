@@ -5,7 +5,7 @@ class PhoneQaApkTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
   self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
-  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libprivate_tts.so':b'fixture','assets/index.android.bundle':b'fixture',**{'assets/flite/'+name:(qa.LICENSE_ROOT/'flite'/name).read_bytes() for name in qa.REQUIRED_FLITE_ASSETS}}
+  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libprivate_tts.so':b'fixture','assets/index.android.bundle':b'fixture',**{'assets/flite/'+name:(qa.LICENSE_ROOT/'flite'/name).read_bytes() for name in qa.REQUIRED_FLITE_ASSETS},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')}}
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
   with zipfile.ZipFile(a,'w') as z:
@@ -30,6 +30,18 @@ class PhoneQaApkTest(unittest.TestCase):
  def test_empty_modifications_rejected(self):
   self.entries['assets/flite/MODIFICATIONS.txt']=b''
   with self.assertRaisesRegex(AssertionError,'Flite license asset'):self.verify()
+ def test_missing_application_license_rejected(self):
+  del self.entries['assets/sign-to-speak/LICENSE']
+  with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()
+ def test_changed_application_license_rejected(self):
+  self.entries['assets/sign-to-speak/LICENSE']=b'changed'
+  with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()
+ def test_missing_application_notice_rejected(self):
+  del self.entries['assets/sign-to-speak/NOTICE']
+  with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()
+ def test_changed_application_notice_rejected(self):
+  self.entries['assets/sign-to-speak/NOTICE']=b'changed'
+  with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()
  def test_shipping_id_rejected(self):
   self.xml=self.xml.replace(qa.PACKAGE,qa.PACKAGE.removesuffix('.qa'))
   with self.assertRaises(AssertionError):self.verify()

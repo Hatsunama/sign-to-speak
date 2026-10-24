@@ -9,6 +9,7 @@ ANDROID='{http://schemas.android.com/apk/res/android}'
 PACKAGE='com.xmilo_at_your_side.sign_to_speak.qa'
 LICENSE_ROOT=pathlib.Path(__file__).resolve().parents[1]/'licenses'
 REQUIRED_FLITE_ASSETS=('THIRD_PARTY_NOTICES.txt','MODIFICATIONS.txt')
+REQUIRED_APPLICATION_ASSETS=('LICENSE','NOTICE')
 
 def verify(manifest, apk):
     root=ET.parse(manifest).getroot()
@@ -38,6 +39,11 @@ def verify(manifest, apk):
             entry='assets/flite/'+filename
             assert source, f'Flite license source is empty: {filename}'
             assert entry in names and archive.read(entry)==source, f'Missing or changed Flite license asset: {entry}'
+        for filename in REQUIRED_APPLICATION_ASSETS:
+            source=(LICENSE_ROOT/'sign-to-speak'/filename).read_bytes()
+            entry='assets/sign-to-speak/'+filename
+            assert source, f'Application license source is empty: {filename}'
+            assert entry in names and archive.read(entry)==source, f'Missing or changed application license asset: {entry}'
         assert not any(re.match(r'META-INF/[^/]+\.(RSA|DSA|EC|SF)$',name,re.I) for name in names), 'Unexpected v1 signature material'
         libraries=[name for name in names if name.startswith('lib/') and name.endswith('.so')]
         assert libraries and {name.split('/')[1] for name in libraries}=={'arm64-v8a'}, 'APK must contain only arm64 native libraries'

@@ -19,7 +19,10 @@ export function createLocalSpeech(bridge, onCleanupFailed = () => {}) {
         if (request !== generation) { cancel(received); return null; }
         token = received;
         return received;
-      } catch { return null; }
+      } catch (error) {
+        if (error?.code === 'CLEANUP_FAILED') onCleanupFailed('CLEANUP_FAILED');
+        return null;
+      }
     },
     async speak(text) {
       const request = generation;

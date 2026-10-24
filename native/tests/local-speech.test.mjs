@@ -48,6 +48,49 @@ test('missing or rejecting bridge fails closed and allows a later explicit retry
   assert.equal(await speech.start(), 'recovered');
 });
 
+test('begin cleanup rejection notifies even when no token was admitted', async () => {
+  const faults = [];
+  const speech = createLocalSpeech({
+    begin: async () => {throw {code: 'CLEANUP_FAILED', message: 'Native admission cleanup failed'};},
+    cancel() {},
+  }, value => faults.push(value));
+  assert.equal(await speech.start(), null);
+  assert.deepEqual(faults, ['CLEANUP_FAILED']);
+});
+
+test('retired begin cleanup rejection notifies after stop and newer admission', async () => {
+  const first = deferred(), second = deferred(), faults = [], cancelled = [];
+  let calls = 0;
+  const speech = createLocalSpeech({
+    begin: () => ++calls === 1 ? first.promise : second.promise,
+    cancel: token => cancelled.push(token),
+  }, value => faults.push(value));
+  const stale = speech.start();
+  speech.stop();
+  const fresh = speech.start();
+  second.resolve('new');
+  assert.equal(await fresh, 'new');
+  first.reject({code: 'CLEANUP_FAILED', message: 'Native admission cleanup failed'});
+  assert.equal(await stale, null);
+  assert.deepEqual(faults, ['CLEANUP_FAILED']);
+  assert.deepEqual(cancelled, []);
+});
+
+test('ordinary and unrelated begin rejections stay retryable and never signal cleanup', async () => {
+  const faults = [];
+  let calls = 0;
+  const speech = createLocalSpeech({
+    begin: () => ++calls === 1 ? Promise.reject({code: 'UNAVAILABLE'})
+      : calls === 2 ? Promise.reject(new Error('CLEANUP_FAILED'))
+        : Promise.resolve('recovered'),
+    cancel() {},
+  }, value => faults.push(value));
+  assert.equal(await speech.start(), null);
+  assert.equal(await speech.start(), null);
+  assert.equal(await speech.start(), 'recovered');
+  assert.deepEqual(faults, []);
+});
+
 test('speak forwards confirmed text and the live native token, preserving native status', async () => {
   const calls = [];
   const speech = createLocalSpeech({begin: async () => 'activity:1', speak: async (token, text) => {

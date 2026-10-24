@@ -14,8 +14,12 @@ class LocalSpeechModule(context: ReactApplicationContext) : ReactContextBaseJava
     val expected = reactApplicationContext.currentActivity as? MainActivity
     UiThreadUtil.runOnUiThread {
       val owner = (reactApplicationContext.currentActivity as? MainActivity)
-      try { promise.resolve(if (owner === expected) owner?.speechOwner?.begin() else null) }
-      catch (_: RuntimeException) { promise.resolve(null) }
+          ?.takeIf { it === expected }
+      val token = try { owner?.speechOwner?.begin() }
+          catch (_: RuntimeException) { null }
+      if ((owner?.application as? MainApplication)?.speechCleanupFaulted == true)
+        promise.reject("CLEANUP_FAILED", "Speech cleanup failed; close and reopen the app.")
+      else promise.resolve(token)
     }
   }
 
