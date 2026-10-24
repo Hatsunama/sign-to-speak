@@ -1,0 +1,41 @@
+name: Trial offline MediaPipe Tasks Core source build
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/native-recognition-flow-20261024
+    paths:
+      - .github/workflows/sign-offline-tracker.yml
+      - native/scripts/build-offline-mediapipe.sh
+permissions:
+  contents: read
+concurrency:
+  group: sign-offline-tracker-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  source-core:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and audit pinned source AAR within 25 minutes
+        timeout-minutes: 27
+        env:
+          EVIDENCE_DIR: ${{ runner.temp }}/sign-offline-tracker
+        run: |
+          set -euo pipefail
+          mkdir -p "$EVIDENCE_DIR"
+          git rev-parse HEAD > "$EVIDENCE_DIR/app-source-commit.txt"
+          timeout --signal=TERM --kill-after=30s 25m \
+            bash native/scripts/build-offline-mediapipe.sh \
+            2>&1 | tee "$EVIDENCE_DIR/build.log"
+      - name: Preserve source build result and blockers
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-offline-core-trial-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: ${{ runner.temp }}/sign-offline-tracker/
