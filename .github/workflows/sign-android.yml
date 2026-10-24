@@ -79,14 +79,15 @@ jobs:
           build="$RUNNER_TEMP/sign-flite-host"
           cmake -S android/app/src/main/cpp/flite -B "$build" -DCMAKE_BUILD_TYPE=Debug
           cmake --build "$build" --parallel 2
-          ctest --test-dir "$build" --output-on-failure
+          ctest --test-dir "$build" --output-on-failure | tee "$RUNNER_TEMP/sign-evidence/flite-ctest.log"
+          nm -D --undefined-only "$build/libprivate_tts.so" > "$RUNNER_TEMP/sign-evidence/flite-undefined-symbols.txt"
           classes="$RUNNER_TEMP/sign-flite-java"
           mkdir -p "$classes"
           "$JAVA_HOME/bin/javac" -d "$classes" \
             android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java \
             android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/FliteRequest.java \
             tests/java/FliteRequestHostTest.java
-          "$JAVA_HOME/bin/java" -Djava.library.path="$build" -cp "$classes" FliteRequestHostTest
+          "$JAVA_HOME/bin/java" -Djava.library.path="$build" -cp "$classes" FliteRequestHostTest | tee "$RUNNER_TEMP/sign-evidence/flite-jni.log"
       - name: Prove cleanup-isolation fail-before assertions and restore exact candidate
         id: baseline
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}

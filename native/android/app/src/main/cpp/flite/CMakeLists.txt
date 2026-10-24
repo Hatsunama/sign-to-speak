@@ -52,6 +52,7 @@ if(NOT ANDROID)
     target_compile_definitions(test_private_tts PRIVATE STTS_TESTING CST_NO_SOCKETS CST_AUDIO_NONE)
     target_compile_options(test_private_tts PRIVATE -UNDEBUG)
     target_link_libraries(test_private_tts PRIVATE m pthread)
+    target_link_options(test_private_tts PRIVATE -Wl,--gc-sections)
     add_test(NAME private_tts_engine COMMAND test_private_tts)
     add_executable(test_request_registry
         "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../tests/flite/test_request_registry.cpp")
