@@ -10,10 +10,12 @@ import android.content.pm.PackageManager;
 import android.os.Build;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -42,6 +44,8 @@ public final class PhonePreviewIntegrationTest {
     private static final String STOP = "Stop camera";
     private static final String LIVE = "Live preview only. Recognition: unsupported.";
     private static final long STREAM_WAIT_MS = 20000;
+    private static final long SCROLL_STABLE_MS = 400;
+    private static final String QA_LOG = "PhonePreviewQA";
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
     private final UiDevice device = UiDevice.getInstance(instrumentation);
@@ -68,9 +72,14 @@ public final class PhonePreviewIntegrationTest {
         assertCameraOff("Launch");
 
         CameraSnapshot first = startAndAwaitStreaming();
-        UiObject2 stop = findActionButton(STOP);
         assertStreaming("Before Stop", first);
-        stop.click();
+        tapActionButton(STOP);
+        try {
+            await("Stop accepted (Start local preview shown)", 5000,
+                    () -> device.hasObject(By.pkg(QA_PACKAGE).text(START)));
+        } catch (AssertionError timeout) {
+            throw new AssertionError(timeout.getMessage() + "; fixed QA labels=" + fixedUiLabels(), timeout);
+        }
         assertReleased("Stop", first);
         findActionButton(START);
         assertNoAutomaticRestart();
@@ -95,7 +104,7 @@ public final class PhonePreviewIntegrationTest {
 
     private CameraSnapshot startAndAwaitStreaming() throws Exception {
         assertCameraOff("Before Start");
-        findActionButton(START).click();
+        tapActionButton(START);
         try {
             await("Start accepted (Stop camera shown)", 5000,
                     () -> device.hasObject(By.pkg(QA_PACKAGE).text(STOP)));
@@ -241,7 +250,16 @@ public final class PhonePreviewIntegrationTest {
     }
 
     private UiObject2 findActionButton(String label) throws Exception {
+        return findActionButton(label, false);
+    }
+
+    private UiObject2 findActionButton(String label, boolean tapping) throws Exception {
         long end = SystemClock.elapsedRealtime() + 15000;
+        long stableSince = -1;
+        int lastScrollY = Integer.MIN_VALUE;
+        Rect lastFull = null;
+        ButtonGeometry firstFullyVisible = null;
+        int movementResets = 0;
         boolean downward = true;
         String last = "label absent";
         while (SystemClock.elapsedRealtime() < end) {
@@ -258,22 +276,83 @@ public final class PhonePreviewIntegrationTest {
                 last = "clickable=" + button.isClickable() + ",enabled=" + button.isEnabled()
                         + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
                         + ",scrollViewport=" + viewport + ",screen=" + screen;
-                if (button.isEnabled() && nativeBounds != null && !visible.isEmpty()
-                        && visible.equals(nativeBounds.full) && nativeBounds.localVisible.equals(new Rect(0, 0, nativeBounds.full.width(),
-                                nativeBounds.full.height()))
-                        && viewport.contains(nativeBounds.full) && screen.contains(nativeBounds.full)) {
-                    // Regression guard: never tap the offscreen label or a clipped Pressable.
-                    return button;
+                if (fullyVisible(button, visible, viewport, screen, nativeBounds)) {
+                    if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
+                    long now = SystemClock.elapsedRealtime();
+                    if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
+                            || !nativeBounds.full.equals(lastFull))) movementResets++;
+                    if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
+                            || !nativeBounds.full.equals(lastFull)) stableSince = now;
+                    lastScrollY = nativeBounds.scrollY;
+                    lastFull = new Rect(nativeBounds.full);
+                    if (now - stableSince >= SCROLL_STABLE_MS) {
+                        if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
+                                + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
+                                + ",fixedLabels=" + fixedUiLabels());
+                        // Re-read the accessibility node and native geometry immediately before the tap.
+                        UiObject2 fresh = device.findObject(By.pkg(QA_PACKAGE).text(label));
+                        if (fresh == null) fresh = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+                        while (fresh != null && !fresh.isClickable()) fresh = fresh.getParent();
+                        ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+                        if (fresh != null && latest != null && latest.scrollY == lastScrollY
+                                && latest.full.equals(lastFull)
+                                && fullyVisible(fresh, fresh.getVisibleBounds(), viewport, screen, latest)) {
+                            Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
+                                    + ",phase=settled,label=" + label + ",firstFullyVisible="
+                                    + firstFullyVisible + ",final=" + latest
+                                    + ",movementResets=" + movementResets);
+                            return fresh;
+                        }
+                        stableSince = -1;
+                    }
+                    SystemClock.sleep(50);
+                    continue;
                 }
             } else {
                 last = "label=" + (text != null) + ",clickableAncestor=" + (button != null)
                         + ",scroll=" + (scroll != null);
             }
+            if (stableSince >= 0) movementResets++;
+            stableSince = -1;
+            lastFull = null;
             if (scroll == null) SystemClock.sleep(100);
             else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
         }
-        throw new AssertionError("QA button '" + label + "' never fully visible; " + last
-                + "; QA labels=" + uiLabels() + "; " + snapshot());
+        throw new AssertionError("QA button '" + label + "' never fully visible and scroll-stable; " + last
+                + "; fixed QA labels=" + fixedUiLabels() + "; " + snapshot());
+    }
+
+    private static boolean fullyVisible(UiObject2 button, Rect visible, Rect viewport, Rect screen,
+            ButtonGeometry nativeBounds) {
+        return button.isEnabled() && nativeBounds != null && nativeBounds.scrollY >= 0
+                && !visible.isEmpty() && visible.equals(nativeBounds.full)
+                && nativeBounds.localVisible.equals(new Rect(0, 0, nativeBounds.full.width(),
+                        nativeBounds.full.height()))
+                && viewport.contains(nativeBounds.full) && screen.contains(nativeBounds.full);
+    }
+
+    private void tapActionButton(String label) throws Exception {
+        UiObject2 button = findActionButton(label, true);
+        // Use a normal physical press after the button settles; avoid a zero-duration tap.
+        button.click(100L);
+        logAction("post-tap", label, 100L);
+    }
+
+    private void logAction(String phase, String label, long holdMs) throws Exception {
+        ButtonGeometry geometry = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+        UiObject2 current = device.findObject(By.pkg(QA_PACKAGE).text(label));
+        if (current == null) current = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+        while (current != null && !current.isClickable()) current = current.getParent();
+        Rect visible = current == null ? null : current.getVisibleBounds();
+        Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime() + ",phase=" + phase
+                + ",label=" + label + ",holdMs=" + holdMs + ",native=" + geometry + ",UIAvisible=" + visible
+                + ",fixedLabels=" + fixedUiLabels());
+    }
+
+    private String fixedUiLabels() {
+        return "{start=" + device.hasObject(By.pkg(QA_PACKAGE).text(START))
+                + ",stop=" + device.hasObject(By.pkg(QA_PACKAGE).text(STOP))
+                + ",live=" + device.hasObject(By.pkg(QA_PACKAGE).text(LIVE)) + "}";
     }
 
     private String uiLabels() {
@@ -303,7 +382,12 @@ public final class PhonePreviewIntegrationTest {
                         position[1] + candidate.getHeight());
                 Rect localVisible = new Rect();
                 candidate.getLocalVisibleRect(localVisible);
-                return new ButtonGeometry(full, localVisible);
+                ViewParent parent = candidate.getParent();
+                while (parent instanceof View && !(parent instanceof ScrollView)) {
+                    parent = parent.getParent();
+                }
+                int scrollY = parent instanceof ScrollView ? ((ScrollView) parent).getScrollY() : -1;
+                return new ButtonGeometry(full, localVisible, scrollY);
             }
         }
         if (root instanceof ViewGroup) {
@@ -318,8 +402,13 @@ public final class PhonePreviewIntegrationTest {
 
     private static final class ButtonGeometry {
         final Rect full, localVisible;
-        ButtonGeometry(Rect full, Rect localVisible) { this.full = full; this.localVisible = localVisible; }
-        @Override public String toString() { return "{full=" + full + ",localVisible=" + localVisible + "}"; }
+        final int scrollY;
+        ButtonGeometry(Rect full, Rect localVisible, int scrollY) {
+            this.full = full; this.localVisible = localVisible; this.scrollY = scrollY;
+        }
+        @Override public String toString() {
+            return "{full=" + full + ",localVisible=" + localVisible + ",scrollY=" + scrollY + "}";
+        }
     }
 
     private UiObject2 findLabel(String label) throws Exception {
