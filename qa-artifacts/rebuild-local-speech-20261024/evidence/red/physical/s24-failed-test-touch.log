@@ -1,0 +1,39 @@
+--------- beginning of main
+10-24 13:47:49.831  3557  3661 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:47:57.360  3854  3890 I TestRunner: run started: 4 tests
+10-24 13:47:57.361  3854  3890 I TestRunner: started: homeBackAndDestroyRevokeWithoutAutomaticResume(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:47:57.437  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:47:58.827  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:47:59.522  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:48:01.730  3854  3890 I TestRunner: finished: homeBackAndDestroyRevokeWithoutAutomaticResume(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:48:01.733  3854  3890 I TestRunner: started: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:48:01.751  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:48:15.014  3854  3890 I TestRunner: finished: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:48:15.015  3854  3890 I TestRunner: started: staleTokenCannotCancelNewSession(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:48:15.037  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:48:28.305  3854  3890 I TestRunner: finished: staleTokenCannotCancelNewSession(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 13:48:28.306  3854  3890 I TestRunner: started: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 13:48:28.327  3854  3981 I ReactNativeJS: Running "SignToSpeak"
+10-24 13:48:29.068  3854  4475 D UiObject2: Scrolling down (bounds=Rect(108, 312 - 972, 1987), percent=0.650000) at 4500px/s.
+10-24 13:48:30.541  3854  4475 D UiObject2: Clicking on (540, 1740).
+10-24 13:48:30.576  3854  4475 W GestureController: Gestures took longer than expected (34ms >> 8ms), device might be in a busy state.
+10-24 13:48:31.308  3854  4475 D UiObject2: Scrolling down (bounds=Rect(108, 312 - 972, 1987), percent=0.650000) at 4500px/s.
+10-24 13:48:31.982  3854  4475 D UiObject2: Clicking on (540, 1740).
+10-24 13:48:42.534  3854  3890 E TestRunner: failed: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 13:48:42.534  3854  3890 E TestRunner: ----- begin exception -----
+10-24 13:48:42.534  3854  3890 E TestRunner: java.lang.AssertionError: Stop did not release owned Preview; native{view=true,mounted=true,requested=true,disposed=false,attached=true,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true,bound=true,resumed=true,registeredActive=true,children=[android.view.TextureView{actual=1440x1080,measured=1440x1080,attached=true,available=true}; androidx.camera.view.ScreenFlashView{actual=810x840,measured=810x840,attached=true}],registry=[#222803451{attached=true,requested=true,disposed=false,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true}]}
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.assertReleased(PhonePreviewIntegrationTest.java:143)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:74)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at java.lang.reflect.Method.invoke(Native Method)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.internal.runners.statements.FailOnTimeout$CallableStatement.call(FailOnTimeout.java:299)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at org.junit.internal.runners.statements.FailOnTimeout$CallableStatement.call(FailOnTimeout.java:293)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at java.util.concurrent.FutureTask.run(FutureTask.java:328)
+10-24 13:48:42.534  3854  3890 E TestRunner: 	at java.lang.Thread.run(Thread.java:1571)
+10-24 13:48:42.534  3854  3890 E TestRunner: ----- end exception -----
+10-24 13:48:42.535  3854  3890 I TestRunner: finished: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 13:48:42.536  3854  3890 I TestRunner: run finished: 4 tests, 1 failed, 0 ignored
+10-24 13:50:40.840  5197  5269 I ReactNativeJS: Running "SignToSpeak"

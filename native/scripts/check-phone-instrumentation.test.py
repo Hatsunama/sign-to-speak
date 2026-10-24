@@ -1,0 +1,127 @@
+import importlib.util
+import pathlib
+import tempfile
+import unittest
+import zipfile
+
+SCRIPT = pathlib.Path(__file__).with_name('check-phone-instrumentation.py')
+spec = importlib.util.spec_from_file_location('phone_instrumentation', SCRIPT)
+audit = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(audit)
+QA = 'com.xmilo_at_your_side.sign_to_speak.qa'
+
+
+class InstrumentationArtifact(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = pathlib.Path(temporary.name)
+        self.xml = f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{QA}.test"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.REORDER_TASKS"/><application android:testOnly="true"/><instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="{QA}"/></manifest>'''
+        self.entries = {'AndroidManifest.xml': b'manifest', 'classes.dex': b'dex'}
+
+    def verify(self):
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w') as archive:
+            for name, data in self.entries.items():
+                archive.writestr(name, data)
+        audit.verify(manifest, apk)
+
+    def reject_xml(self, old, new):
+        self.xml = self.xml.replace(old, new)
+        with self.assertRaises(AssertionError):
+            self.verify()
+
+    def test_valid(self):
+        self.verify()
+
+    def test_arm64_library_allowed(self):
+        self.entries['lib/arm64-v8a/libfoo.so'] = b'native'
+        self.verify()
+
+    def test_wrong_package(self):
+        self.reject_xml(f'{QA}.test', 'other.test')
+
+    def test_wrong_target(self):
+        self.reject_xml(f'android:targetPackage="{QA}"', 'android:targetPackage="other"')
+
+    def test_wrong_runner(self):
+        self.reject_xml('androidx.test.runner.AndroidJUnitRunner', 'other.Runner')
+
+    def test_duplicate_runner(self):
+        self.reject_xml('</manifest>', f'<instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="{QA}"/></manifest>')
+
+    def test_wrong_sdk(self):
+        self.reject_xml('android:targetSdkVersion="36"', 'android:targetSdkVersion="35"')
+
+    def test_not_test_only(self):
+        self.reject_xml('android:testOnly="true"', 'android:testOnly="false"')
+
+    def test_network_permission(self):
+        self.reject_xml('</manifest>', '<uses-permission android:name="android.permission.INTERNET"/></manifest>')
+
+    def test_microphone_permission(self):
+        self.reject_xml('android.permission.REORDER_TASKS', 'android.permission.RECORD_AUDIO')
+
+    def test_duplicate_permission(self):
+        self.reject_xml('</manifest>', '<uses-permission android:name="android.permission.REORDER_TASKS"/></manifest>')
+
+    def test_custom_permission(self):
+        self.reject_xml('</manifest>', '<permission android:name="other.permission"/></manifest>')
+
+    def test_missing_manifest_entry(self):
+        del self.entries['AndroidManifest.xml']
+        with self.assertRaises(AssertionError): self.verify()
+
+    def test_missing_dex(self):
+        del self.entries['classes.dex']
+        with self.assertRaises(AssertionError): self.verify()
+
+    def test_v1_signature(self):
+        self.entries['META-INF/CERT.RSA'] = b'signature'
+        with self.assertRaises(AssertionError): self.verify()
+
+    def test_other_abi(self):
+        self.entries['lib/x86_64/libfoo.so'] = b'native'
+        with self.assertRaises(AssertionError): self.verify()
+
+    def test_duplicate_zip_entry(self):
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w') as archive:
+            archive.writestr('AndroidManifest.xml', b'manifest')
+            archive.writestr('classes.dex', b'dex')
+            archive.writestr('classes.dex', b'dex2')
+        with self.assertRaises(AssertionError): audit.verify(manifest, apk)
+
+    def test_corrupt_crc(self):
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w', compression=zipfile.ZIP_STORED) as archive:
+            archive.writestr('AndroidManifest.xml', b'manifest')
+            archive.writestr('classes.dex', b'dex')
+        data = apk.read_bytes().replace(b'dex', b'bad', 1)
+        apk.write_bytes(data)
+        with self.assertRaises(AssertionError): audit.verify(manifest, apk)
+
+    def test_v2_v3_block(self):
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w') as archive:
+            archive.writestr('AndroidManifest.xml', b'manifest')
+            archive.writestr('classes.dex', b'dex')
+        with zipfile.ZipFile(apk) as archive:
+            central = archive.start_dir
+        # A signed APK places this footer directly before the central directory.
+        data = bytearray(apk.read_bytes())
+        data[central - 16:central] = b'APK Sig Block 42'
+        apk.write_bytes(data)
+        with self.assertRaises(AssertionError): audit.verify(manifest, apk)
+
+
+if __name__ == '__main__':
+    unittest.main()

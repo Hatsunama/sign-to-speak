@@ -1,0 +1,186 @@
+TASK 10416:com.xmilo_at_your_side.sign_to_speak.qa id=1033 userId=0 displayId=0(type=INTERNAL)
+  ACTIVITY com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity 620ceee pid=31430 userId=0 uid=10416 displayId=0(type=INTERNAL)
+    Local Activity b2d15a8 State:
+      mResumed=true mStopped=false mFinished=false
+      mIsInMultiWindowMode=false mIsInPictureInPictureMode=false
+      mChangingConfigurations=false
+      mCurrentConfig={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0}
+      mLoadersStarted=true
+      Active Fragments in e0b7d42:
+        #0: ReportFragment{e1aa153 #0 androidx.lifecycle.LifecycleDispatcher.report_fragment_tag}
+          mFragmentId=#0 mContainerId=#0 mTag=androidx.lifecycle.LifecycleDispatcher.report_fragment_tag
+          mState=5 mIndex=0 mWho=android:fragment:0 mBackStackNesting=0
+          mAdded=true mRemoving=false mFromLayout=false mInLayout=false
+          mHidden=false mDetached=false mMenuVisible=true mHasMenu=false
+          mRetainInstance=false mRetaining=false mUserVisibleHint=true
+          mFragmentManager=FragmentManager{e0b7d42 in HostCallbacks{7b02a90}}
+          mHost=android.app.Activity$HostCallbacks@7b02a90
+          Child FragmentManager{e5a2f89 in ReportFragment{e1aa153}}:
+            FragmentManager misc state:
+              mHost=android.app.Activity$HostCallbacks@7b02a90
+              mContainer=android.app.Fragment$1@3d82b8e
+              mParent=ReportFragment{e1aa153 #0 androidx.lifecycle.LifecycleDispatcher.report_fragment_tag}
+              mCurState=5 mStateSaved=false mDestroyed=false
+      Added Fragments:
+        #0: ReportFragment{e1aa153 #0 androidx.lifecycle.LifecycleDispatcher.report_fragment_tag}
+      FragmentManager misc state:
+        mHost=android.app.Activity$HostCallbacks@7b02a90
+        mContainer=android.app.Activity$HostCallbacks@7b02a90
+        mCurState=5 mStateSaved=false mDestroyed=false
+    PhoneWindow:
+      mStatusBarColor=0x0 mForcedStatusBarColor=false
+      mNavigationBarColor=0x0 mForcedNavigationBarColor=true
+      mDeviceDefaultNavigationBarColor=0xFF010102
+      mDefaultNavigationBarColor=0xFF010102
+      mSettingsNavigationBarColor=0xFF010102
+      mThemeApplied=false
+    ViewRoot:
+      mAdded=true
+      mRemoved=false
+      mStopped=false
+      mPausedForTransition=false
+      mConsumeBatchedInputScheduled=false
+      mConsumeBatchedInputImmediatelyScheduled=false
+      mPendingInputEventCount=0
+      mProcessInputEventsScheduled=false
+      mTraversalScheduled=false
+      mReportNextDraw=false
+      mLastReportedMergedConfiguration={mGlobalConfig={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=undefined mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.1302 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0} mOverrideConfig={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0}}
+      mLastConfigurationFromResources={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0}
+      mLastReportedActivityWindowInfo=ActivityWindowInfo{isEmbedded=false, taskBounds=Rect(0, 0 - 1080, 2340), taskFragmentBounds=Rect(0, 0 - 1080, 2340)}
+      mIsAmbientMode=false
+      mUnbufferedInputSource=0
+      mAttachInfo=       AttachInfo:
+        mHasWindowFocus=true
+        mWindowVisibility=0
+        mInTouchMode=true
+        mUnbufferedDispatchRequested=false
+      android.view.ViewRootImpl$NativePreImeInputStage: mQueueLength=0
+      android.view.ViewRootImpl$ImeInputStage: mQueueLength=0
+      android.view.ViewRootImpl$NativePostImeInputStage: mQueueLength=0
+      android.view.ViewRootImpl$WindowInputEventReceiver
+       mInputChannel: 99b4adc com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity
+       mSeqMap: {}
+       mReceiverPtr:
+        mBatchedInputEventPending: false
+        mOutboundQueue:
+        {}  <empty>
+        
+    Choreographer:
+      mFrameScheduled=true
+      mLastFrameTime=141057002 (20 ms ago)
+    InsetsController:
+        InsetsState
+          mDisplayFrame=Rect(0, 0 - 1080, 2340)
+          mDisplayCutout=DisplayCutout{insets=Rect(0, 103 - 0, 0) waterfall=Insets{left=0, top=0, right=0, bottom=0} boundingRect={Bounds=[Rect(0, 0 - 0, 0), Rect(511, 0 - 569, 103), Rect(0, 0 - 0, 0), Rect(0, 0 - 0, 0)]} cutoutPathParserInfo={CutoutPathParserInfo{displayWidth=1080 displayHeight=2340 physicalDisplayWidth=1080 physicalDisplayHeight=2340 density={3.0} cutoutSpec={M 0,0 H -9.666666666666667 V 34.33333333333333 H 9.666666666666667 V 0 H 0 Z @dp} rotation={0} scale={1.0} physicalPixelDisplaySizeRatio={1.0}}} sideOverrides={}}
+          mRoundedCorners=RoundedCorners{[RoundedCorner{position=TopLeft, radius=108, center=Point(108, 108)}, RoundedCorner{position=TopRight, radius=108, center=Point(972, 108)}, RoundedCorner{position=BottomRight, radius=108, center=Point(972, 2232)}, RoundedCorner{position=BottomLeft, radius=108, center=Point(108, 2232)}]}
+          mRoundedCornerFrame=Rect(0, 0 - 1080, 2340)
+          mPrivacyIndicatorBounds=PrivacyIndicatorBounds {static bounds=Rect(948, 0 - 1080, 103) rotation=0}
+          mDisplayShape=DisplayShape{ spec=1406003047 displayWidth=1080 displayHeight=2340 physicalPixelDisplaySizeRatio=1.0 rotation=0 offsetX=0 offsetY=0 scale=1.0}
+            InsetsSource id=3 type=ime frame=[0,0][0,0] visibleFrame=[0,2340][1080,2340] visible=false flags=INVALID sideHint=NONE boundingRects=null
+            InsetsSource id=27 type=displayCutout frame=[0,0][1080,103] visible=true flags= sideHint=TOP boundingRects=null
+            InsetsSource id=48440000 type=statusBars frame=[0,0][1080,103] visible=true flags= sideHint=TOP boundingRects=null
+            InsetsSource id=48440005 type=mandatorySystemGestures frame=[0,0][1080,139] visible=true flags= sideHint=TOP boundingRects=null
+            InsetsSource id=48440006 type=tappableElement frame=[0,0][1080,103] visible=true flags= sideHint=TOP boundingRects=null
+            InsetsSource id=5a8e0001 type=navigationBars frame=[0,2196][1080,2340] visible=true flags= sideHint=BOTTOM boundingRects=null
+            InsetsSource id=5a8e0004 type=systemGestures frame=[0,0][0,0] visible=true flags= sideHint=NONE boundingRects=null
+            InsetsSource id=5a8e0005 type=mandatorySystemGestures frame=[0,2196][1080,2340] visible=true flags= sideHint=BOTTOM boundingRects=null
+            InsetsSource id=5a8e0006 type=tappableElement frame=[0,2196][1080,2340] visible=true flags= sideHint=BOTTOM boundingRects=null
+            InsetsSource id=5a8e0024 type=systemGestures frame=[0,0][0,0] visible=true flags= sideHint=NONE boundingRects=null
+        mIsPredictiveBackImeHideAnimInProgress=false
+    WindowOnBackDispatcher:
+        Top Callback: androidx.activity.OnBackPressedDispatcher$Api33Impl$$ExternalSyntheticLambda0@4d644d1
+        Callbacks: 
+          Callback: androidx.activity.OnBackPressedDispatcher$Api33Impl$$ExternalSyntheticLambda0@4d644d1 Priority=0
+          Callback: android.app.Activity$$ExternalSyntheticLambda0@f35a7f8 Priority=-1
+    ImeBackAnimationController:
+        mLastProgress=0.0
+        mTriggerBack=false
+        mIsPreCommitAnimationInProgress=false
+        mStartRootScrollY=0
+        isBackAnimationAllowed=true
+        isAdjustPan=false
+        isHideAnimationInProgress=false
+    ViewRootSurfaceController:
+      mSkipScreenshot=false
+      mDisableSuperHdr=false
+      mMetaDataMaps= <empty>
+      mAllowList={ 32}
+    View Hierarchy:
+      com.android.internal.policy.DecorView{1297855 V.E...... R....... 0,0-1080,2340 aid=0}[MainActivity]
+        android.widget.LinearLayout{e8712d3 V.E...... ........ 0,0-1080,2340}
+          android.view.ViewStub{e23ffaf G.E...... ......I. 0,0-0,0 #10201eb android:id/action_mode_bar_stub}
+          android.widget.FrameLayout{a84c4c2 V.E...... ........ 0,0-1080,2340}
+            androidx.appcompat.widget.FitWindowsLinearLayout{fa95d0d V.E...... ........ 0,0-1080,2340 #7f080036 app:id/action_bar_root}
+              androidx.appcompat.widget.ViewStubCompat{d955fbc G.E...... ......I. 0,0-0,0 #7f080041 app:id/action_mode_bar_stub}
+              androidx.appcompat.widget.ContentFrameLayout{7194ba4 V.E...... ........ 0,0-1080,2340 #1020002 android:id/content}
+                com.facebook.react.runtime.ReactSurfaceView{3660a37 V.E...... ........ 0,0-1080,2340 #1}
+                  com.th3rdwave.safeareacontext.SafeAreaProvider{1b0857c V.E...... ........ 0,0-1080,2340 #2}
+                    com.facebook.react.views.view.ReactViewGroup{8f7fc4 V.E...... ........ 0,0-1080,2340 #4c}
+                    com.xmilo_at_your_side.sign_to_speak.HatsuBackgroundView{39b65e2 V.E...... ........ 0,0-1080,2340 #6}
+                      com.hatsunama.refract.RefractBackgroundView{b9f4ead V.ED..... ........ 0,0-1080,2340}
+                    com.th3rdwave.safeareacontext.SafeAreaView{bbc6ced V.E...... ........ 0,0-1080,2340 #4a}
+                      com.facebook.react.views.scroll.ReactScrollView{3112f04 VFED.V... ........ 0,103-1080,2196 #48}
+                        com.facebook.react.views.view.ReactViewGroup{a4bdf17 V.E...... ........ 0,0-1080,3364 #46}
+                          com.facebook.react.views.view.ReactViewGroup{2bbb9fb V.E...... ........ 60,60-1020,1887 #28}
+                          com.facebook.react.views.text.ReactTextView{2274246 V.ED..... ........ 135,135-945,184 #a}
+                          com.facebook.react.views.text.ReactTextView{baf11a3 V.ED..... ........ 135,238-945,509 #e}
+                          com.facebook.react.views.text.ReactTextView{bdaa2cc V.ED..... ........ 135,563-945,713 #12}
+                          com.facebook.react.views.view.ReactViewGroup{fbada18 V.E...... ........ 135,767-945,1323 #1c}
+                          com.facebook.react.views.text.ReactTextView{4d8c191 V.ED..... ........ 183,815-897,951 #16}
+                          com.facebook.react.views.text.ReactTextView{2f27e82 V.ED..... ........ 183,975-897,1275 #1a}
+                          com.facebook.react.views.text.ReactTextView{ac94bef V.ED..... ........ 135,1377-945,1602 #20}
+                          com.facebook.react.views.view.ReactViewGroup{bcfc796 VFE...C.. ........ 135,1656-945,1812 #26}
+                            com.facebook.react.views.text.ReactTextView{10e16b1 V.ED..... ........ 42,44-768,112 #24}
+                          com.facebook.react.views.view.ReactViewGroup{7925c71 V.E...... ........ 60,1941-1020,3304 #42}
+                          com.facebook.react.views.text.ReactTextView{34be6e8 V.ED..... ........ 135,2016-945,2113 #2c}
+                          com.facebook.react.views.view.ReactViewGroup{1e1fa56 V.E...... ........ 135,2167-945,2647 #32}
+                          com.facebook.react.views.text.ReactTextView{f99dc3d V.ED..... ........ 412,2369-668,2444 #30}
+                          com.facebook.react.views.text.ReactTextView{c01fad7 V.ED..... ........ 135,2701-945,2776 #36}
+                          com.facebook.react.views.view.ReactViewGroup{cbd5a9c VFE...C.. ........ 135,2830-945,2986 #3c}
+                            com.facebook.react.views.text.ReactTextView{8159a0f V.ED..... ........ 42,44-768,112 #3a}
+                          com.facebook.react.views.text.ReactTextView{4a46f8a V.ED..... ........ 135,3040-945,3229 #40}
+        android.view.View{2d92b36 V.ED..... ........ 0,2196-1080,2340 #1020030 android:id/navigationBarBackground}
+    Looper (main, tid 2) {32d3b45}
+      (MessageQueue is using Legacy implementation)
+      Message 0: { when=-13ms callback=android.view.Choreographer$FrameDisplayEventReceiver target=android.view.Choreographer$FrameHandler async=true heapIndex=-1 }
+      Message 1: { when=-5ms callback=android.app.Instrumentation$SyncRunnable target=android.app.ActivityThread$H async=false heapIndex=-1 }
+      Message 2: { when=+789ms what=106 target=android.view.ViewRootImpl$ViewRootHandler async=false heapIndex=-1 }
+      Message 3: { when=+2s148ms callback=androidx.profileinstaller.ProfileInstallerInitializer$$ExternalSyntheticLambda0 target=android.os.Handler async=true heapIndex=-1 }
+      (Total messages: 4, polling=false, quitting=false)
+    ResourcesManager:
+      total apks: 2
+      resources: 7
+      resource impls: 7
+    1 dumpables:
+    #0: AutofillManager
+        AutofillManager:
+          sessionId: 2147483647
+          state: UNKNOWN
+          context: com.xmilo_at_your_side.sign_to_speak.MainActivity@b2d15a8
+          service client: null
+          client: android.view.autofill.AutofillClientController@eaf729a (android.os.BinderProxy@d70d3db)
+          enabled: false
+          enabledAugmentedOnly: false
+          hasService: true
+          hasCallback: false
+          onInvisibleCalled false
+          last autofilled data: null
+          id of last fill UI shown: null
+          tracked views: null
+          fillable ids: null
+          entered ids: null
+          save trigger id: null
+          save on finish(): false
+          options: logLvl=0, compatMode=false, augmented=true, appDisabledExpiration=0
+          fill dialog enabled: false
+          fill dialog enabled hints: []
+          compat mode enabled: false
+          debug: false verbose: false
+        Autofill Compat Mode: false
+    Local FragmentActivity b2d15a8 State:
+      mCreated=true mResumed=true mStopped=false    Back Stack Index: 0
+    FragmentManager misc state:
+      mHost=androidx.fragment.app.FragmentActivity$HostCallbacks@2bae7cb
+      mContainer=androidx.fragment.app.FragmentActivity$HostCallbacks@2bae7cb
+      mCurState=7 mStateSaved=false mStopped=false mDestroyed=false

@@ -1,0 +1,31 @@
+{
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+  "label": "seeker",
+  "screenshots": {
+    "CONTROL": {
+      "crop": [
+        2,
+        112,
+        1198,
+        2596
+      ],
+      "image_size": [
+        1200,
+        2670
+      ],
+      "pixels": 2970864,
+      "opaqueBlack": 0,
+      "magenta": 2939675,
+      "full_png_sha256": "9e73331ee105d71d18c819dc929e6b46f27a02a7c6f6efdd7f724ca13fb7fd2b"
+    }
+  },
+  "camera_used": false,
+  "logStart": "10-24 14:48:38.000",
+  "crop": [
+    2,
+    112,
+    1198,
+    2596
+  ]
+}

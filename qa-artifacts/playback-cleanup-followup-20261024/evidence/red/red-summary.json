@@ -1,0 +1,28 @@
+{
+  "source": "5421f477756b5f2add198a1826497653c0722d23",
+  "run": 40131286650,
+  "production_source": "6e12e58994c96d9b10cc885aa6ae13a571792ab8",
+  "counts": {
+    "tests": 121,
+    "failures": 3,
+    "errors": 0,
+    "skipped": 0
+  },
+  "failures": [
+    {
+      "test": "cancelSilencesQueueWhilePrivacyAbortIsInsideStop",
+      "type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: cancel returned while queued audio was still playing"
+    },
+    {
+      "test": "privacyAbortSilencesQueuedAudioBeforeStop",
+      "type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: privacy loss must silence queued PCM before stop starts"
+    },
+    {
+      "test": "failedFocusAbandonFaultsSessionAndBlocksAnotherBegin",
+      "type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: expected:<CLEANUP_FAILED> but was:<COMPLETED>"
+    }
+  ]
+}

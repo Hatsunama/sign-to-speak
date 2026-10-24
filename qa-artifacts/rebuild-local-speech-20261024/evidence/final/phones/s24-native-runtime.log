@@ -1,0 +1,215 @@
+--------- beginning of main
+10-24 14:29:44.459 17288 17307 I TestRunner: run started: 4 tests
+10-24 14:29:44.460 17288 17307 I TestRunner: started: homeBackAndDestroyRevokeWithoutAutomaticResume(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:29:48.837 17288 17307 I TestRunner: finished: homeBackAndDestroyRevokeWithoutAutomaticResume(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:29:48.840 17288 17307 I TestRunner: started: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:30:02.140 17288 17307 I TestRunner: finished: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:30:02.141 17288 17307 I TestRunner: started: staleTokenCannotCancelNewSession(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:30:15.439 17288 17307 I TestRunner: finished: staleTokenCannotCancelNewSession(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+10-24 14:30:15.440 17288 17307 I TestRunner: started: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 14:30:15.689 17288 17603 D UiObject2: Scrolling down (bounds=Rect(142, 380 - 938, 1922), percent=0.650000) at 4500px/s.
+10-24 14:30:17.663 17288 17603 I PhonePreviewQA: elapsedRealtime=256693156,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:18.800 17288 17603 I PhonePreviewQA: elapsedRealtime=256694053,phase=pre-tap,label=Start local preview,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},UIAvisible=Rect(135, 1662 - 945, 1818),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:18.903 17288 17603 I PhonePreviewQA: elapsedRealtime=256694396,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:18.917 17288 17603 D UiObject2: Clicking on (540, 1740) for 100ms.
+10-24 14:30:19.151 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-bd1b48bf-d329-4a48-aeda-c41d9b9d6af9189506751 ACTIVE
+10-24 14:30:19.152 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-bd1b48bf-d329-4a48-aeda-c41d9b9d6af9189506751] now ATTACHED
+10-24 14:30:19.152 17288 17288 D PreviewView: Surface requested by Preview.
+10-24 14:30:19.152 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:19.152 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:19.153 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:19.153 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Attempting to force open the camera.
+10-24 14:30:19.153 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Opening camera.
+10-24 14:30:19.153 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:19.153 17288 17288 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=270, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:19.189 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-bd1b48bf-d329-4a48-aeda-c41d9b9d6af9189506751 ACTIVE
+10-24 14:30:19.191 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onOpened()
+10-24 14:30:19.191 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:19.285 17288 17603 I PhonePreviewQA: elapsedRealtime=256694646,phase=post-tap,label=Start local preview,holdMs=100,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},UIAvisible=null,fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:20.004 17288 17603 D UiObject2: Scrolling down (bounds=Rect(108, 312 - 972, 1987), percent=0.650000) at 4500px/s.
+10-24 14:30:21.313 17288 17603 I PhonePreviewQA: elapsedRealtime=256696746,phase=pre-tap,label=Stop camera,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1706},UIAvisible=Rect(135, 1662 - 945, 1818),fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=true}
+10-24 14:30:21.336 17288 17603 I PhonePreviewQA: elapsedRealtime=256696829,phase=settled,label=Stop camera,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1706},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1706},movementResets=0
+10-24 14:30:21.339 17288 17603 D UiObject2: Clicking on (540, 1740) for 100ms.
+10-24 14:30:21.503 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-bd1b48bf-d329-4a48-aeda-c41d9b9d6af9189506751 INACTIVE
+10-24 14:30:21.503 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-bd1b48bf-d329-4a48-aeda-c41d9b9d6af9189506751] now DETACHED for camera
+10-24 14:30:21.503 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state OPENED
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Closing camera.
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:21.504 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state CLOSING
+10-24 14:30:21.505 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} closing camera
+10-24 14:30:21.584 17288 17603 I PhonePreviewQA: elapsedRealtime=256696995,phase=post-tap,label=Stop camera,holdMs=100,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1706},UIAvisible=Rect(135, 1662 - 945, 1818),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:21.617 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onClosed()
+10-24 14:30:21.617 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:23.110 17288 17603 I PhonePreviewQA: elapsedRealtime=256698603,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:25.342 17288 17603 I PhonePreviewQA: elapsedRealtime=256700636,phase=pre-tap,label=Start local preview,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},UIAvisible=Rect(135, 1662 - 945, 1818),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:25.454 17288 17603 I PhonePreviewQA: elapsedRealtime=256700946,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:25.468 17288 17603 D UiObject2: Clicking on (540, 1740) for 100ms.
+10-24 14:30:25.681 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-77adfeba-11f1-4160-8134-2ffa48a34c9f108094037 ACTIVE
+10-24 14:30:25.681 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-77adfeba-11f1-4160-8134-2ffa48a34c9f108094037] now ATTACHED
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Attempting to force open the camera.
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Opening camera.
+10-24 14:30:25.682 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:25.685 17288 17288 D PreviewView: Surface requested by Preview.
+10-24 14:30:25.710 17288 17288 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=270, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:25.742 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-77adfeba-11f1-4160-8134-2ffa48a34c9f108094037 ACTIVE
+10-24 14:30:25.745 17288 17633 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onOpened()
+10-24 14:30:25.745 17288 17633 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:25.964 17288 17603 I PhonePreviewQA: elapsedRealtime=256701316,phase=post-tap,label=Start local preview,holdMs=100,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},UIAvisible=Rect(135, 2097 - 945, 2196),fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:26.217 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-77adfeba-11f1-4160-8134-2ffa48a34c9f108094037 INACTIVE
+10-24 14:30:26.218 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-77adfeba-11f1-4160-8134-2ffa48a34c9f108094037] now DETACHED for camera
+10-24 14:30:26.218 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:26.218 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state OPENED
+10-24 14:30:26.218 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Closing camera.
+10-24 14:30:26.218 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:26.219 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:26.219 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:26.219 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state CLOSING
+10-24 14:30:26.219 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} closing camera
+10-24 14:30:26.344 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onClosed()
+10-24 14:30:26.344 17288 17634 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:27.569 17288 17603 I PhonePreviewQA: elapsedRealtime=256703062,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:29.735 17288 17603 I PhonePreviewQA: elapsedRealtime=256705030,phase=pre-tap,label=Start local preview,native={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},UIAvisible=Rect(135, 1662 - 945, 1818),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:29.903 17288 17603 I PhonePreviewQA: elapsedRealtime=256705395,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:29.916 17288 17603 D UiObject2: Clicking on (540, 1740) for 100ms.
+10-24 14:30:30.123 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-cb86dff9-6e71-4207-9d36-6cea6a10815d67344456 ACTIVE
+10-24 14:30:30.124 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-cb86dff9-6e71-4207-9d36-6cea6a10815d67344456] now ATTACHED
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Attempting to force open the camera.
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Opening camera.
+10-24 14:30:30.125 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:30.129 17288 17288 D PreviewView: Surface requested by Preview.
+10-24 14:30:30.130 17288 17288 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=270, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:30.151 17288 17632 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-cb86dff9-6e71-4207-9d36-6cea6a10815d67344456 ACTIVE
+10-24 14:30:30.157 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onOpened()
+10-24 14:30:30.157 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:30.477 17288 17603 I PhonePreviewQA: elapsedRealtime=256705836,phase=post-tap,label=Start local preview,holdMs=100,native=null,UIAvisible=null,fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:30.594 17288 17603 D UiObject2: Scrolling down (bounds=Rect(108, 312 - 972, 1987), percent=0.650000) at 4500px/s.
+10-24 14:30:31.285 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use case androidx.camera.core.Preview-cb86dff9-6e71-4207-9d36-6cea6a10815d67344456 INACTIVE
+10-24 14:30:31.291 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Use cases [androidx.camera.core.Preview-cb86dff9-6e71-4207-9d36-6cea6a10815d67344456] now DETACHED for camera
+10-24 14:30:31.291 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:31.291 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state OPENED
+10-24 14:30:31.291 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Closing camera.
+10-24 14:30:31.291 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:31.292 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Resetting Capture Session
+10-24 14:30:31.292 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:31.292 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Releasing session in state CLOSING
+10-24 14:30:31.292 17288 17628 D Camera2CameraImpl: {Camera@c3185e7[id=1]} closing camera
+10-24 14:30:31.464 17288 17633 D Camera2CameraImpl: {Camera@c3185e7[id=1]} CameraDevice.onClosed()
+10-24 14:30:31.465 17288 17633 D Camera2CameraImpl: {Camera@c3185e7[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:31.788 17288 17603 D UiObject2: Scrolling down (bounds=Rect(161, 418 - 919, 1886), percent=0.650000) at 4500px/s.
+10-24 14:30:33.482 17288 17603 I UiObject2: No scroll event received after scroll.
+10-24 14:30:34.372 17288 17603 I PhonePreviewQA: elapsedRealtime=256709865,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:30:36.145 17288 17307 I TestRunner: finished: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 14:30:36.147 17288 17307 I TestRunner: run finished: 4 tests, 0 failed, 0 ignored
+10-24 14:30:37.853 18146 18158 I TestRunner: run started: 1 tests
+10-24 14:30:37.853 18146 18158 I TestRunner: started: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 14:30:38.138 18146 18162 D UiObject2: Scrolling down (bounds=Rect(128, 263 - 868, 990), percent=0.650000) at 4500px/s.
+10-24 14:30:40.055 18146 18162 D UiObject2: Scrolling up (bounds=Rect(312, 189 - 1987, 981), percent=0.650000) at 4500px/s.
+10-24 14:30:42.527 18146 18162 I PhonePreviewQA: elapsedRealtime=256718020,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 565 - 2061, 721),localVisible=Rect(0, 0 - 809, 156),scrollY=474},final={full=Rect(1252, 565 - 2061, 721),localVisible=Rect(0, 0 - 809, 156),scrollY=474},movementResets=0
+10-24 14:30:43.479 18146 18162 I PhonePreviewQA: elapsedRealtime=256718799,phase=pre-tap,label=Start local preview,native={full=Rect(1252, 565 - 2061, 721),localVisible=Rect(0, 0 - 809, 156),scrollY=474},UIAvisible=Rect(1252, 565 - 2061, 721),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:43.628 18146 18162 I PhonePreviewQA: elapsedRealtime=256719121,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 565 - 2061, 721),localVisible=Rect(0, 0 - 809, 156),scrollY=474},final={full=Rect(1252, 565 - 2061, 721),localVisible=Rect(0, 0 - 809, 156),scrollY=474},movementResets=0
+10-24 14:30:43.646 18146 18162 D UiObject2: Clicking on (1656, 643) for 100ms.
+10-24 14:30:43.888 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-8a604dc8-9c34-41dd-9146-4402b076952c508516 ACTIVE
+10-24 14:30:43.889 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-8a604dc8-9c34-41dd-9146-4402b076952c508516] now ATTACHED
+10-24 14:30:43.889 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:43.889 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:43.889 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:43.890 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Attempting to force open the camera.
+10-24 14:30:43.890 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Opening camera.
+10-24 14:30:43.890 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:43.893 18146 18146 D PreviewView: Surface requested by Preview.
+10-24 14:30:43.897 18146 18146 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=0, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:43.920 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-8a604dc8-9c34-41dd-9146-4402b076952c508516 ACTIVE
+10-24 14:30:43.921 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onOpened()
+10-24 14:30:43.921 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:44.120 18146 18162 I PhonePreviewQA: elapsedRealtime=256719438,phase=post-tap,label=Start local preview,holdMs=100,native=null,UIAvisible=null,fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:44.363 18146 18162 D UiObject2: Scrolling down (bounds=Rect(312, 189 - 1987, 981), percent=0.650000) at 4500px/s.
+10-24 14:30:46.371 18146 18162 I PhonePreviewQA: elapsedRealtime=256721831,phase=pre-tap,label=Stop camera,native={full=Rect(1252, 583 - 2061, 739),localVisible=Rect(0, 0 - 809, 156),scrollY=891},UIAvisible=Rect(1252, 583 - 2061, 739),fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=true}
+10-24 14:30:46.396 18146 18162 I PhonePreviewQA: elapsedRealtime=256721889,phase=settled,label=Stop camera,firstFullyVisible={full=Rect(1252, 583 - 2061, 739),localVisible=Rect(0, 0 - 809, 156),scrollY=891},final={full=Rect(1252, 583 - 2061, 739),localVisible=Rect(0, 0 - 809, 156),scrollY=891},movementResets=0
+10-24 14:30:46.397 18146 18162 D UiObject2: Clicking on (1656, 661) for 100ms.
+10-24 14:30:46.556 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-8a604dc8-9c34-41dd-9146-4402b076952c508516 INACTIVE
+10-24 14:30:46.557 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-8a604dc8-9c34-41dd-9146-4402b076952c508516] now DETACHED for camera
+10-24 14:30:46.557 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:46.557 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state OPENED
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Closing camera.
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state CLOSING
+10-24 14:30:46.558 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} closing camera
+10-24 14:30:46.689 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onClosed()
+10-24 14:30:46.689 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:46.827 18146 18162 I PhonePreviewQA: elapsedRealtime=256722092,phase=post-tap,label=Stop camera,holdMs=100,native=null,UIAvisible=null,fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:48.003 18146 18162 I PhonePreviewQA: elapsedRealtime=256723496,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},final={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},movementResets=0
+10-24 14:30:50.301 18146 18162 I PhonePreviewQA: elapsedRealtime=256725630,phase=pre-tap,label=Start local preview,native={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},UIAvisible=Rect(1252, 148 - 2061, 304),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:50.420 18146 18162 I PhonePreviewQA: elapsedRealtime=256725912,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},final={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},movementResets=0
+10-24 14:30:50.447 18146 18162 D UiObject2: Clicking on (1656, 226) for 100ms.
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-dc80e564-7bfc-4eb3-a957-ea30d2a4636c82314313 ACTIVE
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-dc80e564-7bfc-4eb3-a957-ea30d2a4636c82314313] now ATTACHED
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:50.674 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Attempting to force open the camera.
+10-24 14:30:50.675 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Opening camera.
+10-24 14:30:50.675 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:50.681 18146 18146 D PreviewView: Surface requested by Preview.
+10-24 14:30:50.692 18146 18146 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=0, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:50.712 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-dc80e564-7bfc-4eb3-a957-ea30d2a4636c82314313 ACTIVE
+10-24 14:30:50.713 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onOpened()
+10-24 14:30:50.713 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:50.929 18146 18162 I PhonePreviewQA: elapsedRealtime=256726262,phase=post-tap,label=Start local preview,holdMs=100,native=null,UIAvisible=null,fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-dc80e564-7bfc-4eb3-a957-ea30d2a4636c82314313 INACTIVE
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-dc80e564-7bfc-4eb3-a957-ea30d2a4636c82314313] now DETACHED for camera
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state OPENED
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Closing camera.
+10-24 14:30:51.238 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:51.239 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:51.239 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:51.239 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state CLOSING
+10-24 14:30:51.239 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} closing camera
+10-24 14:30:51.360 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onClosed()
+10-24 14:30:51.360 18146 18255 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:52.271 18146 18162 I PhonePreviewQA: elapsedRealtime=256727764,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},final={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},movementResets=0
+10-24 14:30:54.602 18146 18162 I PhonePreviewQA: elapsedRealtime=256729914,phase=pre-tap,label=Start local preview,native={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},UIAvisible=Rect(1252, 148 - 2061, 304),fixedLabels={nativeRenderedStart=true,nativeRenderedStop=false,UIAvisibleStart=true,UIAvisibleStop=false,UIAvisibleLive=false}
+10-24 14:30:54.732 18146 18162 I PhonePreviewQA: elapsedRealtime=256730225,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},final={full=Rect(1252, 148 - 2061, 304),localVisible=Rect(0, 0 - 809, 156),scrollY=891},movementResets=0
+10-24 14:30:54.748 18146 18162 D UiObject2: Clicking on (1656, 226) for 100ms.
+10-24 14:30:54.981 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-65402151-e217-4e96-80eb-fedc1ad596c2124504618 ACTIVE
+10-24 14:30:54.982 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-65402151-e217-4e96-80eb-fedc1ad596c2124504618] now ATTACHED
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: INITIALIZED and previous session status: false
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state INITIALIZED
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Attempting to force open the camera.
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Opening camera.
+10-24 14:30:54.983 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: INITIALIZED --> OPENING
+10-24 14:30:54.991 18146 18146 D PreviewView: Surface requested by Preview.
+10-24 14:30:55.012 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-65402151-e217-4e96-80eb-fedc1ad596c2124504618 ACTIVE
+10-24 14:30:55.013 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onOpened()
+10-24 14:30:55.013 18146 18254 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENING --> OPENED
+10-24 14:30:55.016 18146 18146 D PreviewView: Preview transformation info updated. TransformationInfo{getCropRect=Rect(0, 0 - 1440, 1080), getRotationDegrees=0, getTargetRotation=-1, hasCameraTransform=true, getSensorToBufferTransform=Matrix{[0.36, 0.0, -0.0][0.0, 0.36, -0.0][0.0, 0.0, 1.0]}, isMirroring=true}
+10-24 14:30:55.306 18146 18162 I PhonePreviewQA: elapsedRealtime=256730605,phase=post-tap,label=Start local preview,holdMs=100,native=null,UIAvisible=null,fixedLabels={nativeRenderedStart=false,nativeRenderedStop=true,UIAvisibleStart=false,UIAvisibleStop=true,UIAvisibleLive=false}
+10-24 14:30:55.452 18146 18162 D UiObject2: Scrolling down (bounds=Rect(312, 189 - 1987, 981), percent=0.650000) at 4500px/s.
+10-24 14:30:55.964 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use case androidx.camera.core.Preview-65402151-e217-4e96-80eb-fedc1ad596c2124504618 INACTIVE
+10-24 14:30:55.972 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Use cases [androidx.camera.core.Preview-65402151-e217-4e96-80eb-fedc1ad596c2124504618] now DETACHED for camera
+10-24 14:30:55.972 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:55.972 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state OPENED
+10-24 14:30:55.972 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Closing camera.
+10-24 14:30:55.973 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: OPENED --> CLOSING
+10-24 14:30:55.973 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Resetting Capture Session
+10-24 14:30:55.973 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Skipping Capture Session state check due to current camera state: CLOSING and previous session status: false
+10-24 14:30:55.973 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Releasing session in state CLOSING
+10-24 14:30:55.975 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} closing camera
+10-24 14:30:56.122 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} CameraDevice.onClosed()
+10-24 14:30:56.123 18146 18253 D Camera2CameraImpl: {Camera@40fe16c[id=1]} Transitioning camera internal state: CLOSING --> INITIALIZED
+10-24 14:30:57.577 18146 18162 D UiObject2: Scrolling down (bounds=Rect(108, 312 - 972, 1987), percent=0.650000) at 4500px/s.
+10-24 14:30:59.502 18146 18162 I PhonePreviewQA: elapsedRealtime=256734995,phase=settled,label=Start local preview,firstFullyVisible={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},final={full=Rect(135, 1662 - 945, 1818),localVisible=Rect(0, 0 - 810, 156),scrollY=1271},movementResets=0
+10-24 14:31:01.288 18146 18158 I TestRunner: finished: uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+10-24 14:31:01.290 18146 18158 I TestRunner: run finished: 1 tests, 0 failed, 0 ignored

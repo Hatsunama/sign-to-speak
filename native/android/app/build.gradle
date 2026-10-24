@@ -27,7 +27,7 @@ def reactDebuggableVariants = project.extensions.getByType(ReactExtension).getDe
 
 android {
     // Pinned to the CMake already present on the approved standard Ubuntu CI image.
-    externalNativeBuild { cmake { version "3.31.5" } }
+    externalNativeBuild { cmake { version "3.31.5"; path "src/main/jni/CMakeLists.txt" } }
     ndkVersion rootProject.ext.ndkVersion
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
@@ -244,6 +244,7 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
 ext.emulatorQaBuildInputs = [bundledVariants: reactDebuggableVariants,
     mergedManifest: SingleArtifact.MERGED_MANIFEST.INSTANCE]
 apply from: "emulator-qa.gradle"
+apply from: "phone-qa.gradle"
 
 androidComponents {
     onVariants(selector().all()) { variant ->
@@ -307,3 +308,5 @@ androidComponents {
         }
     }
 }
+
+apply from: "license-assets.gradle"

@@ -1,0 +1,140 @@
+{
+  "tested_source": "d6ff1cb3e994cf0accf55fec2844f897a87fd08a",
+  "ci_run": 40132971778,
+  "android_unit": {
+    "tests": 122,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "junit_xmls": 7,
+  "artifacts": [
+    {
+      "role": "app",
+      "path": "java-check\\cleanup-d6ff1cb-phone\\qa\\app-qa-unsigned.apk",
+      "unsigned_sha256": "d29ca04a4873d14c881b117d8c5f6e92662a70fbc53c17afe8dc8b16a80ae2f7",
+      "bytes": 24052534,
+      "native_libraries": [
+        {
+          "path": "lib/arm64-v8a/libappmodules.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libc++_shared.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libfbjni.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libhermestooling.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libhermesvm.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libimage_processing_util_jni.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libimagepipeline.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libjsi.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libnative-filters.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libnative-imagetranscoder.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libprivate_tts.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libreact_codegen_safeareacontext.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libreactnative.so",
+          "load_alignments": [
+            16384,
+            16384,
+            16384
+          ]
+        },
+        {
+          "path": "lib/arm64-v8a/libsurface_util_jni.so",
+          "load_alignments": [
+            16384,
+            16384
+          ]
+        }
+      ]
+    },
+    {
+      "role": "test",
+      "path": "java-check\\cleanup-d6ff1cb-phone\\androidTest\\qa\\app-qa-androidTest.apk",
+      "unsigned_sha256": "16f0ca74fb4fffa523c04f3e1395c102cf0942abe837ac1ce6938849c11baa50",
+      "bytes": 342253,
+      "native_libraries": []
+    }
+  ]
+}

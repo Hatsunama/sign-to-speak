@@ -1,0 +1,1244 @@
+{
+  "status": "proposal_only_not_downloaded_not_built_not_integrated",
+  "repository": "https://github.com/festvox/flite",
+  "ref": "v2.2",
+  "commit": "e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88",
+  "metadata_source": "https://api.github.com/repos/festvox/flite/git/trees/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88?recursive=1",
+  "metadata_truncated": false,
+  "file_count": 171,
+  "source_body_bytes": 17696355,
+  "translation_unit_count": 98,
+  "archive_compressed_bytes": null,
+  "archive_size_note": "Official release metadata assets is empty. No exact compressed archive size exposed; no archive downloaded. Exact source-body budget is for individually retrieved immutable raw files and excludes HTTP overhead.",
+  "scope": "Conservative single-voice upstream-supported source ceiling: all standard core translation units with au_none.c, cst_mmap_posix.c and cst_file_stdio.c, SLT, usenglish, cmulex, their headers/data and COPYING. Not a proven minimum or approved integration. Extra save/load/url/audio symbols require exclusion or stubbing and retained-link verification before production integration.",
+  "build_proposal": {
+    "toolchain": "NDK build/cmake/android.toolchain.cmake, pinned installed version; do not run upstream Android configure unchanged",
+    "language": "C, GNU99-compatible; no C++ runtime required",
+    "abi": "Use project selected ABI; arm64-v8a candidate if not yet selected",
+    "minimum_api": "Project minSdk; no arbitrary increase",
+    "defines": [
+      "CST_NO_SOCKETS",
+      "CST_AUDIO_NONE"
+    ],
+    "source_selection": "Explicit sources; do not glob cmulex .c files because 4 files are includes, not translation units.",
+    "libraries": [
+      "m"
+    ],
+    "pic": true,
+    "guardrails": [
+      "No CART_DEBUG, EXCESSIVELY_CHATTY or other debug logging macros",
+      "Do not define CST_NO_STATIC_VOX, CST_NO_STATIC_LEX or CST_NO_STATIC_LTS_MODEL",
+      "Ensure no streaming_info callback",
+      "Do not add legacy ANDROID macro without deciding whether its SPEED_HACK vocoder change is desired",
+      "Use function/data sections and hidden visibility; retained-symbol inspection, not flags alone, proves no I/O",
+      "Stub or exclude logging/fatal exit/file/audio/url/load/save paths per separate path audit",
+      "Final shared library must use 16 KiB ELF alignment; NDK r28+ defaults satisfy alignment, older supported NDK needs corresponding linker options"
+    ],
+    "not_verified": [
+      "Android compile/link",
+      "absolute minimal source closure",
+      "final binary/APK size",
+      "16 KiB runtime behavior",
+      "privacy behavior after linker stripping"
+    ]
+  },
+  "files": [
+    {
+      "path": "COPYING",
+      "bytes": 10022,
+      "git_blob_sha1": "4e1fe1267ce76702828fe4a6112b146df9e66a70",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/COPYING",
+      "role": "license"
+    },
+    {
+      "path": "include/cst_alloc.h",
+      "bytes": 4251,
+      "git_blob_sha1": "89fdd34cb9d18b2aedde219c79874699db10b297",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_alloc.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_args.h",
+      "bytes": 3139,
+      "git_blob_sha1": "b569e97552135ddb88702db1d346ad14d7598916",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_args.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_audio.h",
+      "bytes": 5870,
+      "git_blob_sha1": "694cef2241c9c9d9a10bececb7abb912255c30e0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_audio.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_cart.h",
+      "bytes": 3856,
+      "git_blob_sha1": "9c4d0d9ada87a3ee90e942d563bfc0e5597d36be",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_cg.h",
+      "bytes": 7699,
+      "git_blob_sha1": "92a1319f1518b27412bb88f906b15daf607aa3c3",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_cg.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_clunits.h",
+      "bytes": 4671,
+      "git_blob_sha1": "28e337fdb35ef72dd24d7ae4de54369b6202c9c7",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_clunits.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_diphone.h",
+      "bytes": 3734,
+      "git_blob_sha1": "cb49b0c425351d534b9a02cbf3c503743cd8d301",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_diphone.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_endian.h",
+      "bytes": 4226,
+      "git_blob_sha1": "0cbacea887408f84b80d470c5257ec9abcd8e4cb",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_endian.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_error.h",
+      "bytes": 3975,
+      "git_blob_sha1": "505190d8522e1f604b2d291d8c98d2ec217390fd",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_error.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_features.h",
+      "bytes": 5407,
+      "git_blob_sha1": "3e454c554459523f14457c243d28f184542c62a0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_features.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_ffeatures.h",
+      "bytes": 3738,
+      "git_blob_sha1": "2dd57adfb965091f52466a0875b3b3ba681a54dd",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_ffeatures.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_file.h",
+      "bytes": 5709,
+      "git_blob_sha1": "b6585649b79540236aa167e2b6d85d96d46eb627",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_file.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_hrg.h",
+      "bytes": 3159,
+      "git_blob_sha1": "a57a652a8eb79670726612fee0073aa3c2e12027",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_hrg.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_item.h",
+      "bytes": 6568,
+      "git_blob_sha1": "59eafc204bc0d42e79ec7e8d102e82fb1a7053ec",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_item.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_lexicon.h",
+      "bytes": 4616,
+      "git_blob_sha1": "8ca27b277f0a2a2f10478c8b2b16aa69f8d1705e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_lexicon.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_lts.h",
+      "bytes": 3977,
+      "git_blob_sha1": "adb850096059973e60133339a4d63054adc46a5e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_lts.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_lts_rewrites.h",
+      "bytes": 3330,
+      "git_blob_sha1": "9397cce4dbf016c08f3d25b28dc2f35614bbb9eb",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_lts_rewrites.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_math.h",
+      "bytes": 3192,
+      "git_blob_sha1": "61862c4900f826b6483b2fd2137aa37b6c01c9b2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_math.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_phoneset.h",
+      "bytes": 4039,
+      "git_blob_sha1": "d04993729fb5ce35e66ca899314bdbd961e888fa",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_phoneset.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_regex.h",
+      "bytes": 7755,
+      "git_blob_sha1": "983502977d336ea80511873984b3fd0c2d222d53",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_regex.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_relation.h",
+      "bytes": 3783,
+      "git_blob_sha1": "00165a0bad2f3ef6ef6e4b21f41dcb9e941b6c71",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_relation.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_sigpr.h",
+      "bytes": 3824,
+      "git_blob_sha1": "69bd4948c9c2ff3d366df67615d819a04939d0c0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_sigpr.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_socket.h",
+      "bytes": 3204,
+      "git_blob_sha1": "edd3aa3efb3d08d3b8d01902928a3323e29c1dd2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_socket.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_ss.h",
+      "bytes": 3371,
+      "git_blob_sha1": "5ff363d360973e84f79fac6c43f14bb8cc545440",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_ss.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_string.h",
+      "bytes": 4082,
+      "git_blob_sha1": "bfd5687a3ccb9d2847e7f7cc9a9594e35d489bd0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_string.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_sts.h",
+      "bytes": 6511,
+      "git_blob_sha1": "6c59a562a40c85323dff8360da18e8c17f2bfea2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_sts.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_synth.h",
+      "bytes": 4790,
+      "git_blob_sha1": "70bf9ca3253f495fa603b335f1030a80223d4237",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_synth.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_tokenstream.h",
+      "bytes": 7529,
+      "git_blob_sha1": "52962350f0ffaf094dd205962be9c33f20bd59ce",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_tokenstream.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_track.h",
+      "bytes": 3762,
+      "git_blob_sha1": "3674bf7b5d6c10ba8053ba529a8a6b09cd76cd35",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_track.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_units.h",
+      "bytes": 3696,
+      "git_blob_sha1": "0cfc8f768c302e10cea39eb9542acbb284eff99f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_units.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_utt_utils.h",
+      "bytes": 3814,
+      "git_blob_sha1": "3190570599be0e92d9248453b772ab83c81d0a6a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_utt_utils.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_utterance.h",
+      "bytes": 4056,
+      "git_blob_sha1": "848f2ca1b8d6d85a0bab779c1690102dce6a1c32",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_utterance.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_val.h",
+      "bytes": 6728,
+      "git_blob_sha1": "77d60047281587e50bee0c6eb8c590489059e976",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_val.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_val_const.h",
+      "bytes": 18294,
+      "git_blob_sha1": "3e794227e273927981f296011d59eb3563ab2362",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_val_const.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_val_defs.h",
+      "bytes": 6331,
+      "git_blob_sha1": "35ff90d0fc7c001ebc470fb8c3354ce15240be38",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_val_defs.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_viterbi.h",
+      "bytes": 4941,
+      "git_blob_sha1": "7c3a1c1d33f6565b3d724c8ba2be092000b9cf98",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_viterbi.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_voice.h",
+      "bytes": 3924,
+      "git_blob_sha1": "8f25763450774fbea92ed3de639e95539a96b2eb",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_voice.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_wave.h",
+      "bytes": 7147,
+      "git_blob_sha1": "2ba3ae3e5dbf83213833e8550b8e34c79f4309ff",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_wave.h",
+      "role": "header"
+    },
+    {
+      "path": "include/cst_wchar.h",
+      "bytes": 3153,
+      "git_blob_sha1": "a2e3b8e8c58420ad420ecfe33c90ae68fd22f336",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/cst_wchar.h",
+      "role": "header"
+    },
+    {
+      "path": "include/flite.h",
+      "bytes": 7184,
+      "git_blob_sha1": "8814d978a4447ce47bde64fb599705526425fb4b",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/flite.h",
+      "role": "header"
+    },
+    {
+      "path": "include/flite_version.h",
+      "bytes": 232,
+      "git_blob_sha1": "f98edb883abe5248f97ed13b5a39834c8c527f73",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/include/flite_version.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt.c",
+      "bytes": 4458,
+      "git_blob_sha1": "341e01136f8be90c0fd0dcba7eda19a936c284b8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg.c",
+      "bytes": 10397,
+      "git_blob_sha1": "526b78d2d9b7bb74e4e2c205d1f8c0448a1b8e38",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_durmodel.c",
+      "bytes": 348590,
+      "git_blob_sha1": "75fe7df02cfd3bc5058cffbf610f222e0b34d876",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_durmodel.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_durmodel.h",
+      "bytes": 245348,
+      "git_blob_sha1": "c97ae60a686be3040e8281cd1401234bfd6d3e15",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_durmodel.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_f0_trees.c",
+      "bytes": 347806,
+      "git_blob_sha1": "0ecf8123d62852949ee4ad0d54452ecfb775ce42",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_f0_trees.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_f0_trees.h",
+      "bytes": 219748,
+      "git_blob_sha1": "11592e625d2b88cf2db82f330188264323ec3b8b",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_f0_trees.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_phonestate.c",
+      "bytes": 4429,
+      "git_blob_sha1": "efbf08e0d0c126caa8ae5fa06c0c5389b6380e02",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_phonestate.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_single_mcep_trees.c",
+      "bytes": 1422223,
+      "git_blob_sha1": "14c3b49649c3058adbc3cae974f3df3c9438f287",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_single_mcep_trees.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_single_mcep_trees.h",
+      "bytes": 1032566,
+      "git_blob_sha1": "08db0d19aab827f992bef19afc012a41abda4146",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_single_mcep_trees.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_cg_single_params.c",
+      "bytes": 7970179,
+      "git_blob_sha1": "5e6fa1a3fe093f74c43d307e1f7d8bf5b8ab0d7c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_cg_single_params.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_spamf0_accent.c",
+      "bytes": 13699,
+      "git_blob_sha1": "ed72c51b7048d6de17dca893e663046edf6abd2d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_spamf0_accent.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_spamf0_accent.h",
+      "bytes": 11417,
+      "git_blob_sha1": "f43db365f6be9c0ee35a1d84eff2398f5150fbc2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_spamf0_accent.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_spamf0_accent_params.c",
+      "bytes": 17224,
+      "git_blob_sha1": "029511e50a418e2d010747d33268c1c3ed87d8e2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_spamf0_accent_params.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_spamf0_phrase.c",
+      "bytes": 33256,
+      "git_blob_sha1": "38f4005333a132328bf6ec52d49f132bf28738df",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_spamf0_phrase.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmu_us_slt/cmu_us_slt_spamf0_phrase.h",
+      "bytes": 28460,
+      "git_blob_sha1": "eeb4633a6db089b6d9984f029c60ccfba6b36603",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt_spamf0_phrase.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmu_us_slt/voxdefs.h",
+      "bytes": 187,
+      "git_blob_sha1": "e64937fc12a215977a7b4d65607feb8aa2a23a8c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/voxdefs.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex.c",
+      "bytes": 13499,
+      "git_blob_sha1": "7dfdfc12d60b0aaefbdf7947edc48492df7cbe33",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex.h",
+      "bytes": 3089,
+      "git_blob_sha1": "56edd24b82d1977ed64421f87143ded83438a60e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_data.c",
+      "bytes": 245,
+      "git_blob_sha1": "8ae2a20146768e5afe0006d81019b8ee77ee0bb8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_data.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_data_raw.c",
+      "bytes": 2583079,
+      "git_blob_sha1": "0e2d6856c4c6be9e4b183f7fc516bda94a13611e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_data_raw.c",
+      "role": "included_data"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_entries.c",
+      "bytes": 1230,
+      "git_blob_sha1": "1a00f543a9083c1f668e4ecea0dbbf8b9399552a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_entries.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_entries_huff_table.c",
+      "bytes": 6702,
+      "git_blob_sha1": "00f4b201d2f9823904f6d0227bbac8784748bbf0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_entries_huff_table.c",
+      "role": "included_data"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_num_bytes.c",
+      "bytes": 7,
+      "git_blob_sha1": "93440bbd8a0909f19d94d8b411d4975ba93e4246",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_num_bytes.c",
+      "role": "included_data"
+    },
+    {
+      "path": "lang/cmulex/cmu_lex_phones_huff_table.c",
+      "bytes": 8100,
+      "git_blob_sha1": "040eecb0ded2df0dc201035e2c984d5cff0df828",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lex_phones_huff_table.c",
+      "role": "included_data"
+    },
+    {
+      "path": "lang/cmulex/cmu_lts_model.c",
+      "bytes": 1216746,
+      "git_blob_sha1": "7a05e5647873efe6ad25556be16b38fb056faf7a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lts_model.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmulex/cmu_lts_model.h",
+      "bytes": 881229,
+      "git_blob_sha1": "30d4cf25bdf6aa6f4fb77d8a0440cd32d46d15a4",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lts_model.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/cmulex/cmu_lts_rules.c",
+      "bytes": 2014,
+      "git_blob_sha1": "88d0dfe8a97ba77458d329a7ea131820d7d33ea0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_lts_rules.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/cmulex/cmu_postlex.c",
+      "bytes": 4524,
+      "git_blob_sha1": "6c61f4880caecb64415588a10f8a262fe2e8a855",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmulex/cmu_postlex.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_aswd.c",
+      "bytes": 61178,
+      "git_blob_sha1": "e641a484700cc98af09bbfc35b29dc4fbfd51144",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_aswd.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_dur_stats.c",
+      "bytes": 6279,
+      "git_blob_sha1": "cc4794a363be61da21791e4ca598e6e85253097f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_dur_stats.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_durz_cart.c",
+      "bytes": 54087,
+      "git_blob_sha1": "8f803ea5d93860b9193197546c4066ba6dfd8cb8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_durz_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_durz_cart.h",
+      "bytes": 38105,
+      "git_blob_sha1": "1a2f8a4070c056368be9e81d46c0dc1865f22715",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_durz_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_expand.c",
+      "bytes": 11749,
+      "git_blob_sha1": "86d2e9d4819b8362b4d2d638f7a87f4c658d628c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_expand.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_f0.h",
+      "bytes": 3326,
+      "git_blob_sha1": "8e42f97f31420ca66c98cf6b737ab22f94e269f6",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_f0.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_f0_model.c",
+      "bytes": 8040,
+      "git_blob_sha1": "b2a703611b2118e21fae8a89c6732a2bc80f6875",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_f0_model.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_f0lr.c",
+      "bytes": 6715,
+      "git_blob_sha1": "9f2f600aa7431a9e7b83619766099613560d7dfa",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_f0lr.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_ffeatures.c",
+      "bytes": 7988,
+      "git_blob_sha1": "dbff5e2075bde0ecafdc256eb3a863384e032479",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_ffeatures.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_ffeatures.h",
+      "bytes": 3217,
+      "git_blob_sha1": "a8280349f2af3ca2891e395e90cc727bf69e0bac",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_ffeatures.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_gpos.c",
+      "bytes": 10908,
+      "git_blob_sha1": "b79d69edb5217dc6dc0169565c404a707552d314",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_gpos.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_int_accent_cart.c",
+      "bytes": 12724,
+      "git_blob_sha1": "cff2704c33ffa459bc1b3a3161fbc7f10dd671e9",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_accent_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_int_accent_cart.h",
+      "bytes": 6405,
+      "git_blob_sha1": "c119c29e2c02242f346f1029ee4c169761cbaab0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_accent_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_int_tone_cart.c",
+      "bytes": 9587,
+      "git_blob_sha1": "3d9eb6213555788e1e5a76aba041eb9fbbfc102d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_tone_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_int_tone_cart.h",
+      "bytes": 5681,
+      "git_blob_sha1": "5b1e99e3b9af4d19e0968524a48e38c9cfd31fb8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_tone_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_nums_cart.c",
+      "bytes": 6497,
+      "git_blob_sha1": "29a105b2d395119c4b62bbb335354781c5868393",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_nums_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_nums_cart.h",
+      "bytes": 3199,
+      "git_blob_sha1": "27b0fb0abdca88db4bce51fe66253db9f36b1b0a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_nums_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_phoneset.c",
+      "bytes": 8668,
+      "git_blob_sha1": "8673a67e972bf6a381f95a257b861485bd28c496",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_phoneset.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_phrasing_cart.c",
+      "bytes": 1585,
+      "git_blob_sha1": "b2ae723f1c8370fea07e236b7dd6b75dd7f72f12",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_phrasing_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_phrasing_cart.h",
+      "bytes": 708,
+      "git_blob_sha1": "08b9779d2e1b892d8bd84d2231590647176a3d56",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_phrasing_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_pos_cart.c",
+      "bytes": 22412,
+      "git_blob_sha1": "0c7ef8e1e537ecb1027ad9e88499e3c4256cc16f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_pos_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_pos_cart.h",
+      "bytes": 10707,
+      "git_blob_sha1": "6508c35918e43c1f7bc4f5261933ee269829d901",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_pos_cart.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_regexes.h",
+      "bytes": 9234,
+      "git_blob_sha1": "594a74b90b34b7738649318e13efc398ea6a3fb9",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_regexes.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/us_text.c",
+      "bytes": 32261,
+      "git_blob_sha1": "7ee385c92b3de9a0ca1bcce59e4d7316eaf8b835",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_text.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/us_text.h",
+      "bytes": 3551,
+      "git_blob_sha1": "f0316e082fb5d19158f96a709d353776eb90905e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_text.h",
+      "role": "header"
+    },
+    {
+      "path": "lang/usenglish/usenglish.c",
+      "bytes": 4568,
+      "git_blob_sha1": "e5683c8689d79a79e335a12b9d32d80418c4ce78",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/usenglish.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "lang/usenglish/usenglish.h",
+      "bytes": 3593,
+      "git_blob_sha1": "5903b36d1066cbe88b75d2cfc3bd2eab1a51d6c6",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/usenglish.h",
+      "role": "header"
+    },
+    {
+      "path": "src/audio/au_none.c",
+      "bytes": 3651,
+      "git_blob_sha1": "bd2822c666d0e256533c56ba284988309cfafd87",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/au_none.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/audio/au_streaming.c",
+      "bytes": 4464,
+      "git_blob_sha1": "216c3d43340d31a3162e34637cdecb9550eb9b64",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/au_streaming.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/audio/auclient.c",
+      "bytes": 5602,
+      "git_blob_sha1": "9b8635155d90e0084b1a42087cbf95521e6913f3",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/auclient.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/audio/audio.c",
+      "bytes": 8765,
+      "git_blob_sha1": "1cfb772f3fad595e34b7a1cfea4fb026f40bee33",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/audio.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/audio/auserver.c",
+      "bytes": 6561,
+      "git_blob_sha1": "cfcad7d73ac5b500b8c2dd1a556d3a8d8674a372",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/auserver.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/audio/native_audio.h",
+      "bytes": 6839,
+      "git_blob_sha1": "acd4c1e1fe134437e2e61393d7358b9bc26228e9",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/audio/native_audio.h",
+      "role": "header"
+    },
+    {
+      "path": "src/cg/cst_cg.c",
+      "bytes": 26581,
+      "git_blob_sha1": "e11f784770b475cfccc586b724cb33580315f09b",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_cg.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_cg_dump_voice.c",
+      "bytes": 15808,
+      "git_blob_sha1": "41e11f0cb32e3ed893b2f3ef0302d51753cdb199",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_cg_dump_voice.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_cg_load_voice.c",
+      "bytes": 7125,
+      "git_blob_sha1": "e6a71dc0bb52c123d35b262b62ee7d3ddd759a50",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_cg_load_voice.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_cg_map.c",
+      "bytes": 14113,
+      "git_blob_sha1": "6ec7cc0ba6d612fa06cc506a48f3a987050cb05a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_cg_map.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_cg_map.h",
+      "bytes": 4392,
+      "git_blob_sha1": "9784ffd783abd2dc27e48c9502032669985f67ff",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_cg_map.h",
+      "role": "header"
+    },
+    {
+      "path": "src/cg/cst_mlpg.c",
+      "bytes": 30277,
+      "git_blob_sha1": "874a96501cfd6decb55a2bd861862f0d179ee184",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_mlpg.h",
+      "bytes": 12069,
+      "git_blob_sha1": "8c99c4ef0228929277cf23106855965b0da1163e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.h",
+      "role": "header"
+    },
+    {
+      "path": "src/cg/cst_mlsa.c",
+      "bytes": 18116,
+      "git_blob_sha1": "d7a3be1888b745ab7ff494209f112e3c1c395a5b",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlsa.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_mlsa.h",
+      "bytes": 5616,
+      "git_blob_sha1": "c98eaf4d19ac890201c39df276589d5b31b5d1dd",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlsa.h",
+      "role": "header"
+    },
+    {
+      "path": "src/cg/cst_spamf0.c",
+      "bytes": 6786,
+      "git_blob_sha1": "1058bea264b49dd188db2aa87595ae02df3ddcb2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_spamf0.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_spamf0.h",
+      "bytes": 2765,
+      "git_blob_sha1": "879544a57ea6c06472cd17d2b464ecbb91421c7f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_spamf0.h",
+      "role": "header"
+    },
+    {
+      "path": "src/cg/cst_vc.c",
+      "bytes": 6972,
+      "git_blob_sha1": "0ec0369a14d6d152448c454b65bbd2ae0007f97e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_vc.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/cg/cst_vc.h",
+      "bytes": 4220,
+      "git_blob_sha1": "4796427bebcfdf22a13577ff72bed79371098a91",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_vc.h",
+      "role": "header"
+    },
+    {
+      "path": "src/hrg/cst_ffeature.c",
+      "bytes": 7025,
+      "git_blob_sha1": "a01686f4cc80bd5dbb6970471dd316740f477877",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/hrg/cst_ffeature.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/hrg/cst_item.c",
+      "bytes": 11068,
+      "git_blob_sha1": "6150b0f40d906e50dc9768f4ef2f8a8f99b6eb81",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/hrg/cst_item.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/hrg/cst_rel_io.c",
+      "bytes": 4792,
+      "git_blob_sha1": "a90ffee79bd61bc59ba6f900e0d7ef7366351d64",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/hrg/cst_rel_io.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/hrg/cst_relation.c",
+      "bytes": 4457,
+      "git_blob_sha1": "43c8407e6014bd9c316a35d2e86ff67e1b16bc9f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/hrg/cst_relation.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/hrg/cst_utterance.c",
+      "bytes": 4732,
+      "git_blob_sha1": "fb39c8769d25d86c38b6534d7c93ce7147f5d21e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/hrg/cst_utterance.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/lexicon/cst_lexicon.c",
+      "bytes": 13729,
+      "git_blob_sha1": "525fb77191833e5bcf1d5d2a54af03bc01e9a2ec",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/lexicon/cst_lexicon.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/lexicon/cst_lts.c",
+      "bytes": 8431,
+      "git_blob_sha1": "008195a9d89b043c78664057fddf04cf9c2bbad5",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/lexicon/cst_lts.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/lexicon/cst_lts_rewrites.c",
+      "bytes": 7514,
+      "git_blob_sha1": "0b2c9b74f8c80b6721d57d845c6aed3a91ee755f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/lexicon/cst_lts_rewrites.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/regex/cst_regex.c",
+      "bytes": 5456,
+      "git_blob_sha1": "345017fd92226f1b62e0c3d00761254467e5c5c1",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/cst_regex.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/regex/cst_regex_defs.h",
+      "bytes": 6913,
+      "git_blob_sha1": "4bd83e51be9534e358e291b9aafea40cef6fa970",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/cst_regex_defs.h",
+      "role": "header"
+    },
+    {
+      "path": "src/regex/regexp.c",
+      "bytes": 31823,
+      "git_blob_sha1": "27adc9ec694e18af51d142d364b61b9946749439",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/regexp.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/regex/regsub.c",
+      "bytes": 2084,
+      "git_blob_sha1": "14c8990509845fc560505930ba8ff3f9b85aaeb3",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/regsub.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_lpcres.c",
+      "bytes": 4077,
+      "git_blob_sha1": "5a03f0bab86e1b305a249dc36bfe60030329cc7f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_lpcres.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_track.c",
+      "bytes": 4931,
+      "git_blob_sha1": "16e43ee741728694cfb788dab847760b9e48d3ac",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_track.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_track_io.c",
+      "bytes": 7832,
+      "git_blob_sha1": "cc1545985688b22f00ba55e1330c3ac0af08f981",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_track_io.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_wave.c",
+      "bytes": 5051,
+      "git_blob_sha1": "5f2ec04ed73ffeff6b5bc51e4f23c4d8e32b7a19",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_wave.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_wave_io.c",
+      "bytes": 15051,
+      "git_blob_sha1": "5b252d00488480407c50c76de7791582c5611488",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_wave_io.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/cst_wave_utils.c",
+      "bytes": 8124,
+      "git_blob_sha1": "c69066e3a950c2285ad513a37a5e475002f86c39",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/cst_wave_utils.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/g721.c",
+      "bytes": 7976,
+      "git_blob_sha1": "d1cec7b952074598418da0d21acfebf18f5280d8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g721.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/g723_24.c",
+      "bytes": 7350,
+      "git_blob_sha1": "ce90044f9f1583399606cd0baa4a1675efdf23d6",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g723_24.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/g723_40.c",
+      "bytes": 8231,
+      "git_blob_sha1": "41a78a3ce8fe7e05db4d51bccfad9c2184e2f577",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g723_40.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/g72x.c",
+      "bytes": 14492,
+      "git_blob_sha1": "513a3fa4d056ab7842b03588e7d25ea88fcd52e8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g72x.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/speech/g72x.h",
+      "bytes": 7230,
+      "git_blob_sha1": "ab18d8edce9ac4137d18419f7112d908808768a9",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g72x.h",
+      "role": "header"
+    },
+    {
+      "path": "src/speech/rateconv.c",
+      "bytes": 13897,
+      "git_blob_sha1": "b1a549a12be45cba388065163a08bb2ba64900f3",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/rateconv.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/stats/cst_cart.c",
+      "bytes": 6473,
+      "git_blob_sha1": "d00c20c68ba77b9964f7c5cf29712008f518640c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/stats/cst_cart.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/stats/cst_ss.c",
+      "bytes": 3863,
+      "git_blob_sha1": "236a93b027614525ff0bd433afadb19186caec53",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/stats/cst_ss.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/stats/cst_viterbi.c",
+      "bytes": 10099,
+      "git_blob_sha1": "fd9dd45cfee2f7c9fdf1305ee2731aa6f35037d8",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/stats/cst_viterbi.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_ffeatures.c",
+      "bytes": 27547,
+      "git_blob_sha1": "5a28c8f901c3a6f1c26fbe8f796a6b99a073032e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_ffeatures.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_phoneset.c",
+      "bytes": 5092,
+      "git_blob_sha1": "9f73834833fbc7bf33801284f72ba351a836c38b",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_phoneset.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_ssml.c",
+      "bytes": 20286,
+      "git_blob_sha1": "7e6486b58377727cc75c772c4fbc33bdc7fb8f40",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_ssml.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_synth.c",
+      "bytes": 21746,
+      "git_blob_sha1": "0619a4b6536cb87296b9846b0dcbd1a9179d53fa",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_synth.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_utt_utils.c",
+      "bytes": 3487,
+      "git_blob_sha1": "5babefb361e786ef4a96c141fe29e4bd5914515d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_utt_utils.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/cst_voice.c",
+      "bytes": 3552,
+      "git_blob_sha1": "792b244ef19581ad5ad08158b5a5d83fc69ec78d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/cst_voice.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/synth/flite.c",
+      "bytes": 17417,
+      "git_blob_sha1": "d85fe1a728ee44ca177ecdee7fda62af49c52b06",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/synth/flite.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_alloc.c",
+      "bytes": 7185,
+      "git_blob_sha1": "592e673e307d8da47111309350d3e7b356d8938e",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_alloc.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_args.c",
+      "bytes": 5522,
+      "git_blob_sha1": "d63f8a275968486680632e430fcc62f76eed2fcb",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_args.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_endian.c",
+      "bytes": 3534,
+      "git_blob_sha1": "cd9ac4a8ca075f75cb7a00a84968bbfad0a0e7ce",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_endian.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_error.c",
+      "bytes": 4115,
+      "git_blob_sha1": "2d20a79b31f94fd69b52bd1413a74333fb752d32",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_error.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_features.c",
+      "bytes": 8153,
+      "git_blob_sha1": "039bfdce6ff977d6b7850a41f4ce4b53dd54a925",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_features.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_file_stdio.c",
+      "bytes": 5080,
+      "git_blob_sha1": "1de5f45d1ebeeeab3b3cfb97d8131d23d33bc6f7",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_file_stdio.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_mmap_posix.c",
+      "bytes": 5822,
+      "git_blob_sha1": "581d15380e9adbed4593e7b667d321ffae958fa0",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_mmap_posix.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_socket.c",
+      "bytes": 5934,
+      "git_blob_sha1": "4eb658818bddc669e906e81eec708caa5cc59094",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_socket.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_string.c",
+      "bytes": 5548,
+      "git_blob_sha1": "38bc5f3b69920405bf8604f594500e7dba1104b1",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_string.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_tokenstream.c",
+      "bytes": 17895,
+      "git_blob_sha1": "de6f6fd734475c23bccb396c7ed3b57e57f6dd79",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_tokenstream.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_url.c",
+      "bytes": 6667,
+      "git_blob_sha1": "41c368cb5ff21bac47f30a4dcf2efb2f5396e44d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_url.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_val.c",
+      "bytes": 17878,
+      "git_blob_sha1": "40cf1e929b45bf35844300de75ba9f75d1f4468c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_val.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_val_const.c",
+      "bytes": 7005,
+      "git_blob_sha1": "457a85c665accdbda422dca93a79dfa1da000154",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_val_const.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_val_user.c",
+      "bytes": 6131,
+      "git_blob_sha1": "e909981ab8cedeb5a31a450e7072918169801244",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_val_user.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/utils/cst_wchar.c",
+      "bytes": 3580,
+      "git_blob_sha1": "6507185da3eeb9dd6735ab5bb9946cdf2272563a",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_wchar.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_clunits.c",
+      "bytes": 19152,
+      "git_blob_sha1": "7ee00fface52cb16914a61b18fe09b55b4f947e5",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_clunits.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_diphone.c",
+      "bytes": 6526,
+      "git_blob_sha1": "e52cad0ac5299da234a659b3a71cec0bdd6a423f",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_diphone.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_reflpc.c",
+      "bytes": 4121,
+      "git_blob_sha1": "09d9d1fc9f058ec31809fb405aa29c8154b9a818",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_reflpc.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_sigpr.c",
+      "bytes": 11811,
+      "git_blob_sha1": "c6bfac6c167a28f4a2e2dc84b8010a6491484e5c",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_sigpr.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_sts.c",
+      "bytes": 5411,
+      "git_blob_sha1": "2c94cad68558bbc239374b8c50ca83b8c1b4753d",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_sts.c",
+      "role": "translation_unit"
+    },
+    {
+      "path": "src/wavesynth/cst_units.c",
+      "bytes": 20023,
+      "git_blob_sha1": "d049b6d4a777638c3c41547497225e8ccff02be2",
+      "source_url": "https://raw.githubusercontent.com/festvox/flite/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/wavesynth/cst_units.c",
+      "role": "translation_unit"
+    }
+  ]
+}

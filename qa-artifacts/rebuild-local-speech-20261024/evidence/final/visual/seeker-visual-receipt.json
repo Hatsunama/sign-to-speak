@@ -1,0 +1,147 @@
+{
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+  "label": "seeker",
+  "screenshots": {
+    "CONTROL": {
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "image_size": [
+        1200,
+        2670
+      ],
+      "pixels": 2454192,
+      "opaqueBlack": 0,
+      "magenta": 2454192,
+      "full_png_sha256": "13be6686090632c2c60412af1ae271d4bde84d6aa65c5f8aedf7ae3485786a27"
+    },
+    "PROTECTED": {
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "image_size": [
+        1200,
+        2670
+      ],
+      "pixels": 2454192,
+      "opaqueBlack": 2454192,
+      "magenta": 0,
+      "full_png_sha256": "7ed00d4c11b3a560171044a2d7786b593cef4dc9234002f9f68622bdf44bdf03"
+    },
+    "CONTROL_AFTER": {
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "image_size": [
+        1200,
+        2670
+      ],
+      "pixels": 2454192,
+      "opaqueBlack": 0,
+      "magenta": 2454192,
+      "full_png_sha256": "405907d6900ce5c6e8e8660bde89cb12ea522061427bec0cd817435250921e8c"
+    }
+  },
+  "camera_used": false,
+  "logStart": "10-24 14:56:40.000",
+  "crop": [
+    210,
+    112,
+    1198,
+    2596
+  ],
+  "systemOverlayExclusion": {
+    "CONTROL": {
+      "original_crop": [
+        2,
+        112,
+        1198,
+        2596
+      ],
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "systemui_bubbles": {
+        "window": "Bubbles!",
+        "owner": "com.android.systemui",
+        "display_id": 0,
+        "touchable_region": [
+          -44,
+          122,
+          208,
+          374
+        ],
+        "side": "left",
+        "excluded_to_x": 210
+      }
+    },
+    "PROTECTED": {
+      "original_crop": [
+        2,
+        112,
+        1198,
+        2596
+      ],
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "systemui_bubbles": {
+        "window": "Bubbles!",
+        "owner": "com.android.systemui",
+        "display_id": 0,
+        "touchable_region": [
+          -44,
+          122,
+          208,
+          374
+        ],
+        "side": "left",
+        "excluded_to_x": 210
+      }
+    },
+    "CONTROL_AFTER": {
+      "original_crop": [
+        2,
+        112,
+        1198,
+        2596
+      ],
+      "crop": [
+        210,
+        112,
+        1198,
+        2596
+      ],
+      "systemui_bubbles": {
+        "window": "Bubbles!",
+        "owner": "com.android.systemui",
+        "display_id": 0,
+        "touchable_region": [
+          -44,
+          122,
+          208,
+          374
+        ],
+        "side": "left",
+        "excluded_to_x": 210
+      }
+    }
+  },
+  "complete": true
+}

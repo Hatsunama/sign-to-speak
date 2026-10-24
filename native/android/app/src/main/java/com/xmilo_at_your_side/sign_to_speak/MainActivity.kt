@@ -6,6 +6,7 @@ import com.facebook.react.defaults.DefaultNewArchitectureEntryPoint.fabricEnable
 import com.facebook.react.defaults.DefaultReactActivityDelegate
 
 class MainActivity : ReactActivity() {
+  internal val speechOwner by lazy { SpeechOwner(this) }
   internal val capturePrivacyReady: Boolean
     get() = (application as? MainApplication)?.capturePrivacyReady == true
 
@@ -41,14 +42,29 @@ class MainActivity : ReactActivity() {
     // RN 0.86.3 also routes committed predictive Back here for targetSdk 36.
     // Do this before RN can emit a JS event; JS may never process that event.
     cancelCameraViews(dispose = false)
+    speechOwner.cancelAll()
     super.onBackPressed()
   }
 
+  override fun onResume() {
+    super.onResume()
+    speechOwner.resume()
+  }
+
+  override fun onPause() {
+    // Native cancellation precedes React events and Activity state transitions.
+    speechOwner.pause()
+    super.onPause()
+  }
+
   override fun onDestroy() {
-    try { cancelCameraViews(dispose = true) }
+    try { speechOwner.close() }
     finally {
-      cameraViews.clear()
-      super.onDestroy()
+      try { cancelCameraViews(dispose = true) }
+      finally {
+        cameraViews.clear()
+        super.onDestroy()
+      }
     }
   }
 

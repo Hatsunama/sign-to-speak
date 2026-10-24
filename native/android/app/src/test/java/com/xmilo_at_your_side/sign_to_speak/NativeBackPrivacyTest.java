@@ -21,6 +21,9 @@ import com.facebook.react.uimanager.events.EventDispatcher;
 import org.mockito.MockedStatic;
 import android.os.Looper;
 import android.view.View;
+import android.view.ViewGroup;
+import android.view.TextureView;
+import com.facebook.react.views.view.ReactViewGroup;
 import android.widget.FrameLayout;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
@@ -132,6 +135,109 @@ public class NativeBackPrivacyTest {
         if (uiManager != null) uiManager.close();
     }
 
+    @Test public void latePreviewTextureGetsLaidOutWithoutAnotherFabricLayout() throws Exception {
+        // Fabric lays out native views once. ReactViewGroup deliberately ignores a
+        // child's later requestLayout, just as it does in the physical QA screen.
+        root.removeView(view);
+        ReactViewGroup reactParent = new ReactViewGroup(activity);
+        root.addView(reactParent, new FrameLayout.LayoutParams(320, 240));
+        reactParent.addView(view, new ViewGroup.LayoutParams(320, 240));
+        int width = View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY);
+        int height = View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY);
+        reactParent.measure(width, height);
+        reactParent.layout(0, 0, 320, 240);
+        view.measure(width, height);
+        view.layout(0, 0, 320, 240);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        PreviewView surface = previewView();
+        assertEquals(320, surface.getWidth());
+        assertEquals(240, surface.getHeight());
+        assertTrue(view.isAttachedToWindow());
+
+        // CameraX's compatible preview installs a TextureView after the Fabric pass.
+        TextureView lateTexture = new TextureView(activity);
+        surface.addView(lateTexture, new FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
+        assertTrue("Precondition: the late TextureView requested a layout", lateTexture.isLayoutRequested());
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        assertEquals("Late CameraX TextureView must be measured without another Fabric layout",
+                surface.getWidth(), lateTexture.getMeasuredWidth());
+        assertEquals("Late CameraX TextureView must be measured vertically",
+                surface.getHeight(), lateTexture.getMeasuredHeight());
+        assertEquals("Late CameraX TextureView must receive actual horizontal bounds",
+                surface.getWidth(), lateTexture.getWidth());
+        assertEquals("Late CameraX TextureView must receive actual vertical bounds",
+                surface.getHeight(), lateTexture.getHeight());
+    }
+    @Test public void queuedLatePreviewLayoutUsesCurrentHostBounds() throws Exception {
+        root.removeView(view);
+        ReactViewGroup reactParent = new ReactViewGroup(activity);
+        root.addView(reactParent, new FrameLayout.LayoutParams(320, 240));
+        reactParent.addView(view, new ViewGroup.LayoutParams(320, 240));
+        int width = View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY);
+        int height = View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY);
+        reactParent.measure(width, height);
+        reactParent.layout(0, 0, 320, 240);
+        view.measure(width, height);
+        view.layout(0, 0, 320, 240);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        PreviewView surface = previewView();
+        TextureView lateTexture = new TextureView(activity);
+        surface.addView(lateTexture, new FrameLayout.LayoutParams(-1, -1));
+        assertTrue(lateTexture.isLayoutRequested());
+        // The host gets new bounds while the CameraX child request is still queued.
+        // A direct host layout leaves the child measured at the old size until the callback.
+        view.layout(0, 0, 400, 200);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(400, surface.getMeasuredWidth());
+        assertEquals(200, surface.getMeasuredHeight());
+        assertEquals(400, lateTexture.getMeasuredWidth());
+        assertEquals(200, lateTexture.getMeasuredHeight());
+        assertEquals(400, lateTexture.getWidth());
+        assertEquals(200, lateTexture.getHeight());
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+    }
+
+    @Test public void pendingLatePreviewLayoutCancelsOnDetachAndWorksAfterReattach() throws Exception {
+        root.removeView(view);
+        ReactViewGroup reactParent = new ReactViewGroup(activity);
+        root.addView(reactParent, new FrameLayout.LayoutParams(320, 240));
+        reactParent.addView(view, new ViewGroup.LayoutParams(320, 240));
+        int width = View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY);
+        int height = View.MeasureSpec.makeMeasureSpec(240, View.MeasureSpec.EXACTLY);
+        reactParent.measure(width, height);
+        reactParent.layout(0, 0, 320, 240);
+        view.measure(width, height);
+        view.layout(0, 0, 320, 240);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+
+        PreviewView surface = previewView();
+        TextureView pendingTexture = new TextureView(activity);
+        surface.addView(pendingTexture, new FrameLayout.LayoutParams(-1, -1));
+        assertTrue(pendingTexture.isLayoutRequested());
+        reactParent.removeView(view);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(view.isAttachedToWindow());
+        assertEquals(0, pendingTexture.getMeasuredWidth());
+        assertEquals(0, pendingTexture.getWidth());
+        surface.removeView(pendingTexture);
+
+        reactParent.addView(view, new ViewGroup.LayoutParams(320, 240));
+        view.measure(width, height);
+        view.layout(0, 0, 320, 240);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertTrue(view.isAttachedToWindow());
+        TextureView resumedTexture = new TextureView(activity);
+        surface.addView(resumedTexture, new FrameLayout.LayoutParams(-1, -1));
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(320, resumedTexture.getMeasuredWidth());
+        assertEquals(240, resumedTexture.getMeasuredHeight());
+        assertEquals(320, resumedTexture.getWidth());
+        assertEquals(240, resumedTexture.getHeight());
+        assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+    }
     @Test public void lateActiveOnDisposedViewNeverReregisters() throws Exception {
         view.dispose();
         assertFalse(registeredViews(activity).contains(view));

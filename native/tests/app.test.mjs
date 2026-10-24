@@ -18,14 +18,14 @@ const compiled = ts.transpileModule(source, {compilerOptions: {
 }}).outputText;
 
 // Execute the actual App.tsx and session gate, mocking only React Native boundaries.
-async function renderHome(t, privacy = {ready: true}) {
+async function renderHome(t, privacy = {ready: true}, speechBridge) {
   const stateListeners = new Set();
   const backListeners = new Set();
   const permissions = [];
   const starts = [];
   let homeRenders = 0;
   const native = {
-    NativeModules: privacy === null ? {} : {CapturePrivacy: privacy},
+    NativeModules: privacy === null ? {} : {CapturePrivacy: privacy, LocalSpeech: speechBridge},
     AppState: {currentState: 'active', addEventListener(_, fn) {stateListeners.add(fn); return {remove: () => stateListeners.delete(fn)};}},
     BackHandler: {addEventListener(_, fn) {backListeners.add(fn); return {remove: () => backListeners.delete(fn)};}},
     PermissionsAndroid: {
@@ -46,6 +46,7 @@ async function renderHome(t, privacy = {ready: true}) {
       const session = createSession(options);
       return {...session, start(options) {starts.push(options); return session.start(options);}};
     }};
+    if (name === './src/local-speech.mjs') return require('../src/local-speech.mjs');
     return require(name);
   }});
   let app;
@@ -73,6 +74,32 @@ async function renderHome(t, privacy = {ready: true}) {
   const status = async (handler, value) => {await act(() => handler({nativeEvent: {status: value}}));};
   return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, notice, grant, resolve, reject, state, back, status};
 }
+
+test('mounted React Stop, navigation, Back, background and unmount cancel the real native token', async t => {
+  const cancelled = [];
+  let next = 0;
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => String(++next),
+    cancel: token => cancelled.push(token),
+  });
+  async function start() {
+    await h.press('Start local preview');
+    await h.resolve('granted');
+  }
+  await start();
+  await h.press('Stop camera');
+  await start();
+  await h.press('Hatsu Is Here For You');
+  await h.press('Back to Home');
+  await start();
+  assert.deepEqual(await h.back(), [true]);
+  await start();
+  await h.state('background');
+  await h.state('active');
+  await start();
+  await act(() => h.app.unmount());
+  assert.deepEqual(cancelled, ['1', '2', '3', '4', '5']);
+});
 
 test('actual React home handles permission cancellation, native stop, local thanks and Back', async t => {
   const {app, native, stateListeners, backListeners, text, button, press, cameras, grant, resolve} = await renderHome(t);

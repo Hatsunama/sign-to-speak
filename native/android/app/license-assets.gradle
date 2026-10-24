@@ -1,0 +1,10 @@
+// Keep the reviewed license files as the single source of truth for APK assets.
+// Android preserves their relative paths as assets/flite/*.txt.
+def licenseRoot = file("../../licenses")
+["flite/THIRD_PARTY_NOTICES.txt", "flite/MODIFICATIONS.txt"].each { relative ->
+    def source = new File(licenseRoot, relative)
+    if (!source.isFile() || source.length() == 0) {
+        throw new GradleException("Required nonempty Flite license asset missing: ${source}")
+    }
+}
+android.sourceSets.main.assets.srcDir(file("../../licenses"))

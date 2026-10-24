@@ -1,0 +1,121 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" tests="21" skipped="0" failures="3" errors="0" timestamp="2026-10-24T20:51:17.028Z" hostname="runnervmtai0g" time="1.014">
+  <properties/>
+  <testcase name="playbackCleanupFaultPersistsThroughLaterClose" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.295"/>
+  <testcase name="focusLossInvalidatesSessionWithoutAutoResume" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.022"/>
+  <testcase name="partialAndZeroWritesEventuallyDrain" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.019"/>
+  <testcase name="cleanupFailuresAreReportedAfterEveryCleanupAttempt" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.018"/>
+  <testcase name="appAndTrackCapturePolicyAreReadBack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.019"/>
+  <testcase name="privacyLossDuringDrainStopsBeforeNextHeadPoll" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.021"/>
+  <testcase name="privacyLossAfterPartialWriteStopsBeforeNextWrite" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.022"/>
+  <testcase name="deniedFocusNeverCreatesTrack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.02"/>
+  <testcase name="writeCompletionIsNotPlaybackCompletionAndCancelStopsDrain" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.029"/>
+  <testcase name="cancelSilencesQueueWhilePrivacyAbortIsInsideStop" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.03">
+    <failure message="java.lang.AssertionError: cancel returned while queued audio was still playing" type="java.lang.AssertionError">java.lang.AssertionError: cancel returned while queued audio was still playing
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertFalse(Assert.java:65)
+	at com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest.cancelSilencesQueueWhilePrivacyAbortIsInsideStop(ProtectedPcmPlayerTest.java:462)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="privacyAbortSilencesQueuedAudioBeforeStop" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.022">
+    <failure message="java.lang.AssertionError: privacy loss must silence queued PCM before stop starts" type="java.lang.AssertionError">java.lang.AssertionError: privacy loss must silence queued PCM before stop starts
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertFalse(Assert.java:65)
+	at com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest.privacyAbortSilencesQueuedAudioBeforeStop(ProtectedPcmPlayerTest.java:407)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="failedFocusAbandonFaultsSessionAndBlocksAnotherBegin" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.04">
+    <failure message="java.lang.AssertionError: expected:&lt;CLEANUP_FAILED&gt; but was:&lt;COMPLETED&gt;" type="java.lang.AssertionError">java.lang.AssertionError: expected:&lt;CLEANUP_FAILED&gt; but was:&lt;COMPLETED&gt;
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest.failedFocusAbandonFaultsSessionAndBlocksAnotherBegin(ProtectedPcmPlayerTest.java:501)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="cancellationDuringTrackCreationCannotStartAudio" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.024"/>
+  <testcase name="cancellationAttemptsPauseAndFlushAndReportsFailure" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.02"/>
+  <testcase name="initializationAndWriteFailuresReleaseAndAbandon" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.021"/>
+  <testcase name="cancelledBeforePlaybackNeverRequestsFocus" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.021"/>
+  <testcase name="releaseFailureStillAbandonsFocus" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.021"/>
+  <testcase name="focusCancellationFaultPersistsThroughLaterClose" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.024"/>
+  <testcase name="focusLossStillInvalidatesWhenPauseFails" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.023"/>
+  <testcase name="exactCapturePolicyAndSpeechAttributesAreRequired" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.019"/>
+  <testcase name="oldAndroidNeverRequestsFocusOrCreatesTrack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.222"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

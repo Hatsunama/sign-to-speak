@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.UnitTestRuntimeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-24T20:51:21.943Z" hostname="runnervmtai0g" time="0.002">
+  <properties/>
+  <testcase name="androidUnitTestWorkerActuallyRunsJava21" classname="com.xmilo_at_your_side.sign_to_speak.UnitTestRuntimeTest" time="0.001"/>
+  <system-out><![CDATA[Android unit-test worker: java.specification.version=21, java.runtime.version=21.0.12.1+1-LTS, java.home=/usr/lib/jvm/temurin-21-jdk-amd64
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

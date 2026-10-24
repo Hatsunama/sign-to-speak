@@ -1,0 +1,14 @@
+--- old
+
++++ new
+
+@@ -6210,7 +6210,7 @@
+
+       (pt-rPT) "Grupo de opções"
+       (zh-rTW) "選項按鈕群組"
+     resource 0x7f0d0054 string/react_native_dev_server_ip
+-      () "10.1.0.47"
++      () "10.1.0.116"
+     resource 0x7f0d0055 string/rn_tab_description
+       () "Tab"
+       (da) "Fane"

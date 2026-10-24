@@ -1,0 +1,81 @@
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=
+com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest:
+INSTRUMENTATION_STATUS: test=homeBackAndDestroyRevokeWithoutAutomaticResume
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=homeBackAndDestroyRevokeWithoutAutomaticResume
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=realFlitePcmProtectedPlaybackAndInputBoundaries
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=2
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=realFlitePcmProtectedPlaybackAndInputBoundaries
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=
+INSTRUMENTATION_STATUS: test=staleTokenCannotCancelNewSession
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest
+INSTRUMENTATION_STATUS: current=3
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=.
+INSTRUMENTATION_STATUS: test=staleTokenCannotCancelNewSession
+INSTRUMENTATION_STATUS_CODE: 0
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stream=
+com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest:
+INSTRUMENTATION_STATUS: test=uiStartStreamsAndEveryExitReleasesPreview
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest
+INSTRUMENTATION_STATUS: current=4
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=4
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Stop did not release owned Preview; native{view=true,mounted=true,requested=true,disposed=false,attached=true,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true,bound=true,resumed=true,registeredActive=true,children=[android.view.TextureView{actual=1440x1080,measured=1440x1080,attached=true,available=true}; androidx.camera.view.ScreenFlashView{actual=810x840,measured=810x840,attached=true}],registry=[#222803451{attached=true,requested=true,disposed=false,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true}]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.assertReleased(PhonePreviewIntegrationTest.java:143)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:74)
+
+INSTRUMENTATION_STATUS: stream=
+Error in uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest):
+java.lang.AssertionError: Stop did not release owned Preview; native{view=true,mounted=true,requested=true,disposed=false,attached=true,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true,bound=true,resumed=true,registeredActive=true,children=[android.view.TextureView{actual=1440x1080,measured=1440x1080,attached=true,available=true}; androidx.camera.view.ScreenFlashView{actual=810x840,measured=810x840,attached=true}],registry=[#222803451{attached=true,requested=true,disposed=false,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true}]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.assertReleased(PhonePreviewIntegrationTest.java:143)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:74)
+
+INSTRUMENTATION_STATUS: test=uiStartStreamsAndEveryExitReleasesPreview
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 45.176
+There was 1 failure:
+1) uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+java.lang.AssertionError: Stop did not release owned Preview; native{view=true,mounted=true,requested=true,disposed=false,attached=true,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true,bound=true,resumed=true,registeredActive=true,children=[android.view.TextureView{actual=1440x1080,measured=1440x1080,attached=true,available=true}; androidx.camera.view.ScreenFlashView{actual=810x840,measured=810x840,attached=true}],registry=[#222803451{attached=true,requested=true,disposed=false,size=810x840,surface=810x840,stream=STREAMING,preview=true,provider=true}]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.assertReleased(PhonePreviewIntegrationTest.java:143)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:74)
+
+FAILURES!!!
+Tests run: 4,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

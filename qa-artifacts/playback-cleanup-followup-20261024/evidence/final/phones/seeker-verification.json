@@ -1,0 +1,27 @@
+{
+  "source": "d6ff1cb3e994cf0accf55fec2844f897a87fd08a",
+  "phone": "seeker",
+  "serial": "SM02G4061962301",
+  "readiness": {
+    "foreground": "com.android.launcher3",
+    "home": "com.android.launcher3"
+  },
+  "runtime": {
+    "sdk": "36",
+    "page_size": "4096",
+    "model": "Seeker"
+  },
+  "original_rotation": {
+    "accelerometer_rotation": "0",
+    "user_rotation": "0"
+  },
+  "installed_signed_sha256": {
+    "app": "4e1b6c26b3f8fe6ca445133fbe2bf980711371685497124073330c9979ffb27b",
+    "test": "5053f46d60ee3fda77be3285a89169842444bca2afce1669fca24ebb9b20cd23"
+  },
+  "cold_start": "Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity\r\nTotalTime: 253\r\nWaitTime: 254\r\nComplete\r\n",
+  "portrait_pass": true,
+  "landscape_pass": true,
+  "final_foreground": "com.android.launcher3",
+  "returned_home": true
+}

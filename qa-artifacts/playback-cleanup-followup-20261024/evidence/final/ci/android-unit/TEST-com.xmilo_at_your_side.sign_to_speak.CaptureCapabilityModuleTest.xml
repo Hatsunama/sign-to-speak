@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-24T21:14:54.496Z" hostname="runnervmtai0g" time="9.805">
+  <properties/>
+  <testcase name="moduleReportsOnlyNativeCapabilityAndHasNoWritableBridge[28]" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="1.542"/>
+  <testcase name="unknownApplicationFailsClosed[28]" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="0.036"/>
+  <testcase name="moduleReportsOnlyNativeCapabilityAndHasNoWritableBridge[29]" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="2.019"/>
+  <testcase name="unknownApplicationFailsClosed[29]" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="0.035"/>
+  <testcase name="moduleReportsOnlyNativeCapabilityAndHasNoWritableBridge" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="4.453"/>
+  <testcase name="unknownApplicationFailsClosed" classname="com.xmilo_at_your_side.sign_to_speak.CaptureCapabilityModuleTest" time="0.052"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,22 @@
+{
+  "source": "d6ff1cb3e994cf0accf55fec2844f897a87fd08a",
+  "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+  "key_exported": false,
+  "key_unchanged": true,
+  "artifacts": [
+    {
+      "role": "app",
+      "unsigned_sha256": "d29ca04a4873d14c881b117d8c5f6e92662a70fbc53c17afe8dc8b16a80ae2f7",
+      "signed_sha256": "4e1b6c26b3f8fe6ca445133fbe2bf980711371685497124073330c9979ffb27b",
+      "zip_payloads_identical": true,
+      "zipalign_16k": true
+    },
+    {
+      "role": "test",
+      "unsigned_sha256": "16f0ca74fb4fffa523c04f3e1395c102cf0942abe837ac1ce6938849c11baa50",
+      "signed_sha256": "5053f46d60ee3fda77be3285a89169842444bca2afce1669fca24ebb9b20cd23",
+      "zip_payloads_identical": true,
+      "zipalign_16k": true
+    }
+  ]
+}

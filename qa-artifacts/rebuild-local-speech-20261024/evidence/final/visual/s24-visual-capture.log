@@ -1,0 +1,12 @@
+--------- beginning of main
+10-24 14:50:31.916 22358 22358 I VisualCaptureQA: session start width=1080 height=2340 density=480 startNs=146047268106942 maxMs=60000
+10-24 14:50:35.571 22358 22358 I VisualCaptureQA: phase requested name=CONTROL crop=2,105,998,2194 requestedNs=146050923358816
+10-24 14:50:35.823 22358 22358 I VisualCaptureQA: phase armed name=CONTROL armedNs=146051175074337
+10-24 14:50:38.586 22358 22358 I VisualCaptureQA: phase end name=CONTROL reason=phase-timeout valid=true frames=14 pixels=29129016 opaqueBlack=0 magenta=29129016 errors=0 firstImageTimestampNs=146051271858086 lastImageTimestampNs=146053897733398 requestedNs=146050923358816 armedNs=146051175074337 endNs=146053938166106 width=1080 height=2340 crop=2,105,998,2194
+10-24 14:50:43.239 22358 22358 I VisualCaptureQA: phase requested name=PROTECTED crop=2,105,998,2194 requestedNs=146058591375063
+10-24 14:50:43.489 22358 22358 I VisualCaptureQA: phase armed name=PROTECTED armedNs=146058841403813
+10-24 14:50:46.291 22358 22358 I VisualCaptureQA: phase end name=PROTECTED reason=phase-timeout valid=true frames=89 pixels=185177316 opaqueBlack=185177316 magenta=0 errors=0 firstImageTimestampNs=146058847891782 lastImageTimestampNs=146061604828603 requestedNs=146058591375063 armedNs=146058841403813 endNs=146061643337770 width=1080 height=2340 crop=2,105,998,2194
+10-24 14:50:49.928 22358 22358 I VisualCaptureQA: phase requested name=CONTROL_AFTER crop=2,105,998,2194 requestedNs=146065279871831
+10-24 14:50:50.179 22358 22358 I VisualCaptureQA: phase armed name=CONTROL_AFTER armedNs=146065530755425
+10-24 14:50:52.927 22358 22358 I VisualCaptureQA: phase end name=CONTROL_AFTER reason=phase-timeout valid=true frames=14 pixels=29129016 opaqueBlack=0 magenta=29129016 errors=0 firstImageTimestampNs=146065608636623 lastImageTimestampNs=146068234774278 requestedNs=146065279871831 armedNs=146065530755425 endNs=146068279105007 width=1080 height=2340 crop=2,105,998,2194
+10-24 14:50:53.682 22358 22358 I VisualCaptureQA: session end reason=explicit-stop cleanupFailed=false endNs=146069034506778

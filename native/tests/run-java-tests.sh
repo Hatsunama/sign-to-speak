@@ -5,5 +5,8 @@ cd "$(dirname "$0")/.."
 OUT=$(mktemp -d)
 trap 'rm -rf "$OUT"' EXIT INT TERM
 "$JAVA_HOME/bin/javac" -J-Xmx128m -d "$OUT" \
-  android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PreviewLease.java tests/java/PreviewLeaseTest.java
+  android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PreviewLease.java tests/java/PreviewLeaseTest.java \
+  android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java tests/java/SpeechSessionTest.java
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" PreviewLeaseTest
+
+"$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" SpeechSessionTest

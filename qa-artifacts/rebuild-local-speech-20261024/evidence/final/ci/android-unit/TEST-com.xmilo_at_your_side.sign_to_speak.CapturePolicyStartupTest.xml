@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-10-24T18:21:43.551Z" hostname="runnervm8k3b6" time="10.263">
+  <properties/>
+  <testcase name="denyAllCaptureBeforeAnyReactOrPlayerStartup[28]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="2.259"/>
+  <testcase name="denyAllCaptureBeforeAnyReactOrPlayerStartup[29]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="2.397"/>
+  <testcase name="serviceFailureLatchesUnavailableBeforeReactStartup[29]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.043"/>
+  <testcase name="missingServiceLatchesUnavailableBeforeReactStartup[29]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.028"/>
+  <testcase name="rejectedPolicyLatchesUnavailableBeforeReactStartup[29]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.026"/>
+  <testcase name="readbackFailureAlsoLatchesUnavailable[29]" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.024"/>
+  <testcase name="denyAllCaptureBeforeAnyReactOrPlayerStartup" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="5.216"/>
+  <testcase name="serviceFailureLatchesUnavailableBeforeReactStartup" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.05"/>
+  <testcase name="missingServiceLatchesUnavailableBeforeReactStartup" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.032"/>
+  <testcase name="rejectedPolicyLatchesUnavailableBeforeReactStartup" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.031"/>
+  <testcase name="readbackFailureAlsoLatchesUnavailable" classname="com.xmilo_at_your_side.sign_to_speak.CapturePolicyStartupTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

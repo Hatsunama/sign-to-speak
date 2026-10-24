@@ -1,0 +1,33 @@
+  Window #0 Window{b5f188d u0 com.xmilo_at_your_side.sign_to_speak.qa.visualcapture/com.xmilo_at_your_side.sign_to_speak.qa.visualcapture.ControlActivity}:
+    mDisplayId=0 taskId=1074 mSession=Session{5bba442 22358:u0a10437} mClient=android.os.BinderProxy@86ac524
+    mOwnerUid=10437 showForAllUsers=false package=com.xmilo_at_your_side.sign_to_speak.qa.visualcapture appop=NONE
+    mAttrs={(0,0)(fillxfill) sim={adjust=pan forwardNavigation} layoutInDisplayCutoutMode=always ty=BASE_APPLICATION wanim=0x1030318
+      fl=81810100
+      pfl=100088c0
+      apr=210
+      bhv=1
+      fitSides=0
+      frameRateBoostOnTouch=true
+      dvrrWindowFrameRateHint=true naviIconColor=0}
+    Requested w=1080 h=2340 mLayoutSeq=4265
+    mBaseLayer=21000 mSubLayer=0    mToken=ActivityRecord{208539883 u0 com.xmilo_at_your_side.sign_to_speak.qa.visualcapture/.ControlActivity t1074}
+    mActivityRecord=ActivityRecord{208539883 u0 com.xmilo_at_your_side.sign_to_speak.qa.visualcapture/.ControlActivity t1074}
+    drawnStateEvaluated=true    mightAffectAllDrawn=true
+    mViewVisibility=0x0 mHaveFrame=true mObscured=false
+    mGivenContentInsets=[0,0][0,0] mGivenVisibleInsets=[0,0][0,0]
+    mFullConfiguration={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0}
+    mLastReportedConfiguration={1.0 310mcc240mnc [en_US] ldltr sw360dp w360dp h780dp 480dpi nrml long compactNeeded hdr widecg port night finger -keyb/v/h -nav/h winConfig={ mBounds=Rect(0, 0 - 1080, 2340) mAppBounds=Rect(0, 0 - 1080, 2340) mMaxBounds=Rect(0, 0 - 1080, 2340) mDisplayRotation=ROTATION_0 mWindowingMode=fullscreen mActivityType=standard mAlwaysOnTop=undefined mRotation=ROTATION_0 mStageConfig=undefined mEmbedActivityMode=undefined mPopOver=off mOverlappingWithCutout=false} s.2 fontWeightAdjustment=0 ff=0 bf=-1 bts=0 cst=1.0 nightDim=0 themeSeq=0}
+    mLastReportedActivityWindowInfo=ActivityWindowInfo{isEmbedded=false, taskBounds=Rect(0, 0 - 1080, 2340), taskFragmentBounds=Rect(0, 0 - 1080, 2340)}
+    mHasSurface=true isReadyForDisplay()=true mWindowRemovalAllowed=false
+    Frames: parent=[0,0][1080,2340] display=[0,0][1080,2340] frame=[0,0][1080,2340] last=[0,0][1080,2340] insetsChanged=false
+     surface=[0,0][0,0]
+    WindowStateAnimator{3852e26 com.xmilo_at_your_side.sign_to_speak.qa.visualcapture/com.xmilo_at_your_side.sign_to_speak.qa.visualcapture.ControlActivity}:
+      mSurface=Surface(name=com.xmilo_at_your_side.sign_to_speak.qa.visualcapture/com.xmilo_at_your_side.sign_to_speak.qa.visualcapture.ControlActivity$_22358#3986)/@0xb286a67
+      Surface: shown=true      mDrawState=HAS_DRAWN       mLastHidden=false
+      mEnterAnimationPending=false
+    isOnScreen=true
+    isVisible=true
+    keepClearAreas: restricted=[], unrestricted=[]
+    mPrepareSyncSeqId=0
+    mBufferSeqId=0
+    mHiddenWhileProfileLockedState=false

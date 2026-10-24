@@ -1,0 +1,42 @@
+{
+  "s24": {
+    "scroll_viewport": [
+      0,
+      103,
+      1080,
+      2196
+    ],
+    "app_signed_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "home_exact_hierarchy": true,
+    "thanks_exact_hierarchy": true,
+    "return_exact_hierarchy": true,
+    "camera_off": true,
+    "secure_window_verified": true,
+    "screenshots_taken": false,
+    "original_rotation": {
+      "accelerometer_rotation": "1",
+      "user_rotation": "0"
+    },
+    "canonical_home_return_and_styles_sha256": "43bd39eb4d896411a1f432b22105314ff669669ca92797727206ea57f2525819"
+  },
+  "seeker": {
+    "scroll_viewport": [
+      0,
+      110,
+      1200,
+      2598
+    ],
+    "app_signed_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "home_exact_hierarchy": true,
+    "thanks_exact_hierarchy": true,
+    "return_exact_hierarchy": true,
+    "camera_off": true,
+    "secure_window_verified": true,
+    "screenshots_taken": false,
+    "original_rotation": {
+      "accelerometer_rotation": "0",
+      "user_rotation": "0"
+    },
+    "canonical_home_return_and_styles_sha256": "43bd39eb4d896411a1f432b22105314ff669669ca92797727206ea57f2525819"
+  }
+}

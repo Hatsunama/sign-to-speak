@@ -6,12 +6,17 @@ import {
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {createSession} from './src/session.mjs';
+import {createLocalSpeech} from './src/local-speech.mjs';
 
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
   onStatus: (event: NativeSyntheticEvent<{status: string}>) => void;
 }>('PrivateCameraPreview');
+
+function localSpeechBridge() {
+  try { return NativeModules.LocalSpeech; } catch { return null; }
+}
 
 function Button({children, onPress, disabled = false}: {
   children: string; onPress: () => void; disabled?: boolean;
@@ -32,10 +37,10 @@ function Home() {
   const [notice, setNotice] = useState('Camera is off.');
   const request = useRef<{canStart: boolean} | null>(null);
   const mounted = useRef(true);
+  const speech = useRef(createLocalSpeech(localSpeechBridge())).current;
   const gate = useRef(createSession({
     stopCamera: () => setPreview(null),
-    // No speech engine or app-owned camera buffers are present in this build.
-    stopSpeech: () => {}, clearNativeBuffers: () => {},
+    stopSpeech: () => speech.stop(), clearNativeBuffers: () => {},
   })).current;
 
   const stop = useCallback(() => {
@@ -94,6 +99,7 @@ function Home() {
       }
       const previewToken = gate.start({permission: true, foreground: true});
       if (previewToken !== null) {
+        void speech.start();
         setNotice('Starting local preview. Translation is unavailable.');
         setPreview(previewToken);
       }

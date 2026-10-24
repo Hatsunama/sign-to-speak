@@ -1,0 +1,76 @@
+{
+  "s24-4ec7c8a": {
+    "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+    "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "phases": {
+      "CONTROL": {
+        "elapsedMs": 256995861,
+        "durationMs": 20091,
+        "samples": 319488,
+        "nonzero": 74378,
+        "peak": 6000,
+        "readErrors": 0,
+        "logStartSeconds": 145115.63,
+        "logEndSeconds": 145135.72
+      },
+      "PROTECTED": {
+        "elapsedMs": 257017205,
+        "durationMs": 20090,
+        "samples": 319488,
+        "nonzero": 0,
+        "peak": 0,
+        "readErrors": 0,
+        "logStartSeconds": 145136.974,
+        "logEndSeconds": 145157.064
+      }
+    },
+    "controlToneHeadFrames": 76800,
+    "productionTestStartSeconds": 145138.162,
+    "productionTestEndSeconds": 145151.713,
+    "protectedTestPassed": true,
+    "noMicOrScreenPixelsOrPcmPersisted": true,
+    "controlIsolation": "Product QA force-stopped before CONTROL; only owned tone stimulus. Tone force-stopped before PROTECTED. Both phases limited to exact product/tone UIDs.",
+    "evidence": {
+      "s24-4ec7c8a-final-timing.log": "57317c0a2a5d31ff6a77a1844b381aba566c01d90213f38f8ad4259aafad56be",
+      "s24-4ec7c8a-final-capture.log": "37021aa4a8fc2caca0dbd8030b438f9a6e1e984c0a3a4a910517d3541dd7680d",
+      "s24-4ec7c8a-protected-instrumentation.txt": "83d0cc1eacefc264ceac048379ed52960e37cd064e44eaca228a4e51f52d18f5"
+    }
+  },
+  "seeker-4ec7c8a": {
+    "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+    "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "phases": {
+      "CONTROL": {
+        "elapsedMs": 649413395,
+        "durationMs": 20103,
+        "samples": 319488,
+        "nonzero": 73359,
+        "peak": 6000,
+        "readErrors": 0,
+        "logStartSeconds": 489978.862,
+        "logEndSeconds": 489998.965
+      },
+      "PROTECTED": {
+        "elapsedMs": 649434581,
+        "durationMs": 20090,
+        "samples": 319488,
+        "nonzero": 0,
+        "peak": 0,
+        "readErrors": 0,
+        "logStartSeconds": 490000.06,
+        "logEndSeconds": 490020.151
+      }
+    },
+    "controlToneHeadFrames": 76458,
+    "productionTestStartSeconds": 490000.972,
+    "productionTestEndSeconds": 490014.142,
+    "protectedTestPassed": true,
+    "noMicOrScreenPixelsOrPcmPersisted": true,
+    "controlIsolation": "Product QA force-stopped before CONTROL; only owned tone stimulus. Tone force-stopped before PROTECTED. Both phases limited to exact product/tone UIDs.",
+    "evidence": {
+      "seeker-4ec7c8a-final-timing.log": "98aa79b407693e28c5d372f1fc90cc892ea3c55a2b50b98ce50722deaf8b5fc2",
+      "seeker-4ec7c8a-final-capture.log": "cb7c3ec68266b66eac949fbd13cc63061faabb6426c0c3f7fbbbcf1047078ee6",
+      "seeker-4ec7c8a-protected-instrumentation.txt": "4242adacde2e4198357c3d1c21f7b5bedce7239d96cfee006fa82032bc0d065b"
+    }
+  }
+}

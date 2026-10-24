@@ -1,0 +1,10 @@
+Internal ctest changing into directory: /home/runner/work/_temp/sign-flite-host
+Test project /home/runner/work/_temp/sign-flite-host
+    Start 1: private_tts_engine
+1/2 Test #1: private_tts_engine ...............   Passed    5.37 sec
+    Start 2: request_registry
+2/2 Test #2: request_registry .................   Passed    0.00 sec
+
+100% tests passed, 0 tests failed out of 2
+
+Total Test time (real) =   5.42 sec

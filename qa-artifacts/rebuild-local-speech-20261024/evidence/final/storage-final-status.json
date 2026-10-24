@@ -1,0 +1,12 @@
+{
+  "canonical_repository": "C:/sign_to_speak/repository",
+  "historical_evidence": "C:/sign_to_speak/historical-evidence/sign-arm64-60d255d0",
+  "full_destination_hash_verification_passed": true,
+  "old_xmilo_app_directory_exists": false,
+  "old_workspace_duplicate_exists": true,
+  "duplicate_removal_executed": false,
+  "duplicate_removal_auto_review": "Rejected before execution: blocked by policy; no more specific reason provided",
+  "duplicate_move_result": "Windows: file is being used by another process",
+  "keys_and_credentials_deleted_or_moved": false,
+  "next_storage_step": "Release the process holding the old workspace, then retire only its already verified duplicate; do not stop other agents or delete signing keys."
+}

@@ -63,19 +63,38 @@ jobs:
           npm test
           npm run typecheck
           sh tests/run-java-tests.sh
-          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs
-          python3 scripts/check-isolation-baseline.test.py
-          python3 scripts/check-phone-qa.test.py
+          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
+          for test_file in scripts/*.test.py; do python3 "$test_file"; done
+          python3 tests/flite/test_prepared_sources.py
       - name: Verify Android prerequisites without accepting new licenses
         id: sdk
         run: bash scripts/ci-sdk.sh
+      - name: Build and test source-built Flite engine and host JNI bridge
+        id: flite_host
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          python3 android/app/src/main/cpp/flite/prepare_sources.py --check
+          build="$RUNNER_TEMP/sign-flite-host"
+          cmake -S android/app/src/main/cpp/flite -B "$build" -DCMAKE_BUILD_TYPE=Debug
+          cmake --build "$build" --parallel 2
+          ctest --test-dir "$build" --output-on-failure | tee "$RUNNER_TEMP/sign-evidence/flite-ctest.log"
+          nm -D --undefined-only "$build/libprivate_tts.so" > "$RUNNER_TEMP/sign-evidence/flite-undefined-symbols.txt"
+          classes="$RUNNER_TEMP/sign-flite-java"
+          mkdir -p "$classes"
+          "$JAVA_HOME/bin/javac" -d "$classes" \
+            android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java \
+            android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/FliteRequest.java \
+            tests/java/FliteRequestHostTest.java
+          "$JAVA_HOME/bin/java" -Djava.library.path="$build" -cp "$classes" FliteRequestHostTest | tee "$RUNNER_TEMP/sign-evidence/flite-jni.log"
       - name: Prove cleanup-isolation fail-before assertions and restore exact candidate
         id: baseline
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
         timeout-minutes: 12
         run: bash scripts/ci-isolation-baseline.sh
       - name: Compile actual Kotlin and run full Android unit suite (Robolectric, no emulator)
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -84,7 +103,7 @@ jobs:
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:testDebugUnitTest
       - name: Verify debug and release merged permissions
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -93,7 +112,7 @@ jobs:
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions
       - name: Assemble unsigned development APK only
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -112,7 +131,8 @@ jobs:
           ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
-            :app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa :app:assembleQaAndroidTest
           cd ..
           bash scripts/ci-phone-qa-audit.sh
       - name: Retain bounded test evidence, including failures
@@ -142,4 +162,6 @@ jobs:
           retention-days: 3
           if-no-files-found: error
           compression-level: 0
-          path: native/android/app/build/outputs/apk/qa/*.apk
+          path: |
+            native/android/app/build/outputs/apk/qa/*.apk
+            native/android/app/build/outputs/apk/androidTest/qa/*.apk

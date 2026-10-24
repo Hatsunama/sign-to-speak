@@ -7,6 +7,8 @@ import xml.etree.ElementTree as ET
 import zipfile
 ANDROID='{http://schemas.android.com/apk/res/android}'
 PACKAGE='com.xmilo_at_your_side.sign_to_speak.qa'
+LICENSE_ROOT=pathlib.Path(__file__).resolve().parents[1]/'licenses'
+REQUIRED_FLITE_ASSETS=('THIRD_PARTY_NOTICES.txt','MODIFICATIONS.txt')
 
 def verify(manifest, apk):
     root=ET.parse(manifest).getroot()
@@ -31,9 +33,15 @@ def verify(manifest, apk):
         assert archive.testzip() is None, 'APK ZIP CRC failed'
         assert 'AndroidManifest.xml' in names and 'classes.dex' in names
         assert 'assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript'
+        for filename in REQUIRED_FLITE_ASSETS:
+            source=(LICENSE_ROOT/'flite'/filename).read_bytes()
+            entry='assets/flite/'+filename
+            assert source, f'Flite license source is empty: {filename}'
+            assert entry in names and archive.read(entry)==source, f'Missing or changed Flite license asset: {entry}'
         assert not any(re.match(r'META-INF/[^/]+\.(RSA|DSA|EC|SF)$',name,re.I) for name in names), 'Unexpected v1 signature material'
         libraries=[name for name in names if name.startswith('lib/') and name.endswith('.so')]
         assert libraries and {name.split('/')[1] for name in libraries}=={'arm64-v8a'}, 'APK must contain only arm64 native libraries'
+        assert 'lib/arm64-v8a/libprivate_tts.so' in libraries, 'APK must carry the local synthesis library'
         central=archive.start_dir
     # APK Signature Scheme v2/v3 use this footer immediately before the ZIP directory.
     with open(apk,'rb') as file:

@@ -1,0 +1,9 @@
+--------- beginning of main
+10-24 14:35:46.224 28973 28973 I CaptureQA: session start elapsedMs=649390506 maxMs=60000 audioOnly=true
+10-24 14:35:49.011 28973 28973 I CaptureQA: phase start name=CONTROL elapsedMs=649393292 maxMs=20000 productUid=10387 toneUid=10406
+10-24 14:35:53.795 29236 29336 I ToneQA  : tone end elapsedMs=649398077 durationMs=4790 writtenFrames=80000 headFrames=76458 reason=duration-limit
+10-24 14:35:53.801 29236 29236 I ToneQA  : tone stop reason=complete
+10-24 14:36:09.113 28973 28973 I CaptureQA: phase end name=CONTROL elapsedMs=649413395 durationMs=20103 samples=319488 nonzero=73359 peak=6000 readErrors=0 reason=phase-timeout
+10-24 14:36:10.209 28973 28973 I CaptureQA: phase start name=PROTECTED elapsedMs=649414491 maxMs=20000 productUid=10387 toneUid=10406
+10-24 14:36:30.299 28973 28973 I CaptureQA: phase end name=PROTECTED elapsedMs=649434581 durationMs=20090 samples=319488 nonzero=0 peak=0 readErrors=0 reason=phase-timeout
+10-24 14:36:31.755 28973 28973 I CaptureQA: session end reason=explicit-stop durationMs=45531

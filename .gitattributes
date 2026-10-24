@@ -1,3 +1,14 @@
 *.kt text eol=lf
 *.sh text eol=lf
 *.patch text eol=lf
+
+native/android/app/src/main/jni/CMakeLists.txt text eol=lf
+native/android/app/src/main/cpp/** text eol=lf
+native/android/app/src/main/cpp/flite/upstream/** text eol=lf
+native/licenses/flite/** text eol=lf
+
+# Preserve upstream license/source formatting; raw hashes are checked separately.
+native/android/app/src/main/cpp/flite/upstream/** -whitespace
+native/android/app/src/main/cpp/flite/generated/** -whitespace
+native/android/app/src/main/cpp/flite/modifications.patch -whitespace
+native/licenses/flite/THIRD_PARTY_NOTICES.txt -whitespace

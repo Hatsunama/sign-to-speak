@@ -1,0 +1,1182 @@
+{
+  "R3CX90HWPGB": {
+    "installed_sha256": "4d276f9f7d3c5efdb29a28dcd7006fb6f03503f2b8f2ed8efb502f91a57e3a70",
+    "camera_started": false,
+    "screenshots_taken": false,
+    "cold_start": "Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity\r\nTotalTime: 139\r\nWaitTime: 141\r\nComplete\r\n",
+    "home": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,163][1020,1990]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "SIGN TO SPEAK \u00b7 ANDROID FOUNDATION",
+        "class": "android.widget.TextView",
+        "bounds": "[135,238][945,287]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Your hands. Your words.",
+        "class": "android.view.View",
+        "bounds": "[135,341][945,612]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "A private, on-device signing companion in development.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,666][945,816]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,870][945,1426]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Translation is not available yet",
+        "class": "android.widget.TextView",
+        "bounds": "[183,918][897,1054]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "This build can show a live camera preview. It does not recognize ASL or speak a translation.",
+        "class": "android.widget.TextView",
+        "bounds": "[183,1078][897,1378]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "No recording. No saved signing sessions. Camera frames stay on this device.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,1480][945,1705]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,1759][945,1915]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Hatsu Is Here For You"
+      },
+      {
+        "text": "Hatsu Is Here For You",
+        "class": "android.widget.TextView",
+        "bounds": "[177,1803][903,1871]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,2044][1020,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Live camera",
+        "class": "android.view.View",
+        "bounds": "[135,2119][945,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,2270][945,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,2196][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "thanks": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,163][1020,2136]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Thank you",
+        "class": "android.view.View",
+        "bounds": "[135,238][945,383]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Thanks for downloading Sign To Speak and spending time with it. Hope it makes your world a little brighter.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,437][945,737]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "If you want to support Hatsu please subscribe to the Patreon @Hatsunama",
+        "class": "android.widget.TextView",
+        "bounds": "[135,791][945,1016]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,1070][945,1226]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Back to Home"
+      },
+      {
+        "text": "Back to Home",
+        "class": "android.widget.TextView",
+        "bounds": "[177,1114][903,1182]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,2196][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "returned": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,103][1080,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,163][1020,1990]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "SIGN TO SPEAK \u00b7 ANDROID FOUNDATION",
+        "class": "android.widget.TextView",
+        "bounds": "[135,238][945,287]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Your hands. Your words.",
+        "class": "android.view.View",
+        "bounds": "[135,341][945,612]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "A private, on-device signing companion in development.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,666][945,816]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,870][945,1426]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Translation is not available yet",
+        "class": "android.widget.TextView",
+        "bounds": "[183,918][897,1054]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "This build can show a live camera preview. It does not recognize ASL or speak a translation.",
+        "class": "android.widget.TextView",
+        "bounds": "[183,1078][897,1378]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "No recording. No saved signing sessions. Camera frames stay on this device.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,1480][945,1705]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,1759][945,1915]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Hatsu Is Here For You"
+      },
+      {
+        "text": "Hatsu Is Here For You",
+        "class": "android.widget.TextView",
+        "bounds": "[177,1803][903,1871]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,2044][1020,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Live camera",
+        "class": "android.view.View",
+        "bounds": "[135,2119][945,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,2270][945,2196]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.View",
+        "bounds": "[0,2196][1080,2340]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "navigation_passed": true,
+    "returned_to_launcher": true
+  },
+  "SM02G4061962301": {
+    "installed_sha256": "4d276f9f7d3c5efdb29a28dcd7006fb6f03503f2b8f2ed8efb502f91a57e3a70",
+    "camera_started": false,
+    "screenshots_taken": false,
+    "cold_start": "Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity\r\nTotalTime: 235\r\nWaitTime: 258\r\nComplete\r\n",
+    "home": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,170][1140,1859]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "SIGN TO SPEAK \u00b7 ANDROID FOUNDATION",
+        "class": "android.widget.TextView",
+        "bounds": "[135,245][1065,294]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Your hands. Your words.",
+        "class": "android.view.View",
+        "bounds": "[135,348][1065,619]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "A private, on-device signing companion in development.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,673][1065,823]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,877][1065,1295]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Translation is not available yet",
+        "class": "android.widget.TextView",
+        "bounds": "[183,925][1017,998]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "This build can show a live camera preview. It does not recognize ASL or speak a translation.",
+        "class": "android.widget.TextView",
+        "bounds": "[183,1022][1017,1247]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "No recording. No saved signing sessions. Camera frames stay on this device.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,1349][1065,1574]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,1628][1065,1784]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Hatsu Is Here For You"
+      },
+      {
+        "text": "Hatsu Is Here For You",
+        "class": "android.widget.TextView",
+        "bounds": "[177,1672][1023,1740]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,1913][1140,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Live camera",
+        "class": "android.view.View",
+        "bounds": "[135,1988][1065,2085]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,2139][1065,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Camera off",
+        "class": "android.widget.TextView",
+        "bounds": "[472,2341][728,2416]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "thanks": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,170][1140,2538]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Thank you",
+        "class": "android.view.View",
+        "bounds": "[135,245][1065,390]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Thanks for downloading Sign To Speak and spending time with it. Hope it makes your world a little brighter.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,444][1065,669]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "If you want to support Hatsu please subscribe to the Patreon @Hatsunama",
+        "class": "android.widget.TextView",
+        "bounds": "[135,723][1065,873]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,927][1065,1083]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Back to Home"
+      },
+      {
+        "text": "Back to Home",
+        "class": "android.widget.TextView",
+        "bounds": "[177,971][1023,1039]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "returned": [
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.LinearLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.FrameLayout",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,0][1200,2670]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.ScrollView",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[0,110][1200,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,170][1140,1859]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "SIGN TO SPEAK \u00b7 ANDROID FOUNDATION",
+        "class": "android.widget.TextView",
+        "bounds": "[135,245][1065,294]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Your hands. Your words.",
+        "class": "android.view.View",
+        "bounds": "[135,348][1065,619]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "A private, on-device signing companion in development.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,673][1065,823]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,877][1065,1295]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Translation is not available yet",
+        "class": "android.widget.TextView",
+        "bounds": "[183,925][1017,998]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "This build can show a live camera preview. It does not recognize ASL or speak a translation.",
+        "class": "android.widget.TextView",
+        "bounds": "[183,1022][1017,1247]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "No recording. No saved signing sessions. Camera frames stay on this device.",
+        "class": "android.widget.TextView",
+        "bounds": "[135,1349][1065,1574]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.widget.Button",
+        "bounds": "[135,1628][1065,1784]",
+        "clickable": "true",
+        "enabled": "true",
+        "content-desc": "Hatsu Is Here For You"
+      },
+      {
+        "text": "Hatsu Is Here For You",
+        "class": "android.widget.TextView",
+        "bounds": "[177,1672][1023,1740]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[60,1913][1140,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Live camera",
+        "class": "android.view.View",
+        "bounds": "[135,1988][1065,2085]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "",
+        "class": "android.view.ViewGroup",
+        "bounds": "[135,2139][1065,2598]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      },
+      {
+        "text": "Camera off",
+        "class": "android.widget.TextView",
+        "bounds": "[472,2341][728,2416]",
+        "clickable": "false",
+        "enabled": "true",
+        "content-desc": ""
+      }
+    ],
+    "navigation_passed": true,
+    "returned_to_launcher": true
+  }
+}

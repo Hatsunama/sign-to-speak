@@ -1,0 +1,158 @@
+{
+  "s24": {
+    "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+    "app_signed_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "camera_off": true,
+    "screenshots_passed": true,
+    "fresh_projection_frames_passed": true,
+    "control_before_after": "100% magenta",
+    "protected_frames": 89,
+    "protected_pixels": "100% opaque black",
+    "crop": [
+      2,
+      105,
+      998,
+      2194
+    ],
+    "capture_cleanup_failed": false,
+    "phases": [
+      {
+        "name": "CONTROL",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 14,
+        "pixels": 29129016,
+        "opaqueBlack": 0,
+        "magenta": 29129016,
+        "errors": "0",
+        "firstImageTimestampNs": 146051271858086,
+        "lastImageTimestampNs": 146053897733398,
+        "requestedNs": 146050923358816,
+        "armedNs": 146051175074337,
+        "endNs": 146053938166106,
+        "width": 1080,
+        "height": 2340,
+        "crop": "2,105,998,2194"
+      },
+      {
+        "name": "PROTECTED",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 89,
+        "pixels": 185177316,
+        "opaqueBlack": 185177316,
+        "magenta": 0,
+        "errors": "0",
+        "firstImageTimestampNs": 146058847891782,
+        "lastImageTimestampNs": 146061604828603,
+        "requestedNs": 146058591375063,
+        "armedNs": 146058841403813,
+        "endNs": 146061643337770,
+        "width": 1080,
+        "height": 2340,
+        "crop": "2,105,998,2194"
+      },
+      {
+        "name": "CONTROL_AFTER",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 14,
+        "pixels": 29129016,
+        "opaqueBlack": 0,
+        "magenta": 29129016,
+        "errors": "0",
+        "firstImageTimestampNs": 146065608636623,
+        "lastImageTimestampNs": 146068234774278,
+        "requestedNs": 146065279871831,
+        "armedNs": 146065530755425,
+        "endNs": 146068279105007,
+        "width": 1080,
+        "height": 2340,
+        "crop": "2,105,998,2194"
+      }
+    ],
+    "evidence_sha256": {
+      "s24-visual-receipt.json": "92799bc01f84f5ae3d2afa22090631f533352998f2c798f2595ad0b9472ae480",
+      "s24-visual-capture.log": "b5f329ef3b6b67c258aebf4d9347446fc2cdad99cf2149d09ec2d2d9325a3392",
+      "s24-protected-window.txt": "1bf5a207a1c62de7e3b137b5e3fd17d1758a9a0980be2d1f0fc0d1bb41f23698"
+    }
+  },
+  "seeker": {
+    "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+    "app_signed_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "camera_off": true,
+    "screenshots_passed": true,
+    "fresh_projection_frames_passed": true,
+    "control_before_after": "100% magenta",
+    "protected_frames": 3,
+    "protected_pixels": "100% opaque black",
+    "crop": [
+      210,
+      112,
+      1198,
+      2596
+    ],
+    "capture_cleanup_failed": false,
+    "phases": [
+      {
+        "name": "CONTROL",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 15,
+        "pixels": 36812880,
+        "opaqueBlack": 0,
+        "magenta": 36812880,
+        "errors": "0",
+        "firstImageTimestampNs": 491234327712587,
+        "lastImageTimestampNs": 491236815771279,
+        "requestedNs": 491234021402664,
+        "armedNs": 491234271998740,
+        "endNs": 491237021997125,
+        "width": 1200,
+        "height": 2670,
+        "crop": "210,112,1198,2596"
+      },
+      {
+        "name": "PROTECTED",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 3,
+        "pixels": 7362576,
+        "opaqueBlack": 7362576,
+        "magenta": 0,
+        "errors": "0",
+        "firstImageTimestampNs": 491242326337126,
+        "lastImageTimestampNs": 491244325094741,
+        "requestedNs": 491241625591664,
+        "armedNs": 491241876260279,
+        "endNs": 491244626570664,
+        "width": 1200,
+        "height": 2670,
+        "crop": "210,112,1198,2596"
+      },
+      {
+        "name": "CONTROL_AFTER",
+        "reason": "phase-timeout",
+        "valid": "true",
+        "frames": 18,
+        "pixels": 44175456,
+        "opaqueBlack": 0,
+        "magenta": 44175456,
+        "errors": "0",
+        "firstImageTimestampNs": 491249775957818,
+        "lastImageTimestampNs": 491252439577203,
+        "requestedNs": 491249482501818,
+        "armedNs": 491249732661511,
+        "endNs": 491252521911665,
+        "width": 1200,
+        "height": 2670,
+        "crop": "210,112,1198,2596"
+      }
+    ],
+    "evidence_sha256": {
+      "seeker-visual-receipt.json": "1a270c901a09dff910ea9da410e0d2d271c6e2a73486198da259566e9d8d6e24",
+      "seeker-visual-capture.log": "6a5998d9d1c5574670e4c5847c2262edb4bd66e9a09d6bd9bf37602624e08bb3",
+      "seeker-protected-window.txt": "67249d96ef113e5dc4a6f4c3a8ffb3c907ad42486438fd10225c6e405b12e2b8"
+    }
+  }
+}

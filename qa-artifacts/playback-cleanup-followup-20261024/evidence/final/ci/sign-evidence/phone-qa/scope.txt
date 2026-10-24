@@ -1,0 +1,5 @@
+app_package=com.xmilo_at_your_side.sign_to_speak.qa
+test_package=com.xmilo_at_your_side.sign_to_speak.qa.test
+abi=arm64-v8a
+signing=unsigned
+physical_device_test=NOT_RUN
