@@ -11,7 +11,9 @@ target=//mediapipe/tasks/java/com/google/mediapipe/tasks/core:tasks_core
 evidence=${EVIDENCE_DIR:?EVIDENCE_DIR must name an artifact directory}
 mkdir -p "$evidence"
 trial=$(mktemp -d "${RUNNER_TEMP:-/tmp}/mediapipe-source-trial.XXXXXXXX")
-trap 'rm -rf "$trial"' EXIT
+# Bazel can leave read-only files in this trial directory. The hosted Actions
+# runner discards its temporary filesystem after the job, so do not let a
+# redundant recursive cleanup turn a successful audited build into a failure.
 fail() { echo "ERROR: $*" >&2; exit 1; }
 check_sha() { printf '%s  %s\n' "$1" "$2" | sha256sum --check --status || fail "SHA-256 mismatch: $2"; }
 
