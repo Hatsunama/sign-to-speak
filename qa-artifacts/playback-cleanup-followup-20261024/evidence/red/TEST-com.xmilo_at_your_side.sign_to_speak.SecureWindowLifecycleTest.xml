@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-10-24T20:51:18.047Z" hostname="runnervmtai0g" time="3.517">
+  <properties/>
+  <testcase name="actualPinnedReactModalCopiesSecureFlagBeforeShowAndAfterRecreation[28]" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="0.989"/>
+  <testcase name="secureBeforeReactContentAndAcrossLifecycle[28]" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="0.069"/>
+  <testcase name="actualPinnedReactModalCopiesSecureFlagBeforeShowAndAfterRecreation[29]" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="0.914"/>
+  <testcase name="secureBeforeReactContentAndAcrossLifecycle[29]" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="0.074"/>
+  <testcase name="actualPinnedReactModalCopiesSecureFlagBeforeShowAndAfterRecreation" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="1.354"/>
+  <testcase name="secureBeforeReactContentAndAcrossLifecycle" classname="com.xmilo_at_your_side.sign_to_speak.SecureWindowLifecycleTest" time="0.09"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+]]></system-err>
+</testsuite>

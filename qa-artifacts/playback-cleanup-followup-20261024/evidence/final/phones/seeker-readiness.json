@@ -1,0 +1,9 @@
+{
+  "source": "d6ff1cb3e994cf0accf55fec2844f897a87fd08a",
+  "expected_serial": "SM02G4061962301",
+  "checked_at_utc": "2026-10-24T21:23:20.769649+00:00",
+  "connected": false,
+  "device_listing": "List of devices attached\r\nR3CX90HWPGB            device product:e1quew model:SM_S921U1 device:e1q transport_id:2\r\n\r\n",
+  "no_device_action_taken": true,
+  "status": "blocked_disconnected"
+}

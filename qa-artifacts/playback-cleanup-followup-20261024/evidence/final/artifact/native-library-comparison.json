@@ -1,0 +1,6 @@
+{
+  "path": "lib/arm64-v8a/libprivate_tts.so",
+  "old_library_sha256": "9e3bc55755d895d8270fea5c87185fc16332213b56b0db527d5f25e84e6b103b",
+  "new_library_sha256": "9e3bc55755d895d8270fea5c87185fc16332213b56b0db527d5f25e84e6b103b",
+  "byte_identical": true
+}

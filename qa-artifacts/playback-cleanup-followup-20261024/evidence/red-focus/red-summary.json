@@ -1,0 +1,17 @@
+{
+  "source": "00f7df1c247ef8e7945d48b1be28cfb9cd93d120",
+  "run": 40132182876,
+  "counts": {
+    "tests": 122,
+    "failures": 1,
+    "errors": 0,
+    "skipped": 0
+  },
+  "failures": [
+    {
+      "test": "focusLossWhilePrivacyAbortWaitsForLockSilencesQueuedAudio",
+      "type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: focus loss returned with queued PCM playing"
+    }
+  ]
+}

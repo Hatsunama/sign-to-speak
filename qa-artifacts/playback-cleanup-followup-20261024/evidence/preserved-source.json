@@ -1,0 +1,18 @@
+{
+  "native/App.tsx": {
+    "unchanged": true,
+    "git_blob_sha256": "50ded6c87547465584161383c2529c0f317aecfe20d5043cf48e1d16b252b8aa"
+  },
+  "native/android/app/src/main/java/com/hatsunama/refract/RefractBackgroundView.kt": {
+    "unchanged": true,
+    "git_blob_sha256": "3ae35fd6e40bb419ef4d5a6cddc8baea7ac498e3d91f61b3b19ccfe502c9452b"
+  },
+  "native/android/app/src/main/java/com/hatsunama/refract/RefractSeed.kt": {
+    "unchanged": true,
+    "git_blob_sha256": "4790b0f5976406755f9f2b72c5a390aad5746441f95591074382f28710e8f66d"
+  },
+  "native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt": {
+    "unchanged": true,
+    "git_blob_sha256": "4bda1d85befa1d6c646f0d8add84c956ceecb66edcb071219d9a6f174c4daad2"
+  }
+}

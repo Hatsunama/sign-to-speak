@@ -1,0 +1,22 @@
+{
+  "privacyAbortSilencesQueuedAudioBeforeStop": {
+    "red_source": "5421f477756b5f2add198a1826497653c0722d23",
+    "unchanged_in_final_code": true,
+    "method_sha256": "a476ffa95799636ed4aa982024a842c959a03f38e21e3dbbef136b17370313f1"
+  },
+  "cancelSilencesQueueWhilePrivacyAbortIsInsideStop": {
+    "red_source": "5421f477756b5f2add198a1826497653c0722d23",
+    "unchanged_in_final_code": true,
+    "method_sha256": "382063ad75f10577b643110534003a252c851f4cb94f5e6ebdf3763f3352baf7"
+  },
+  "failedFocusAbandonFaultsSessionAndBlocksAnotherBegin": {
+    "red_source": "5421f477756b5f2add198a1826497653c0722d23",
+    "unchanged_in_final_code": true,
+    "method_sha256": "d01c04da00ec626f8380985073749630fdf20addf5b05f097179ae327fdb9d98"
+  },
+  "focusLossWhilePrivacyAbortWaitsForLockSilencesQueuedAudio": {
+    "red_source": "00f7df1c247ef8e7945d48b1be28cfb9cd93d120",
+    "unchanged_in_final_code": true,
+    "method_sha256": "b3b2c614f1b3372c5b74ae4108c32d337e12067701d6d279eceaa8c5e9c13854"
+  }
+}
