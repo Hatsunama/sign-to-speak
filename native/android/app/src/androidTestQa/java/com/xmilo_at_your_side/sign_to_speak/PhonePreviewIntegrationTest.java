@@ -75,8 +75,8 @@ public final class PhonePreviewIntegrationTest {
         assertStreaming("Before Stop", first);
         tapActionButton(STOP);
         try {
-            await("Stop accepted (Start local preview shown)", 5000,
-                    () -> device.hasObject(By.pkg(QA_PACKAGE).text(START)));
+            await("Stop accepted (Start local preview rendered)", 5000,
+                    () -> nativeActionRendered(START));
         } catch (AssertionError timeout) {
             throw new AssertionError(timeout.getMessage() + "; fixed QA labels=" + fixedUiLabels(), timeout);
         }
@@ -106,10 +106,11 @@ public final class PhonePreviewIntegrationTest {
         assertCameraOff("Before Start");
         tapActionButton(START);
         try {
-            await("Start accepted (Stop camera shown)", 5000,
-                    () -> device.hasObject(By.pkg(QA_PACKAGE).text(STOP)));
+            await("Start accepted (Stop camera rendered)", 5000,
+                    () -> nativeActionRendered(STOP));
         } catch (AssertionError timeout) {
-            throw new AssertionError(timeout.getMessage() + "; QA labels=" + uiLabels(), timeout);
+            throw new AssertionError(timeout.getMessage() + "; UIA visible QA labels=" + uiLabels()
+                    + "; fixed QA labels=" + fixedUiLabels(), timeout);
         }
         final CameraSnapshot[] streamed = new CameraSnapshot[1];
         final CameraSnapshot[] lastMounted = new CameraSnapshot[1];
@@ -349,10 +350,17 @@ public final class PhonePreviewIntegrationTest {
                 + ",fixedLabels=" + fixedUiLabels());
     }
 
-    private String fixedUiLabels() {
-        return "{start=" + device.hasObject(By.pkg(QA_PACKAGE).text(START))
-                + ",stop=" + device.hasObject(By.pkg(QA_PACKAGE).text(STOP))
-                + ",live=" + device.hasObject(By.pkg(QA_PACKAGE).text(LIVE)) + "}";
+    // An offscreen action remains rendered in the scrollable landscape layout; UIA visibility is not UI state.
+    private boolean nativeActionRendered(String label) throws Exception {
+        return onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label) != null);
+    }
+
+    private String fixedUiLabels() throws Exception {
+        return "{nativeRenderedStart=" + nativeActionRendered(START)
+                + ",nativeRenderedStop=" + nativeActionRendered(STOP)
+                + ",UIAvisibleStart=" + device.hasObject(By.pkg(QA_PACKAGE).text(START))
+                + ",UIAvisibleStop=" + device.hasObject(By.pkg(QA_PACKAGE).text(STOP))
+                + ",UIAvisibleLive=" + device.hasObject(By.pkg(QA_PACKAGE).text(LIVE)) + "}";
     }
 
     private String uiLabels() {
