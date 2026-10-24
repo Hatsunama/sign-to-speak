@@ -1,0 +1,18 @@
+{
+  "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+  "key_exported": false,
+  "artifacts": [
+    {
+      "role": "recorder",
+      "unsigned_sha256": "1bbca36cc61f7d807b878940ac92a45c77463f98a6f2cf0dbe2388b43ca3c886",
+      "signed_sha256": "ebd0ffaf7b0e9ef12d0db08eb8d9dda39048ebb75bb5230f28e23613f2eab1d3",
+      "zip_payloads_identical": true
+    },
+    {
+      "role": "tone",
+      "unsigned_sha256": "395eb669bf7ea7956ce1b34c1fda1d61320475dafd667ca96ac0ef93e9f9a73f",
+      "signed_sha256": "22a42df24fe5a0ec9382272d6b98693cae17a76f538af8753af7a13cef150f22",
+      "zip_payloads_identical": true
+    }
+  ]
+}

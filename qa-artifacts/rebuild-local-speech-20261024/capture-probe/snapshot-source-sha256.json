@@ -1,0 +1,10 @@
+{
+  "build.py": "736d5fd6152ab416eec7fe04afc74a6500613c1e1c2c5f927ca6c15bfebf164d",
+  "README.md": "34889fc9ac00316322a34e561da2ea800c954f2b25d5ff062b700b5f20b4e7f3",
+  "recorder/src/com/xmilo_at_your_side/sign_to_speak/qa/capture/PhaseReceiver.java": "b133cb5e08163f09a14c688e077cefb6692fcc3ba8812ddf63725501af10c484",
+  "recorder/src/com/xmilo_at_your_side/sign_to_speak/qa/capture/RecorderActivity.java": "bc806b20dad23655b111a9be233490d98cf0a49f3e6aa6bdaea9f41f3e4daa8f",
+  "recorder/src/com/xmilo_at_your_side/sign_to_speak/qa/capture/RecorderService.java": "d18600377b7dc889d265453268e98eb077e92a423136ea302e0cbcfd2c954ca1",
+  "recorder/AndroidManifest.xml": "4023d5586767b8d639557a77c83506ea35069f365d0fdcdf5b3f1e7209d1aa6f",
+  "tone/src/com/xmilo_at_your_side/sign_to_speak/qa/tone/ToneActivity.java": "98bc8596cd7ca6f1db4ee087d858d7509d292332a7d67ff50654850450dbcc8c",
+  "tone/AndroidManifest.xml": "8971505dd875a77000fb63790e7ddfec4cbc0edc6728740c0943ff345d59eba2"
+}

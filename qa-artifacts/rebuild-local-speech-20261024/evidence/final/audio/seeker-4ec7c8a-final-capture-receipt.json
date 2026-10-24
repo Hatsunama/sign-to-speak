@@ -1,0 +1,31 @@
+{
+  "serial": "SM02G4061962301",
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+  "logStart": "10-24 14:35:46.000",
+  "playButton": {
+    "index": "1",
+    "text": "Play capturable 5 second tone",
+    "resource-id": "",
+    "class": "android.widget.Button",
+    "package": "com.xmilo_at_your_side.sign_to_speak.qa.tone",
+    "content-desc": "",
+    "checkable": "false",
+    "checked": "false",
+    "clickable": "true",
+    "enabled": "true",
+    "focusable": "true",
+    "focused": "false",
+    "scrollable": "false",
+    "long-clickable": "false",
+    "password": "false",
+    "selected": "false",
+    "bounds": "[60,215][1140,359]",
+    "drawing-order": "2",
+    "hint": ""
+  },
+  "instrumentStartUptime": 649414.88,
+  "instrumentEndUptime": 649429.43,
+  "stop": "Broadcasting: Intent { act=com.xmilo_at_your_side.sign_to_speak.qa.capture.PHASE flg=0x10400000 cmp=com.xmilo_at_your_side.sign_to_speak.qa.capture/.PhaseReceiver (has extras) }\r\nBroadcast completed: result=0\r\n",
+  "testPassed": true
+}

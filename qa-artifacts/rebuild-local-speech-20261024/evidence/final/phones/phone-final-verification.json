@@ -1,0 +1,33 @@
+{
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "phones": {
+    "s24": {
+      "logStart": "10-24 14:29:32.000",
+      "installed_signed_sha256": {
+        "app": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+        "test": "77c5eda4fa351cca9fd4ca286d2969212e1efbea5452b9383a54eaaa56dfe0fd"
+      },
+      "cold_start": "Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity\r\nTotalTime: 124\r\nWaitTime: 128\r\nComplete\r\n",
+      "original_rotation": {
+        "accelerometer_rotation": "1",
+        "user_rotation": "0"
+      },
+      "portrait_full_pass": true,
+      "landscape_camera_pass": true
+    },
+    "seeker": {
+      "logStart": "10-24 14:29:36.000",
+      "installed_signed_sha256": {
+        "app": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+        "test": "77c5eda4fa351cca9fd4ca286d2969212e1efbea5452b9383a54eaaa56dfe0fd"
+      },
+      "cold_start": "Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }\r\nStatus: ok\r\nLaunchState: COLD\r\nActivity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity\r\nTotalTime: 526\r\nWaitTime: 533\r\nComplete\r\n",
+      "original_rotation": {
+        "accelerometer_rotation": "0",
+        "user_rotation": "0"
+      },
+      "portrait_full_pass": true,
+      "landscape_camera_pass": true
+    }
+  }
+}

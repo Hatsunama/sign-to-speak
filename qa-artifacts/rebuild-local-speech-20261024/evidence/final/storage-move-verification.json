@@ -1,0 +1,21 @@
+{
+  "method": "Windows rejected open repository directory rename; copied repository and verified every file hash. Historical app-specific directory moved and every file hash verified.",
+  "verified": {
+    "repository": {
+      "destination": "C:\\sign_to_speak\\repository",
+      "file_count": 18527,
+      "bytes": 522512715,
+      "all_file_sha256_match": true,
+      "private_keys_moved": false
+    },
+    "historical-evidence/sign-arm64-60d255d0": {
+      "destination": "C:\\sign_to_speak\\historical-evidence\\sign-arm64-60d255d0",
+      "file_count": 90,
+      "bytes": 111027218,
+      "all_file_sha256_match": true,
+      "private_keys_moved": false
+    }
+  },
+  "unrelated_xmilo_project_moved": false,
+  "keys_and_credentials_retained_in_existing_locations": true
+}

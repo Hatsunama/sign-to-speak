@@ -1,0 +1,47 @@
+{
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+  "label": "s24",
+  "screenshots": {
+    "CONTROL": {
+      "crop": [
+        2,
+        105,
+        1078,
+        2194
+      ],
+      "image_size": [
+        1080,
+        2340
+      ],
+      "pixels": 2247764,
+      "opaqueBlack": 0,
+      "magenta": 2243738,
+      "full_png_sha256": "5a5c11dd160b774db10eaf8d385177b76bd78431ec2ae181eff28a3ba66a80af"
+    },
+    "PROTECTED": {
+      "crop": [
+        2,
+        105,
+        1078,
+        2194
+      ],
+      "image_size": [
+        1080,
+        2340
+      ],
+      "pixels": 2247764,
+      "opaqueBlack": 2243738,
+      "magenta": 0,
+      "full_png_sha256": "efc9a8485b16df1eca8651ed8dfc973e1d5cc4227c667b43ab0578f505c200b5"
+    }
+  },
+  "camera_used": false,
+  "logStart": "10-24 14:46:03.000",
+  "crop": [
+    2,
+    105,
+    1078,
+    2194
+  ]
+}

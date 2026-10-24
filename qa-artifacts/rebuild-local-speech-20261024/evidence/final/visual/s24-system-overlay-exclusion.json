@@ -1,0 +1,56 @@
+{
+  "CONTROL": {
+    "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+    "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+    "width": 80,
+    "excluded_from_x": 998,
+    "original_crop": [
+      2,
+      105,
+      1078,
+      2194
+    ],
+    "crop": [
+      2,
+      105,
+      998,
+      2194
+    ]
+  },
+  "PROTECTED": {
+    "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+    "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+    "width": 80,
+    "excluded_from_x": 998,
+    "original_crop": [
+      2,
+      105,
+      1078,
+      2194
+    ],
+    "crop": [
+      2,
+      105,
+      998,
+      2194
+    ]
+  },
+  "CONTROL_AFTER": {
+    "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+    "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+    "width": 80,
+    "excluded_from_x": 998,
+    "original_crop": [
+      2,
+      105,
+      1078,
+      2194
+    ],
+    "crop": [
+      2,
+      105,
+      998,
+      2194
+    ]
+  }
+}

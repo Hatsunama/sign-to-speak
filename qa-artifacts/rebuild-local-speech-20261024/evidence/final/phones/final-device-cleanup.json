@@ -1,0 +1,34 @@
+{
+  "s24": {
+    "removed_owned_helpers": [
+      "com.xmilo_at_your_side.sign_to_speak.qa.capture",
+      "com.xmilo_at_your_side.sign_to_speak.qa.tone",
+      "com.xmilo_at_your_side.sign_to_speak.qa.visualcapture"
+    ],
+    "rotation_restored": {
+      "accelerometer_rotation": "1",
+      "user_rotation": "0"
+    },
+    "product_app_retained_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "product_data_cleared": false,
+    "volume_changed_by_qa": false,
+    "owned_projection_active": false,
+    "returned_home": true
+  },
+  "seeker": {
+    "removed_owned_helpers": [
+      "com.xmilo_at_your_side.sign_to_speak.qa.capture",
+      "com.xmilo_at_your_side.sign_to_speak.qa.tone",
+      "com.xmilo_at_your_side.sign_to_speak.qa.visualcapture"
+    ],
+    "rotation_restored": {
+      "accelerometer_rotation": "0",
+      "user_rotation": "0"
+    },
+    "product_app_retained_sha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+    "product_data_cleared": false,
+    "volume_changed_by_qa": false,
+    "owned_projection_active": false,
+    "returned_home": true
+  }
+}

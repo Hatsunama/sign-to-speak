@@ -1,0 +1,5 @@
+--------- beginning of main
+10-24 14:46:03.496 21753 21753 I VisualCaptureQA: session start width=1080 height=2340 density=480 startNs=145778848467409 maxMs=60000
+10-24 14:46:07.580 21753 21753 I VisualCaptureQA: phase requested name=CONTROL crop=2,105,1078,2194 requestedNs=145782931709647
+10-24 14:46:07.830 21753 21753 I VisualCaptureQA: phase armed name=CONTROL armedNs=145783182287407
+10-24 14:46:10.582 21753 21753 I VisualCaptureQA: phase end name=CONTROL reason=phase-timeout valid=true frames=14 pixels=31468696 opaqueBlack=0 magenta=31412332 errors=0 firstImageTimestampNs=145783227445220 lastImageTimestampNs=145785854867563 requestedNs=145782931709647 armedNs=145783182287407 endNs=145785934396261 width=1080 height=2340 crop=2,105,1078,2194

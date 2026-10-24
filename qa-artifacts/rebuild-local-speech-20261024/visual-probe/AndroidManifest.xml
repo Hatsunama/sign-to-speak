@@ -1,0 +1,15 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.xmilo_at_your_side.sign_to_speak.qa.visualcapture">
+  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION"/>
+  <application android:label="Visual Capture QA" android:testOnly="true" android:allowBackup="false" android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+    <activity android:name=".ConsentActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+    <activity android:name=".ControlActivity" android:exported="true"/>
+    <service android:name=".CaptureService" android:exported="false" android:foregroundServiceType="mediaProjection"/>
+    <receiver android:name=".PhaseReceiver" android:exported="true" android:permission="android.permission.DUMP">
+      <intent-filter><action android:name="com.xmilo_at_your_side.sign_to_speak.qa.visualcapture.PHASE"/></intent-filter>
+    </receiver>
+  </application>
+</manifest>

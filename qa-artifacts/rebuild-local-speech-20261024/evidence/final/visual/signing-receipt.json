@@ -1,0 +1,8 @@
+{
+  "unsigned_sha256": "9c2669f12e017629b8ea5ff7d30b458d1d51977dc3012a00f2ba4df866652c1a",
+  "signed_sha256": "0b39bd3ad80e674e1dd7930d1af6e7c074ae1c111212584b0b57921f6b5bb7cf",
+  "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+  "zip_payloads_identical": true,
+  "existing_key_unchanged": true,
+  "key_exported": false
+}

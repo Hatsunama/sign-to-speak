@@ -1,0 +1,13 @@
+--------- beginning of main
+145112.697 19365 19365 I CaptureQA: session start elapsedMs=256972838 maxMs=60000 audioOnly=true
+145115.630 19365 19365 I CaptureQA: phase start name=CONTROL elapsedMs=256975770 maxMs=20000 productUid=10416 toneUid=10434
+145120.437 19927 20018 I ToneQA  : tone end elapsedMs=256980578 durationMs=4781 writtenFrames=80000 headFrames=76800 reason=duration-limit
+145120.445 19927 19927 I ToneQA  : tone stop reason=complete
+145135.720 19365 19365 I CaptureQA: phase end name=CONTROL elapsedMs=256995861 durationMs=20091 samples=319488 nonzero=74378 peak=6000 readErrors=0 reason=phase-timeout
+145136.974 19365 19365 I CaptureQA: phase start name=PROTECTED elapsedMs=256997115 maxMs=20000 productUid=10416 toneUid=10434
+145138.162 20084 20095 I TestRunner: run started: 1 tests
+145138.162 20084 20095 I TestRunner: started: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+145151.713 20084 20095 I TestRunner: finished: realFlitePcmProtectedPlaybackAndInputBoundaries(com.xmilo_at_your_side.sign_to_speak.PhoneSpeechIntegrationTest)
+145151.716 20084 20095 I TestRunner: run finished: 1 tests, 0 failed, 0 ignored
+145157.064 19365 19365 I CaptureQA: phase end name=PROTECTED elapsedMs=257017205 durationMs=20090 samples=319488 nonzero=0 peak=0 readErrors=0 reason=phase-timeout
+145158.460 19365 19365 I CaptureQA: session end reason=explicit-stop durationMs=45763

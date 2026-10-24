@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-10-24T18:21:53.838Z" hostname="runnervm8k3b6" time="1.122">
+  <properties/>
+  <testcase name="playbackCleanupFaultPersistsThroughLaterClose" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.335"/>
+  <testcase name="focusLossInvalidatesSessionWithoutAutoResume" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.035"/>
+  <testcase name="partialAndZeroWritesEventuallyDrain" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.026"/>
+  <testcase name="cleanupFailuresAreReportedAfterEveryCleanupAttempt" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.028"/>
+  <testcase name="appAndTrackCapturePolicyAreReadBack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.025"/>
+  <testcase name="privacyLossDuringDrainStopsBeforeNextHeadPoll" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.026"/>
+  <testcase name="privacyLossAfterPartialWriteStopsBeforeNextWrite" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.03"/>
+  <testcase name="deniedFocusNeverCreatesTrack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.023"/>
+  <testcase name="writeCompletionIsNotPlaybackCompletionAndCancelStopsDrain" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.027"/>
+  <testcase name="cancellationDuringTrackCreationCannotStartAudio" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.027"/>
+  <testcase name="cancellationAttemptsPauseAndFlushAndReportsFailure" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.056"/>
+  <testcase name="initializationAndWriteFailuresReleaseAndAbandon" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.025"/>
+  <testcase name="cancelledBeforePlaybackNeverRequestsFocus" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.024"/>
+  <testcase name="releaseFailureStillAbandonsFocus" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.024"/>
+  <testcase name="focusCancellationFaultPersistsThroughLaterClose" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.026"/>
+  <testcase name="focusLossStillInvalidatesWhenPauseFails" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.024"/>
+  <testcase name="exactCapturePolicyAndSpeechAttributesAreRequired" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.023"/>
+  <testcase name="oldAndroidNeverRequestsFocusOrCreatesTrack" classname="com.xmilo_at_your_side.sign_to_speak.ProtectedPcmPlayerTest" time="0.312"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

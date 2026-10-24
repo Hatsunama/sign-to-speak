@@ -1,0 +1,65 @@
+[
+  {
+    "label": "Start local preview",
+    "button": {
+      "index": "14",
+      "text": "",
+      "resource-id": "",
+      "class": "android.widget.Button",
+      "package": "com.xmilo_at_your_side.sign_to_speak.qa",
+      "content-desc": "Start local preview",
+      "checkable": "false",
+      "checked": "false",
+      "clickable": "true",
+      "enabled": "true",
+      "focusable": "true",
+      "focused": "false",
+      "scrollable": "false",
+      "long-clickable": "false",
+      "password": "false",
+      "selected": "false",
+      "bounds": "[135,1662][945,1818]",
+      "drawing-order": "15",
+      "hint": ""
+    },
+    "scrollAttempt": 1
+  },
+  {
+    "label": "Stop camera",
+    "button": {
+      "index": "13",
+      "text": "",
+      "resource-id": "",
+      "class": "android.widget.Button",
+      "package": "com.xmilo_at_your_side.sign_to_speak.qa",
+      "content-desc": "Stop camera",
+      "checkable": "false",
+      "checked": "false",
+      "clickable": "true",
+      "enabled": "true",
+      "focusable": "true",
+      "focused": "false",
+      "scrollable": "false",
+      "long-clickable": "false",
+      "password": "false",
+      "selected": "false",
+      "bounds": "[135,1662][945,1818]",
+      "drawing-order": "14",
+      "hint": ""
+    },
+    "scrollAttempt": 1
+  },
+  {
+    "afterStopCameraViewMounted": false,
+    "afterStopLabels": [
+      "This build can show a live camera preview. It does not recognize ASL or speak a translation.",
+      "No recording. No saved signing sessions. Camera frames stay on this device.",
+      "Hatsu Is Here For You",
+      "Live camera",
+      "Camera off",
+      "Camera is off.",
+      "Start local preview",
+      "Leaving this screen or putting the app in the background stops the camera. Starting again is always your choice."
+    ]
+  }
+]

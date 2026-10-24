@@ -1,0 +1,83 @@
+{
+  "CONTROL": {
+    "original_crop": [
+      2,
+      112,
+      1198,
+      2596
+    ],
+    "crop": [
+      210,
+      112,
+      1198,
+      2596
+    ],
+    "systemui_bubbles": {
+      "window": "Bubbles!",
+      "owner": "com.android.systemui",
+      "display_id": 0,
+      "touchable_region": [
+        -44,
+        122,
+        208,
+        374
+      ],
+      "side": "left",
+      "excluded_to_x": 210
+    }
+  },
+  "PROTECTED": {
+    "original_crop": [
+      2,
+      112,
+      1198,
+      2596
+    ],
+    "crop": [
+      210,
+      112,
+      1198,
+      2596
+    ],
+    "systemui_bubbles": {
+      "window": "Bubbles!",
+      "owner": "com.android.systemui",
+      "display_id": 0,
+      "touchable_region": [
+        -44,
+        122,
+        208,
+        374
+      ],
+      "side": "left",
+      "excluded_to_x": 210
+    }
+  },
+  "CONTROL_AFTER": {
+    "original_crop": [
+      2,
+      112,
+      1198,
+      2596
+    ],
+    "crop": [
+      210,
+      112,
+      1198,
+      2596
+    ],
+    "systemui_bubbles": {
+      "window": "Bubbles!",
+      "owner": "com.android.systemui",
+      "display_id": 0,
+      "touchable_region": [
+        -44,
+        122,
+        208,
+        374
+      ],
+      "side": "left",
+      "excluded_to_x": 210
+    }
+  }
+}

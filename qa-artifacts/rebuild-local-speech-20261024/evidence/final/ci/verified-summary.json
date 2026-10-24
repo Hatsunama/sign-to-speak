@@ -1,0 +1,13 @@
+{
+  "tested_code": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "run_id": 40119903979,
+  "conclusion": "success",
+  "android_unit": {
+    "tests": 118,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "native_ctest": 2,
+  "host_jni_checks": 344
+}

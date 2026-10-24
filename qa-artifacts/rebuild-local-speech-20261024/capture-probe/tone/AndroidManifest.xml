@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="com.xmilo_at_your_side.sign_to_speak.qa.tone">
+  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36"/>
+  <application android:label="Capturable Tone QA" android:testOnly="true" android:allowBackup="false" android:allowAudioPlaybackCapture="true" android:usesCleartextTraffic="false">
+    <activity android:name=".ToneActivity" android:exported="true">
+      <intent-filter><action android:name="android.intent.action.MAIN"/><category android:name="android.intent.category.LAUNCHER"/></intent-filter>
+    </activity>
+  </application>
+</manifest>

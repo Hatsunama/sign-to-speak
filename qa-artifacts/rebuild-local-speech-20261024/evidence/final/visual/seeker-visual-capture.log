@@ -1,0 +1,12 @@
+--------- beginning of main
+10-24 14:56:40.407 32092 32092 I VisualCaptureQA: session start width=1200 height=2670 density=480 startNs=491230258447048 maxMs=60000
+10-24 14:56:44.170 32092 32092 I VisualCaptureQA: phase requested name=CONTROL crop=210,112,1198,2596 requestedNs=491234021402664
+10-24 14:56:44.420 32092 32092 I VisualCaptureQA: phase armed name=CONTROL armedNs=491234271998740
+10-24 14:56:47.170 32092 32092 I VisualCaptureQA: phase end name=CONTROL reason=phase-timeout valid=true frames=15 pixels=36812880 opaqueBlack=0 magenta=36812880 errors=0 firstImageTimestampNs=491234327712587 lastImageTimestampNs=491236815771279 requestedNs=491234021402664 armedNs=491234271998740 endNs=491237021997125 width=1200 height=2670 crop=210,112,1198,2596
+10-24 14:56:51.774 32092 32092 I VisualCaptureQA: phase requested name=PROTECTED crop=210,112,1198,2596 requestedNs=491241625591664
+10-24 14:56:52.024 32092 32092 I VisualCaptureQA: phase armed name=PROTECTED armedNs=491241876260279
+10-24 14:56:54.775 32092 32092 I VisualCaptureQA: phase end name=PROTECTED reason=phase-timeout valid=true frames=3 pixels=7362576 opaqueBlack=7362576 magenta=0 errors=0 firstImageTimestampNs=491242326337126 lastImageTimestampNs=491244325094741 requestedNs=491241625591664 armedNs=491241876260279 endNs=491244626570664 width=1200 height=2670 crop=210,112,1198,2596
+10-24 14:56:59.631 32092 32092 I VisualCaptureQA: phase requested name=CONTROL_AFTER crop=210,112,1198,2596 requestedNs=491249482501818
+10-24 14:56:59.881 32092 32092 I VisualCaptureQA: phase armed name=CONTROL_AFTER armedNs=491249732661511
+10-24 14:57:02.670 32092 32092 I VisualCaptureQA: phase end name=CONTROL_AFTER reason=phase-timeout valid=true frames=18 pixels=44175456 opaqueBlack=0 magenta=44175456 errors=0 firstImageTimestampNs=491249775957818 lastImageTimestampNs=491252439577203 requestedNs=491249482501818 armedNs=491249732661511 endNs=491252521911665 width=1200 height=2670 crop=210,112,1198,2596
+10-24 14:57:02.865 32092 32092 I VisualCaptureQA: session end reason=explicit-stop cleanupFailed=false endNs=491252716687665

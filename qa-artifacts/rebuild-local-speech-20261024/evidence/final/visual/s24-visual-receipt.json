@@ -1,0 +1,120 @@
+{
+  "source": "4ec7c8a38d9444db4d6ef2b3506faa27b0b5a292",
+  "appSignedSha256": "6f5d30e481781e5b7cc5dca13f47550143277ac159e27f84b5a01846afa3f7e1",
+  "label": "s24",
+  "screenshots": {
+    "CONTROL": {
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ],
+      "image_size": [
+        1080,
+        2340
+      ],
+      "pixels": 2080644,
+      "opaqueBlack": 0,
+      "magenta": 2080644,
+      "full_png_sha256": "52dca600af6f1fef2d2950aa4bc22101740ab10f5687165d03d2e70fde8fd35b"
+    },
+    "PROTECTED": {
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ],
+      "image_size": [
+        1080,
+        2340
+      ],
+      "pixels": 2080644,
+      "opaqueBlack": 2080644,
+      "magenta": 0,
+      "full_png_sha256": "08d7f5de2ae7383471613ccede79f620ffd30da1640508031ff41731b10f7ae3"
+    },
+    "CONTROL_AFTER": {
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ],
+      "image_size": [
+        1080,
+        2340
+      ],
+      "pixels": 2080644,
+      "opaqueBlack": 0,
+      "magenta": 2080644,
+      "full_png_sha256": "7dd7f6095749a13cc1ff101dadfe8ce514e5e9fb14b531960205236687ae4aa6"
+    }
+  },
+  "camera_used": false,
+  "logStart": "10-24 14:50:31.000",
+  "crop": [
+    2,
+    105,
+    998,
+    2194
+  ],
+  "systemOverlayExclusion": {
+    "CONTROL": {
+      "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+      "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+      "width": 80,
+      "excluded_from_x": 998,
+      "original_crop": [
+        2,
+        105,
+        1078,
+        2194
+      ],
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ]
+    },
+    "PROTECTED": {
+      "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+      "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+      "width": 80,
+      "excluded_from_x": 998,
+      "original_crop": [
+        2,
+        105,
+        1078,
+        2194
+      ],
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ]
+    },
+    "CONTROL_AFTER": {
+      "window": "com.sec.android.app.launcher/com.samsung.app.honeyspace.edge.edgepanel.app.CocktailBarService",
+      "attrs": "(0,433)(80x342) gr=TOP RIGHT CENTER",
+      "width": 80,
+      "excluded_from_x": 998,
+      "original_crop": [
+        2,
+        105,
+        1078,
+        2194
+      ],
+      "crop": [
+        2,
+        105,
+        998,
+        2194
+      ]
+    }
+  },
+  "complete": true
+}

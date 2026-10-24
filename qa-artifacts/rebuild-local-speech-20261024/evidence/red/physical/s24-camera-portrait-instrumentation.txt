@@ -1,0 +1,53 @@
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stream=
+com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest:
+INSTRUMENTATION_STATUS: test=uiStartStreamsAndEveryExitReleasesPreview
+INSTRUMENTATION_STATUS_CODE: 1
+INSTRUMENTATION_STATUS: class=com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest
+INSTRUMENTATION_STATUS: current=1
+INSTRUMENTATION_STATUS: id=AndroidJUnitRunner
+INSTRUMENTATION_STATUS: numtests=1
+INSTRUMENTATION_STATUS: stack=java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}; last mounted camera before unmount=null
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:107)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:67)
+	... 8 trimmed
+Caused by: java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.await(PhonePreviewIntegrationTest.java:272)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:99)
+	... 10 more
+
+INSTRUMENTATION_STATUS: stream=
+Error in uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest):
+java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}; last mounted camera before unmount=null
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:107)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:67)
+	... 8 trimmed
+Caused by: java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.await(PhonePreviewIntegrationTest.java:272)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:99)
+	... 10 more
+
+INSTRUMENTATION_STATUS: test=uiStartStreamsAndEveryExitReleasesPreview
+INSTRUMENTATION_STATUS_CODE: -2
+INSTRUMENTATION_RESULT: stream=
+
+Time: 22.063
+There was 1 failure:
+1) uiStartStreamsAndEveryExitReleasesPreview(com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest)
+java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}; last mounted camera before unmount=null
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:107)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.uiStartStreamsAndEveryExitReleasesPreview(PhonePreviewIntegrationTest.java:67)
+	... 8 trimmed
+Caused by: java.lang.AssertionError: Timed out: physical camera STREAMING; native{view=false,mounted=false,requested=false,disposed=false,attached=false,size=0x0,surface=0x0,stream=null,preview=false,provider=false,bound=false,resumed=true,registeredActive=false,children=[none],registry=[]}
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.await(PhonePreviewIntegrationTest.java:272)
+	at com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest.startAndAwaitStreaming(PhonePreviewIntegrationTest.java:99)
+	... 10 more
+
+FAILURES!!!
+Tests run: 1,  Failures: 1
+
+
+INSTRUMENTATION_CODE: -1

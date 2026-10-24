@@ -1,0 +1,12 @@
+{
+  "clone": {
+    "name": "f800121 Bubbles!",
+    "displayId": 5,
+    "touchableRegion": [0, 122, 208, 374]
+  },
+  "physical": {
+    "name": "f800121 Bubbles!",
+    "displayId": 0,
+    "touchableRegion": [-44, 122, 208, 374]
+  }
+}
