@@ -47,18 +47,17 @@ diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_spe
          cameraViews.clear()
          super.onDestroy()
 diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
-index a1d1622..8387613 100644
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
 +++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
-@@ -3,7 +3,6 @@ package com.xmilo_at_your_side.sign_to_speak
- import android.Manifest
+@@ -4,7 +4,6 @@
  import android.content.pm.PackageManager
+ import android.view.View
  import android.widget.FrameLayout
 -import androidx.camera.core.CameraState
  import androidx.camera.core.CameraSelector
  import androidx.camera.core.Preview
  import androidx.camera.lifecycle.ProcessCameraProvider
-@@ -11,8 +10,6 @@ import androidx.camera.view.PreviewView
+@@ -12,8 +11,6 @@
  import androidx.core.content.ContextCompat
  import androidx.lifecycle.Lifecycle
  import androidx.lifecycle.LifecycleOwner
@@ -67,7 +66,7 @@ index a1d1622..8387613 100644
  import com.facebook.react.bridge.Arguments
  import com.facebook.react.bridge.LifecycleEventListener
  import com.facebook.react.uimanager.ThemedReactContext
-@@ -31,10 +28,6 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+@@ -32,10 +29,6 @@
      private var observing = false
      private var disposed = false
      private var cameraActivity: MainActivity? = null
@@ -75,10 +74,10 @@ index a1d1622..8387613 100644
 -    private var streamObserver: Observer<PreviewView.StreamState>? = null
 -    private var cameraStates: LiveData<CameraState>? = null
 -    private var cameraObserver: Observer<CameraState>? = null
- 
-     init {
-         registerWithActivity()
-@@ -52,9 +45,6 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+     private var previewLayoutPosted = false
+     private val layoutPreview = Runnable {
+         try {
+@@ -69,9 +62,6 @@
              status("capture_privacy_unavailable")
              return
          }
@@ -88,7 +87,7 @@ index a1d1622..8387613 100644
          requested = true
          if (isAttachedToWindow) start()
      }
-@@ -62,10 +52,10 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+@@ -79,10 +69,10 @@
      private fun start() {
          val owner = reactContext.currentActivity as? LifecycleOwner
          if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
@@ -101,7 +100,7 @@ index a1d1622..8387613 100644
          }
          val token = lease.begin(true, true)
          try {
-@@ -77,104 +67,40 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+@@ -94,104 +84,40 @@
                      val cameraProvider = future.get()
                      val camera = CameraSelector.DEFAULT_FRONT_CAMERA
                      if (!cameraProvider.hasCamera(camera)) {
@@ -132,7 +131,8 @@ index a1d1622..8387613 100644
  
      private fun isCurrent(token: Long) = requested && !disposed &&
          isAttachedToWindow && lease.isCurrent(token)
-
+-
++
 -    private fun observeCamera(
 -        owner: LifecycleOwner, token: Long, states: LiveData<CameraState>, hadRetiredStream: Boolean,
 -    ) {
@@ -215,7 +215,7 @@ index a1d1622..8387613 100644
      }
  
      private fun registerWithActivity() {
-@@ -185,21 +111,15 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+@@ -202,22 +128,16 @@
          activity?.registerCameraView(this)
      }
  
@@ -225,6 +225,7 @@ index a1d1622..8387613 100644
  
      fun dispose() {
          disposed = true
+         cancelPreviewLayout()
 -        try { stop() }
 -        finally {
 -            try {
@@ -242,8 +243,8 @@ index a1d1622..8387613 100644
 +        cameraActivity = null
      }
  
-     override fun onAttachedToWindow() {
-@@ -212,17 +132,13 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
+     override fun requestLayout() {
+@@ -244,18 +164,14 @@
      }
  
      override fun onDetachedFromWindow() {
@@ -252,12 +253,14 @@ index a1d1622..8387613 100644
 -            try { if (observing) reactContext.removeLifecycleEventListener(this) }
 -            finally {
 -                observing = false
+-                cancelPreviewLayout()
 -                super.onDetachedFromWindow()
 -            }
 -        }
 +        stop()
 +        if (observing) reactContext.removeLifecycleEventListener(this)
 +        observing = false
++        cancelPreviewLayout()
 +        super.onDetachedFromWindow()
      }
  
