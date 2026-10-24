@@ -103,7 +103,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
             int offset = 0;
             long lastProgressAt = SystemClock.elapsedRealtime();
             while (offset < pcm.length) {
-                requireNotCancelled(sessionCancelled);
+                requireReady(sessionCancelled);
                 int written;
                 synchronized (lock) {
                     requireNotCancelled(sessionCancelled);
@@ -125,7 +125,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
             long lastHead = -1;
             long lastHeadAt = drainStart;
             while (true) {
-                requireNotCancelled(sessionCancelled);
+                requireReady(sessionCancelled);
                 long head;
                 synchronized (lock) {
                     requireNotCancelled(sessionCancelled);

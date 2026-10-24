@@ -46,7 +46,8 @@ public class ProtectedPcmPlayerTest {
             return AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
         });
         when(track.getState()).thenReturn(AudioTrack.STATE_INITIALIZED);
-        when(track.getAudioAttributes()).thenAnswer(call -> createdAttributes.get());
+        if (Build.VERSION.SDK_INT >= 29)
+            when(track.getAudioAttributes()).thenAnswer(call -> createdAttributes.get());
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
             .thenAnswer(call -> call.getArgument(2));
         when(track.getPlaybackHeadPosition()).thenReturn(160);
@@ -301,23 +302,40 @@ public class ProtectedPcmPlayerTest {
         doThrow(new IllegalStateException("test pause failure")).when(track).pause();
         doThrow(new IllegalStateException("test flush failure")).when(track).flush();
         CountDownLatch wrote = new CountDownLatch(1);
+        CountDownLatch atDrain = new CountDownLatch(1);
+        CountDownLatch resumeDrain = new CountDownLatch(1);
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
             .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
         ProtectedPcmPlayer player = player();
         Thread worker = new Thread(() -> {
-            try { player.play(new short[160], () -> false); }
-            catch (IllegalStateException expected) { /* focus loss stops playback */ }
+            try {
+                player.play(new short[160], () -> {
+                    if (wrote.getCount() == 0) {
+                        atDrain.countDown();
+                        try { resumeDrain.await(); }
+                        catch (InterruptedException failure) {
+                            Thread.currentThread().interrupt();
+                            throw new AssertionError(failure);
+                        }
+                    }
+                    return false;
+                });
+            } catch (IllegalStateException expected) { /* focus loss stops playback */ }
         });
         worker.start();
-        assertTrue(wrote.await(2, TimeUnit.SECONDS));
-        player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
-        assertEquals(1, invalidations.get());
+        try {
+            assertTrue(atDrain.await(2, TimeUnit.SECONDS));
+            player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
+            assertEquals(1, invalidations.get());
+            verify(track, times(1)).pause();
+            verify(track, times(1)).flush();
+        } finally {
+            resumeDrain.countDown();
+        }
         worker.join(2000);
         assertFalse(worker.isAlive());
         assertThrows(IllegalStateException.class, player::close);
         assertThrows(IllegalStateException.class, player::close);
-        verify(track, times(1)).pause();
-        verify(track, times(1)).flush();
         verify(track, times(1)).stop();
         verify(track, times(1)).release();
         verify(audio, times(1)).abandonAudioFocusRequest(focusRequest.get());
