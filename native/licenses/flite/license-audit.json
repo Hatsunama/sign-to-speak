@@ -1,0 +1,144 @@
+{
+  "status": "read_only_source_license_audit_not_legal_advice",
+  "commit": "e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88",
+  "notices": [
+    {
+      "category": "Flite collection, core, SLT voice/model, cmulex",
+      "files": [
+        "COPYING",
+        "lang/cmu_us_slt/cmu_us_slt.c"
+      ],
+      "terms": "CMU BSD-like permissive grant, including commercial use/distribution. Retain copyright, terms and disclaimer; mark modifications; keep author names; no endorsement without permission. Root license says it covers all files except listed exceptions. Generated SLT and cmulex data are not listed exceptions.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/COPYING",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/cmu_us_slt/cmu_us_slt.c"
+      ]
+    },
+    {
+      "category": "US English generated Festival-derived data",
+      "files": [
+        "lang/usenglish/us_durz_cart.c",
+        "lang/usenglish/us_durz_cart.h",
+        "lang/usenglish/us_int_accent_cart.c",
+        "lang/usenglish/us_int_accent_cart.h",
+        "lang/usenglish/us_int_tone_cart.c",
+        "lang/usenglish/us_int_tone_cart.h",
+        "lang/usenglish/us_phoneset.c",
+        "lang/usenglish/us_f0lr.c"
+      ],
+      "terms": "Joint CMU/University of Edinburgh copyright under same permissive terms. Preserve exact notices in source and bundled notice.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_durz_cart.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_durz_cart.h",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_accent_cart.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_accent_cart.h",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_tone_cart.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_int_tone_cart.h",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_phoneset.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/lang/usenglish/us_f0lr.c"
+      ]
+    },
+    {
+      "category": "Cepstral platform I/O",
+      "files": [
+        "src/utils/cst_file_stdio.c",
+        "src/utils/cst_mmap_posix.c"
+      ],
+      "terms": "Cepstral LLC 2001 copyright; same permissive four-condition terms. Applies if these remain; they are present in the conservative source ceiling but production I/O closure is unresolved.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_file_stdio.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/utils/cst_mmap_posix.c"
+      ]
+    },
+    {
+      "category": "HTS 1.1b/1.1.1",
+      "files": [
+        "src/cg/cst_mlsa.c",
+        "src/cg/cst_vc.c",
+        "src/cg/cst_mlpg.c",
+        "src/cg/cst_mlpg.h"
+      ],
+      "terms": "Nagoya Institute of Technology, Tokyo Institute of Technology and HTS Working Group, copyright 2001-2003. Permissive use/distribution, retain notice/terms/disclaimer and mark modifications. Exact original file headers include Tokyo/HTS wording beyond the root COPYING summary.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlsa.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_vc.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.h"
+      ]
+    },
+    {
+      "category": "MLPG additional notice",
+      "files": [
+        "src/cg/cst_mlpg.c",
+        "src/cg/cst_mlpg.h"
+      ],
+      "terms": "Additional Nagoya/CMU notice, 2003-2004 and 2008 for .c; retain notice/terms/disclaimer, mark modifications, retain authors.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlpg.h"
+      ]
+    },
+    {
+      "category": "MLSA and VC headers",
+      "files": [
+        "src/cg/cst_mlsa.h",
+        "src/cg/cst_vc.h"
+      ],
+      "terms": "Nagoya, Nara Institute of Science and Technology, CMU 2003-2004; permissive three-condition license, retain notice/disclaimer, mark changes and retain authors.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_mlsa.h",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/cg/cst_vc.h"
+      ]
+    },
+    {
+      "category": "Henry Spencer regex",
+      "files": [
+        "src/regex/regexp.c",
+        "src/regex/regsub.c"
+      ],
+      "terms": "University of Toronto 1986; free use/redistribution, origin must not be misrepresented, alterations plainly marked, warranty/liability exclusion. Keep existing altered-version provenance.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/regexp.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/regex/regsub.c"
+      ]
+    },
+    {
+      "category": "Rate conversion",
+      "files": [
+        "src/speech/rateconv.c"
+      ],
+      "terms": "Markus Mummert 1992/1995; retain notice/terms/full disclaimer and identify modification. Keep David Huggins-Daines modification notice. Root COPYING excerpts conditions but file contains full disclaimer.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/rateconv.c"
+      ]
+    },
+    {
+      "category": "Sun audio codecs",
+      "files": [
+        "src/speech/g72x.h",
+        "src/speech/g721.c",
+        "src/speech/g72x.c",
+        "src/speech/g723_24.c",
+        "src/speech/g723_40.c"
+      ],
+      "terms": "Sun unrestricted use/copy/modify grant and broad no-warranty/no-support/no-liability notice. Retain original notices if codec sources remain.",
+      "urls": [
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g72x.h",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g721.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g72x.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g723_24.c",
+        "https://github.com/festvox/flite/blob/e9e2e37c329dbe98bfeb27a1828ef9a71fa84f88/src/speech/g723_40.c"
+      ]
+    }
+  ],
+  "required_packaging": "Preserve COPYING and exact per-file copyright/license/modification notices. Bundle all applicable notice variants in the eventual Android distribution, recording any modifications. Root COPYING alone is insufficient as a complete third-party notice bundle.",
+  "excluded_license_families": "Autoconf/GPL build-helper files, grapheme Apache 2.0 tables, SAPI and platform-specific implementations are outside this 171-file source proposal.",
+  "voice_scope": "This audit is for in-repository embedded cmu_us_slt at the pinned Flite commit. No separate .flitevox, HTS-engine SLT model, MaryTTS model or CMU ARCTIC corpus is selected/downloaded; their licenses must not be substituted for this model's license.",
+  "corpus_license_verification": "Official festvox.org CMU ARCTIC pages were unavailable via web during audit. No raw corpus is in proposal. Root distribution license and in-tree SLT wrapper support the embedded voice/model license; independent recording-rights/corpus chain not fully revalidated.",
+  "known_gates": [
+    "Voice selection not approved",
+    "No bulk download approval supplied",
+    "Modern NDK compilation and source closure unverified",
+    "Read-only path review identifies audio/file/load/save/url/error-exit concerns requiring sanitized wrapper and retained-link inspection"
+  ]
+}

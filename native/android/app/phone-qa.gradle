@@ -1,0 +1,99 @@
+import groovy.json.JsonOutput
+
+// Explicit physical ARM64 QA. App and instrumentation APKs stay unsigned.
+def phoneQaEnabled = providers.gradleProperty("unsignedPhoneQa").orElse("false").get() == "true"
+if (phoneQaEnabled) {
+    def fallback = "android.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes"
+    if (gradle.startParameter.projectProperties[fallback] != "false") {
+        throw new GradleException("Explicitly disable AGP default-debug signing fallback")
+    }
+    if (project.properties.keySet().any { it.toString().startsWith("android.injected.signing.") }) {
+        throw new GradleException("Injected signing credentials are forbidden")
+    }
+    if (androidComponents.pluginVersion.version != "8.12.0") {
+        throw new GradleException("Unsigned phone QA guard is reviewed for pinned AGP 8.12.0 only")
+    }
+    if (providers.gradleProperty("unsignedEmulatorQa").orElse("false").get() != "false" ||
+            providers.gradleProperty("reactNativeArchitectures").orElse("").get() != "arm64-v8a") {
+        throw new GradleException("Phone QA requires arm64-v8a and cannot combine with emulator QA")
+    }
+    android {
+        defaultConfig {
+            testApplicationId "com.xmilo_at_your_side.sign_to_speak.qa.test"
+            testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        }
+        testBuildType "qa"
+    }
+    dependencies {
+        androidTestImplementation("androidx.test:core:1.7.0")
+        androidTestImplementation("androidx.test:runner:1.7.0")
+        androidTestImplementation("androidx.test.ext:junit:1.3.0")
+        androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+    }
+    def checked = [:]
+    androidComponents.finalizeDsl { dsl ->
+        if (dsl.testBuildType != "qa" ||
+                dsl.defaultConfig.applicationId != "com.xmilo_at_your_side.sign_to_speak" ||
+                dsl.buildTypes.qa.signingConfig != null ||
+                dsl.buildTypes.debug.signingConfig != null ||
+                dsl.buildTypes.release.signingConfig != null) {
+            throw new GradleException("Final phone QA DSL changed signing or identity")
+        }
+        checked.dsl = true
+    }
+    // AGP may resolve test-variant signing separately from the DSL.
+    gradle.projectsEvaluated {
+        android.applicationVariants.all { variant ->
+            if (variant.name == "qa") {
+                if (variant.applicationId != "com.xmilo_at_your_side.sign_to_speak.qa" ||
+                        variant.signingConfig != null || variant.isSigningReady()) {
+                    throw new GradleException("Resolved phone app must be isolated and unsigned")
+                }
+                checked.app = [applicationId: variant.applicationId, signingConfig: null, signingReady: false]
+            }
+        }
+        android.testVariants.all { variant ->
+            if (variant.name == "qaAndroidTest") {
+                if (variant.applicationId != "com.xmilo_at_your_side.sign_to_speak.qa.test" ||
+                        variant.signingConfig != null || variant.isSigningReady()) {
+                    throw new GradleException("Resolved phone instrumentation must be isolated and unsigned")
+                }
+                checked.test = [applicationId: variant.applicationId, signingConfig: null, signingReady: false]
+            }
+        }
+    }
+    androidComponents {
+        onVariants(selector().withBuildType("qa")) { variant ->
+            tasks.matching { it.name in ["packageQa", "assembleQa", "assembleQaAndroidTest"] }.configureEach {
+                dependsOn("verifyUnsignedPhoneQaIsolation")
+            }
+        }
+    }
+    gradle.taskGraph.whenReady { graph ->
+        if (!checked.dsl || !checked.app || !checked.test) {
+            throw new GradleException("Both resolved unsigned phone variants must be checked")
+        }
+        def forbidden = graph.allTasks.findAll { task ->
+            def n = task.name.toLowerCase()
+            def localLintJar = task.path == ":react-native-safe-area-context:prepareLintJarForPublish" &&
+                    task.class.name in ["com.android.build.gradle.internal.tasks.PrepareLintJarForPublish",
+                        "com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated"]
+            n.contains("validatesigning") || n.contains("keystore") || n.contains("keytool") ||
+                    n ==~ /.*(create|generate).*key.*/ || n.startsWith("sign") ||
+                    n.startsWith("install") || n.startsWith("uninstall") || n.startsWith("connected") ||
+                    (n.contains("publish") && !localLintJar) || n.contains("upload") ||
+                    n in ["assemblerelease", "bundlerelease"] ||
+                    task.class.name.contains("ValidateSigningTask") ||
+                    task.class.name.contains("PublishToMaven") ||
+                    task.class.name.contains("PublishToIvyRepository")
+        }
+        println("SIGN_PHONE_UNSIGNED_GRAPH=" + JsonOutput.toJson([
+            agp: "8.12.0", variants: checked, defaultDebugFallback: false,
+            tasks: graph.allTasks.collect { [path: it.path, type: it.class.name] },
+            dryRun: gradle.startParameter.dryRun
+        ]))
+        if (!forbidden.isEmpty()) {
+            throw new GradleException("Forbidden unsigned phone task graph: " + forbidden*.path)
+        }
+    }
+}

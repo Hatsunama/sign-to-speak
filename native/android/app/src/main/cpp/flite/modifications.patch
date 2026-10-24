@@ -1,0 +1,231 @@
+--- upstream/include/cst_error.h
++++ generated/include/cst_error.h
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -65,7 +66,8 @@
+ #else /* not palmos */
+ #include <setjmp.h>
+ extern jmp_buf *cst_errjmp;
+-# define cst_error() (cst_errjmp ? longjmp(*cst_errjmp,1) : exit(-1))
++#include "private_runtime.h"
++# define cst_error() stts_fail(STTS_ENGINE)
+ #endif
+ 
+ /* WinCE sometimes doesn't have stdio, so this is a wrapper for
+--- upstream/src/cg/cst_mlsa.c
++++ generated/src/cg/cst_mlsa.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*  ---------------------------------------------------------------  */
+ /*      The HMM-Based Speech Synthesis System (HTS): version 1.1b    */
+ /*                        HTS Working Group                          */
+@@ -62,9 +63,7 @@
+ #include "cst_wave.h"
+ #include "cst_audio.h"
+ 
+-#ifdef ANDROID
+-#define SPEED_HACK
+-#endif
++/* Candidate keeps the full desktop vocoder order on Android as well. */
+ 
+ #ifdef UNDER_CE
+ #define SPEED_HACK
+@@ -138,6 +137,8 @@
+         vs.gauss = MFALSE;
+ 
+     /* synthesize waveforms by MLSA filter */
++    if (asi || fs != 16000 || framel <= 0 || params->num_frames <= 0 ||
++        params->num_frames > STTS_MAX_PCM_SAMPLES / framel) stts_fail(STTS_FORMAT);
+     wave = new_wave();
+     cst_wave_resize(wave,params->num_frames * framel,1);
+     wave->sample_rate = fs; 
+@@ -148,6 +149,7 @@
+          (rc == CST_AUDIO_STREAM_CONT) && (t < params->num_frames);
+          t++) 
+     {
++        stts_checkpoint();
+         f0 = (double)params->frames[t][0];
+         for (i=1; i<num_mcep+1; i++)
+             mcep[i-1] = params->frames[t][i];
+@@ -239,7 +241,7 @@
+ {
+     /* Randomly return 1 or -1 */
+     /* not sure rand() is portable */
+-    if (rand() > RAND_MAX/2.0)
++    if (stts_noise_bit())
+         return 1.0;
+     else
+         return -1.0;
+@@ -377,7 +379,7 @@
+ 
+ 	x = mlsadf(x, vs->c, m, cg_db->mlsa_alpha, vs->pd, vs->d1, vs);
+ 
+-        wav->samples[*pos] = (short)x;
++        wav->samples[*pos] = stts_checked_sample(x);
+ 	*pos += 1;
+ 
+ 	if (!--i) {
+--- upstream/src/utils/cst_tokenstream.c
++++ generated/src/utils/cst_tokenstream.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -231,10 +232,7 @@
+ {
+     if (ts->fd != NULL)
+     {
+-#ifndef UNDER_CE
+-	if (ts->fd != stdin)
+-#endif
+-	    cst_fclose(ts->fd);
++        stts_fail(STTS_ENGINE); /* string-only candidate: no file descriptor */
+ 	ts->fd = NULL; /* just in case close gets called twice */
+     }
+     if (ts->string_buffer != NULL)
+--- upstream/src/synth/cst_synth.c
++++ generated/src/synth/cst_synth.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -159,6 +160,7 @@
+ {
+     while (meth->hookname)
+     {
++        stts_checkpoint();
+ 	if ((u = apply_synth_module(u, meth)) == NULL)
+ 	    return NULL;
+ 	++meth;
+--- upstream/src/cg/cst_mlpg.c
++++ generated/src/cg/cst_mlpg.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*  ---------------------------------------------------------------  */
+ /*      The HMM-Based Speech Synthesis System (HTS): version 1.1.1   */
+ /*                        HTS Working Group                          */
+@@ -438,6 +439,7 @@
+ 
+    /* generating parameter in each dimension */
+    for (m = 0; m <= pst->order; m++) {
++       stts_checkpoint();
+        calc_R_and_r(pst, m);
+        Choleski(pst);
+        Choleski_forward(pst);
+--- upstream/lang/usenglish/us_text.c
++++ generated/lang/usenglish/us_text.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -415,8 +416,8 @@
+ 	}
+         ss = cons_val(string_val(aaa),ss);  /* note the order is now reversed */
+         if ((val_length(ss) == 2) &&
+-            (atoi(val_string(val_car(val_cdr(ss)))) <
+-             atoi(val_string(val_car(ss)))) &&  /* small to large */
++            (stts_checked_atoi(val_string(val_car(val_cdr(ss)))) <
++             stts_checked_atoi(val_string(val_car(ss)))) &&  /* small to large */
+             (abs(cst_strlen(val_string(val_car(val_cdr(ss)))) -
+                  cst_strlen(val_string(val_car(ss)))) < 2)) /* not too diff */
+         {
+@@ -731,11 +732,11 @@
+ 	if ((cst_streq("1",aaa)) && (cst_streq("2",bbb)))
+ 	    r = cons_val(string_val("a"),
+ 			 cons_val(string_val("half"),0));
+-	else if (atoi(aaa) < (atoi(bbb)))
++	else if (stts_checked_atoi(aaa) < (stts_checked_atoi(bbb)))
+ 	{
+ 	    r = val_append(en_exp_number(aaa),
+ 			   en_exp_ordinal(bbb));
+-	    if (atoi(aaa) > 1)
++	    if (stts_checked_atoi(aaa) > 1)
+ 		r = val_append(r,cons_val(string_val("'s"),0));
+ 	}
+ 	else
+--- upstream/src/utils/cst_val.c
++++ generated/src/utils/cst_val.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -136,9 +137,9 @@
+     if (v && (CST_VAL_TYPE(v) == CST_VAL_TYPE_INT))
+ 	return CST_VAL_INT(v);
+     else if (v && (CST_VAL_TYPE(v) == CST_VAL_TYPE_FLOAT))
+-	return (int)CST_VAL_FLOAT(v);
++	return stts_checked_float_int((double)CST_VAL_FLOAT(v));
+     else if (v && (CST_VAL_TYPE(v) == CST_VAL_TYPE_STRING))
+-	return atoi(CST_VAL_STRING(v));
++	return stts_checked_atoi(CST_VAL_STRING(v));
+     else
+     {
+ 	cst_errmsg("VAL: tried to access int in %d typed val\n",
+--- upstream/src/utils/cst_string.c
++++ generated/src/utils/cst_string.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -74,7 +75,7 @@
+ 
+ double cst_atof(const char *str)
+ {
+-    return atof(str);
++    return stts_checked_atof(str);
+ }
+ #endif /* WinCE */
+ 
+--- upstream/src/cg/cst_cg.c
++++ generated/src/cg/cst_cg.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -276,6 +277,8 @@
+         mcep_parent = relation_append(mcep_link, s);
+         for ( ; (num_frames * cg_db->frame_advance) <= end; num_frames++ )
+         {
++            if ((num_frames + 1) * (double)cg_db->frame_advance > 30.0)
++                stts_fail(STTS_FORMAT);
+             mcep_frame = relation_append(mcep,NULL);
+             item_add_daughter(mcep_parent,mcep_frame);
+             item_set_int(mcep_frame,"frame_number",num_frames);
+@@ -578,6 +581,11 @@
+     int extra_feats = 0;
+ 
+     cg_db = val_cg_db(utt_feat_val(utt,"cg_db"));
++    /* Reject excessive predicted duration before large parameter matrices. */
++    if (cg_db->sample_rate != 16000 || cg_db->frame_advance <= 0 ||
++        utt_feat_int(utt,"param_track_num_frames") <= 0 ||
++        utt_feat_int(utt,"param_track_num_frames") * (double)cg_db->frame_advance > 30.0)
++        stts_fail(STTS_FORMAT);
+     param_track = new_track();
+     if (cg_db->do_mlpg) /* which should be the default */
+         fff = 1;  /* copy details with stddevs */
+--- upstream/src/speech/cst_track.c
++++ generated/src/speech/cst_track.c
+@@ -1,3 +1,4 @@
++/* Modified for isolated Sign To Speak candidate; see modifications.patch. */
+ /*************************************************************************/
+ /*                                                                       */
+ /*                  Language Technologies Institute                      */
+@@ -79,7 +80,8 @@
+     int i;
+ 
+     n_times = cst_alloc(float,num_frames);
+-    memmove(n_times,t->times,
++    if (num_frames > 0 && t->num_frames > 0)
++        memmove(n_times,t->times,
+ 	    (sizeof(float)*((num_frames < t->num_frames) ? 
+ 			    num_frames : t->num_frames)));
+     n_frames = cst_alloc(float*,num_frames);

@@ -37,16 +37,21 @@ function files(dir) {
   });
 }
 
-test('foundation still has no audio output or unreviewed private secondary window', () => {
-  // A boundary alarm, not a claim that source scanning proves arbitrary future code safe.
-  // Adding any sink/window requires replacing this gate with real boundary/loopback tests.
+test('only the reviewed app-owned protected PCM sink is permitted', () => {
+  // Source scanning is an alarm; the protected sink also has Android policy tests.
   const sources = [fileURLToPath(new URL('App.tsx', root)), ...files(fileURLToPath(new URL('src', root))),
     ...files(fileURLToPath(new URL(main + 'java', root)))].filter(p => /\.(kt|java|[cm]?js|tsx?)$/.test(p));
   for (const file of sources) {
     const source = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
-    assert.doesNotMatch(source,
-      /\b(TextToSpeech|AudioTrack|MediaPlayer|SoundPool|ToneGenerator|ExoPlayer|AAudio|OpenSLES|WebView|MediaCodec|SpeechSynthesisUtterance)\b|speechSynthesis|createAudioTrack|createMediaPlayer|\.playSoundEffect\s*\(/,
-      `Audio output needs explicit privacy review: ${file}`);
+    if (path.basename(file) === 'ProtectedPcmPlayer.java') {
+      assert.match(source, /setAllowedCapturePolicy\(AudioAttributes\.ALLOW_CAPTURE_BY_NONE\)/);
+      assert.match(source, /getAllowedCapturePolicy\(\) != AudioAttributes\.ALLOW_CAPTURE_BY_NONE/);
+      assert.match(source, /Build\.VERSION\.SDK_INT < 29/);
+    } else {
+      assert.doesNotMatch(source,
+        /\b(TextToSpeech|AudioTrack|MediaPlayer|SoundPool|ToneGenerator|ExoPlayer|AAudio|OpenSLES|WebView|MediaCodec|SpeechSynthesisUtterance)\b|speechSynthesis|createAudioTrack|createMediaPlayer|\.playSoundEffect\s*\(/,
+        `Audio output needs explicit privacy review: ${file}`);
+    }
     assert.doesNotMatch(source, /\b(AlertDialog|ComponentDialog|Dialog|PopupWindow|Modal)\b|Alert\.alert/,
       `Separate window needs explicit secure-window review: ${file}`);
   }

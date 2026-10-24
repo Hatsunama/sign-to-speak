@@ -16,6 +16,11 @@ class MainApplication : Application(), ReactApplication {
   @Volatile var capturePrivacyReady: Boolean = false
     private set
 
+  @Volatile var speechCleanupFaulted: Boolean = false
+    private set
+
+  internal fun recordSpeechCleanupFault() { speechCleanupFaulted = true }
+
 
   override val reactHost: ReactHost by lazy {
     getDefaultReactHost(
@@ -47,8 +52,8 @@ class MainApplication : Application(), ReactApplication {
         false
       }
     }
-    // This foundation has no audio sink. RN renders only the unavailable screen on
-    // policy failure; native camera eligibility is also denied independently of JS.
+    // RN renders only the unavailable screen on policy failure; native camera and
+    // speech eligibility are also denied independently of JS.
     loadReactNative(this)
   }
 }

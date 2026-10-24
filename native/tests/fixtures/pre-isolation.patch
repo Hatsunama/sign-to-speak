@@ -1,8 +1,7 @@
 diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
-index 478cfa1..a1d49a9 100644
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
 +++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
-@@ -13,26 +13,6 @@ class MainActivity : ReactActivity() {
+@@ -14,26 +14,6 @@
    private val cameraViews = java.util.Collections.newSetFromMap(
        java.util.WeakHashMap<PrivateCameraView, Boolean>())
  
@@ -29,27 +28,24 @@ index 478cfa1..a1d49a9 100644
    internal fun registerCameraView(view: PrivateCameraView) { cameraViews.add(view) }
    internal fun unregisterCameraView(view: PrivateCameraView) { cameraViews.remove(view) }
  
-@@ -40,16 +20,14 @@ class MainActivity : ReactActivity() {
+@@ -41,7 +21,7 @@
    override fun onBackPressed() {
      // RN 0.86.3 also routes committed predictive Back here for targetSdk 36.
      // Do this before RN can emit a JS event; JS may never process that event.
 -    cancelCameraViews(dispose = false)
 +    cameraViews.toList().forEach { it.cancelFromNativeBack() }
+     speechOwner.cancelAll()
      super.onBackPressed()
    }
- 
+@@ -60,7 +40,7 @@
    override fun onDestroy() {
--    try { cancelCameraViews(dispose = true) }
--    finally {
--      cameraViews.clear()
--      super.onDestroy()
--    }
-+    cameraViews.toList().forEach { it.dispose() }
-+    cameraViews.clear()
-+    super.onDestroy()
-   }
- 
-   override fun onCreate(savedInstanceState: android.os.Bundle?) {
+     try { speechOwner.close() }
+     finally {
+-      try { cancelCameraViews(dispose = true) }
++      try { cameraViews.toList().forEach { it.dispose() } }
+       finally {
+         cameraViews.clear()
+         super.onDestroy()
 diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
 index a1d1622..8387613 100644
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
