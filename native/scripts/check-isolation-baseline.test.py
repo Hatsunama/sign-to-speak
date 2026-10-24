@@ -87,7 +87,7 @@ class RestoreIntegrationTest(unittest.TestCase):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(repository / path, destination)
             gradlew = root / 'native/android/gradlew'
-            gradlew.write_text('#!/bin/sh\nexit ' + str(fake_exit) + '\n')
+            gradlew.write_bytes(('#!/bin/sh\nprintf reached > gradle-invoked\nexit ' + str(fake_exit) + '\n').encode())
             gradlew.chmod(0o755)
             def git(*args):
                 return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
@@ -107,6 +107,8 @@ class RestoreIntegrationTest(unittest.TestCase):
             result = subprocess.run([str(bash), shell_path(root / 'native/scripts/ci-isolation-baseline.sh')], cwd=root,
                 env={**os.environ, 'RUNNER_TEMP':shell_path(root / 'temp'),
                     'GITHUB_OUTPUT':shell_path(output)}, capture_output=True, text=True)
+            self.assertTrue((root / 'native/android/gradle-invoked').is_file(),
+                f'Counterfactual Gradle was never reached; exit={result.returncode}; stderr={result.stderr}')
             self.assertNotEqual(result.returncode, 0, 'Missing reports or unexpected green must reject baseline')
             self.assertTrue(output.is_file(), f'Restore output missing; exit={result.returncode}; stderr={result.stderr}')
             self.assertIn('restored=true', output.read_text())
