@@ -61,6 +61,22 @@ git -C "$trial/source" checkout -q --detach FETCH_HEAD
 [[ "$(git -C "$trial/source" rev-parse HEAD)" == "$source_commit" ]] || fail 'Upstream source commit changed.'
 [[ "$(cat "$trial/source/.bazelversion")" == 7.7.0 ]] || fail 'Upstream Bazel version changed.'
 
+# MediaPipe's setup_android_sdk_and_ndk.sh appends these WORKSPACE rules only
+# when it installs the SDK/NDK. Its existing-toolchain branch exits before
+# doing so, leaving Bazel without an Android SDK toolchain for the AAR rule.
+cat >> "$trial/source/WORKSPACE" <<'EOF'
+
+# Hosted source trial: use the preinstalled Android toolchains.
+android_sdk_repository(
+    name = "androidsdk",
+    api_level = 36,
+    build_tools_version = "35.0.0",
+)
+android_ndk_repository(name = "androidndk", api_level = 21)
+bind(name = "android/crosstool", actual = "@androidndk//:toolchain")
+register_toolchains("@androidsdk//:all", "@androidndk//:all")
+EOF
+
 # The upstream source snapshot lacks this release metadata target. Restore the
 # byte-identical published NOTICE and only the BUILD declaration it expects.
 release_dir="$trial/source/mediapipe/tasks/internal/release/android"
@@ -82,8 +98,8 @@ cp "$release_dir/NOTICE" "$evidence/NOTICE"
 
 cd "$trial/source"
 [[ ! -e .bazelversion || "$(cat .bazelversion)" == 7.7.0 ]] || fail 'Bazel pin changed.'
-# The upstream setup script downloads SDK/NDK and can accept licenses. Existing
-# ANDROID_HOME and ANDROID_NDK_HOME let Bazel discover the installed toolchain.
+# The upstream setup script downloads SDK/NDK and can accept licenses. The
+# WORKSPACE rules above use the checked, existing paths from the environment.
 "$trial/bazel" --batch --host_jvm_args=-Xmx1g --output_user_root="$trial/bazel-cache" \
   build --config=android_arm64 --define=ENABLE_TASKS_USAGE_LOGGING=0 --jobs=2 --local_ram_resources=4096 \
   --java_runtime_version=local_jdk --tool_java_runtime_version=local_jdk \
