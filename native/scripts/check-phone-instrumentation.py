@@ -31,6 +31,7 @@ def verify(manifest, apk):
     apps = root.findall('application')
     assert len(apps) == 1 and apps[0].get(ANDROID + 'testOnly') == 'true'
     assert apps[0].get(ANDROID + 'debuggable') in (None, 'false')
+    assert not any(apps[0].findall(tag) for tag in ('service', 'receiver', 'provider')), 'Unexpected instrumentation application component'
     requests = [p for p in root if p.tag in ('uses-permission', 'uses-permission-sdk-23', 'uses-permission-sdk-m')]
     assert len(requests) == 1 and requests[0].tag == 'uses-permission'
     assert requests[0].attrib == {ANDROID + 'name': PERMISSION}, 'Unexpected instrumentation permission'

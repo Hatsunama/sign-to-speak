@@ -40,6 +40,14 @@ The inspected Kaggle preprocessing expects the legacy Holistic layout: 468 face,
 
 Add ImageAnalysis to the existing CameraX owner only after the selected tracker/model contract is established. Release every ImageProxy, bound queued work and temporal history, and invalidate all pending results on session replacement or cancellation. MediaPipe LIVE_STREAM can discard submitted frames while busy; multi-task joins must not wait forever for a callback from every submitted frame. Frames and landmarks stay native and in memory; React Native receives text/status only. No automatic speech from uncertain model output.
 
+## Offline SDK admission gate
+
+The first opt-in phone probe compiled, and all 123 normal Android tests passed at source `2678f22c95691ea5befd25aae85b3101054f8637`, but [CI 40140649088](https://github.com/Hatsunama/sign-to-speak/actions/runs/40140649088) correctly failed the final instrumentation APK audit. Published MediaPipe `tasks-vision:1.1.1` pulls `tasks-core:1.1.1`, whose published logger factory initializes DataTransport. The merged test manifest contained INTERNET, ACCESS_NETWORK_STATE and transport services/receiver. The production app manifest passed its no-network gate. No phone recognition result exists.
+
+Removing permissions or excluding transport while retaining that factory would hide or break the dependency. The official source at commit `50505c8312c7eacb1bd411cecdc4cc9fd08d53cb` instead generates `TasksStatsDummyLogger` by default. A bounded hosted trial will build that source variant, retaining the exact published native library and notices. It must pass artifact/class/dependency inspection, the unchanged actual-APK network gate and physical execution before adoption. Source configuration alone is insufficient evidence. No binary factory patch or reflective constructor bypass is acceptable.
+
+The instrumentation audit now also rejects unplanned services, receivers and providers even if they request no additional permission. Three injected-component cases failed before the guard repair. This is an artifact-audit repair; it does not establish that all possible SDK behavior has been inspected.
+
 ## Phase gates
 
 | Phase | Deliverable | Required evidence |

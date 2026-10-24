@@ -1,4 +1,10 @@
-# Sign To Speak — Android foundation
+# Sign To Speak — current Android work
+
+The current candidate adds reviewed typed text to the existing local Flite speech backend while preserving the Hatsu renderer and original intro/camera arrangement. Camera recognition, continuous ASL translation and customer microphone captions are still absent. The recorded-video tracker/model probe is opt-in instrumentation research, not an application feature.
+
+See [the current phase plan](docs/RECOGNITION_PLAN.md) for boundaries and acceptance gates. New customer-flow phone verification is pending; historical results below apply only to their named artifacts. Production release remains blocked.
+
+## Historical foundation checkpoint
 
 An isolated **React Native Android app**, not a wrapper around the existing web prototype. This milestone implements home, the canonical Hatsu background, a local thank-you page and camera **preview only**. ASL recognition, landmark inference and speech are unavailable. It does not claim interpreter capability or HIPAA certification.
 

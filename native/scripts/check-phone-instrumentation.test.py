@@ -58,6 +58,29 @@ class InstrumentationArtifact(unittest.TestCase):
     def test_not_test_only(self):
         self.reject_xml('android:testOnly="true"', 'android:testOnly="false"')
 
+    def test_unplanned_application_components(self):
+        components = (
+            '<service android:name="com.google.mediapipe.tasks.components.DataTransportService" android:exported="false"/>',
+            '<receiver android:name="com.google.mediapipe.tasks.components.DataTransportReceiver" android:exported="false"/>',
+            '<provider android:name="com.google.mediapipe.tasks.components.DataTransportProvider" android:authorities="test.provider" android:exported="false"/>',
+        )
+        self.verify()  # The baseline manifest requests only REORDER_TASKS.
+        for component in components:
+            with self.subTest(component=component):
+                self.xml = self.xml.replace('<application android:testOnly="true"/>',
+                                            f'<application android:testOnly="true">{component}</application>')
+                try:
+                    with self.assertRaises(AssertionError):
+                        self.verify()
+                finally:
+                    self.xml = self.xml.replace(f'<application android:testOnly="true">{component}</application>',
+                                                '<application android:testOnly="true"/>')
+
+    def test_androidx_test_activity_allowed(self):
+        self.xml = self.xml.replace('<application android:testOnly="true"/>',
+                                    '<application android:testOnly="true"><activity android:name="androidx.test.core.app.InstrumentationActivityInvoker$BootstrapActivity"/></application>')
+        self.verify()
+
     def test_network_permission(self):
         self.reject_xml('</manifest>', '<uses-permission android:name="android.permission.INTERNET"/></manifest>')
 
