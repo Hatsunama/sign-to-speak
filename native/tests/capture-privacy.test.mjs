@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 const root = new URL('../', import.meta.url);
 const read = p => fs.readFileSync(new URL(p, root), 'utf8');
 const main = 'android/app/src/main/';
@@ -39,8 +40,8 @@ function files(dir) {
 test('foundation still has no audio output or unreviewed private secondary window', () => {
   // A boundary alarm, not a claim that source scanning proves arbitrary future code safe.
   // Adding any sink/window requires replacing this gate with real boundary/loopback tests.
-  const sources = [new URL('App.tsx', root).pathname, ...files(new URL('src', root).pathname),
-    ...files(new URL(main + 'java', root).pathname)].filter(p => /\.(kt|java|[cm]?js|tsx?)$/.test(p));
+  const sources = [fileURLToPath(new URL('App.tsx', root)), ...files(fileURLToPath(new URL('src', root))),
+    ...files(fileURLToPath(new URL(main + 'java', root)))].filter(p => /\.(kt|java|[cm]?js|tsx?)$/.test(p));
   for (const file of sources) {
     const source = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, '');
     assert.doesNotMatch(source,

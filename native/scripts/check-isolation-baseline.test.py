@@ -87,19 +87,30 @@ class RestoreIntegrationTest(unittest.TestCase):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(repository / path, destination)
             gradlew = root / 'native/android/gradlew'
-            gradlew.write_text('#!/bin/sh\nexit ' + str(fake_exit) + '\n')
+            gradlew.write_bytes(('#!/bin/sh\nprintf reached > gradle-invoked\nexit ' + str(fake_exit) + '\n').encode())
             gradlew.chmod(0o755)
             def git(*args):
                 return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
             git('init', '-q')
+            git('config', 'core.autocrlf', 'false')
             git('add', '.')
             git('-c', 'user.name=CI fixture', '-c', 'user.email=fixture@example.invalid', 'commit', '-qm', 'fixture')
             originals = {path: (root / path).read_bytes() for path in paths if path.endswith('.kt')}
             output = root / 'step-output'
-            result = subprocess.run(['bash', 'native/scripts/ci-isolation-baseline.sh'], cwd=root,
-                env={**os.environ, 'RUNNER_TEMP':str(root / 'temp'), 'GITHUB_OUTPUT':str(output)},
-                capture_output=True, text=True)
+            bash = (pathlib.Path(os.environ.get('ProgramFiles', 'C:/Program Files')) / 'Git/bin/bash.exe'
+                if os.name == 'nt' else 'bash')
+            def shell_path(path):
+                if os.name != 'nt': return str(path)
+                converted = subprocess.run([str(bash), '-c', 'cygpath -u "$1"', '_', str(path)],
+                    capture_output=True, text=True, check=True)
+                return converted.stdout.strip()
+            result = subprocess.run([str(bash), shell_path(root / 'native/scripts/ci-isolation-baseline.sh')], cwd=root,
+                env={**os.environ, 'RUNNER_TEMP':shell_path(root / 'temp'),
+                    'GITHUB_OUTPUT':shell_path(output)}, capture_output=True, text=True)
+            self.assertTrue((root / 'native/android/gradle-invoked').is_file(),
+                f'Counterfactual Gradle was never reached; exit={result.returncode}; stderr={result.stderr}')
             self.assertNotEqual(result.returncode, 0, 'Missing reports or unexpected green must reject baseline')
+            self.assertTrue(output.is_file(), f'Restore output missing; exit={result.returncode}; stderr={result.stderr}')
             self.assertIn('restored=true', output.read_text())
             for path, body in originals.items(): self.assertEqual((root / path).read_bytes(), body)
             git('diff', '--exit-code', 'HEAD', '--', *originals)

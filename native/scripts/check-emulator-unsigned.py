@@ -15,7 +15,7 @@ def unsigned(apk,expected_abi=None):
         libs=[n for n in names if n.startswith('lib/') and n.endswith('.so')]
         if expected_abi:
             assert libs and {n.split('/')[1] for n in libs}=={expected_abi}
-            assert 'assets/index.android.bundle' in names, 'App must carry its bundled JavaScript'
+            assert 'assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript'
         else: assert not libs or {n.split('/')[1] for n in libs}=={'x86_64'}
         central=archive.start_dir
     with open(apk,'rb') as file:

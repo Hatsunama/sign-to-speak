@@ -3,8 +3,17 @@ import assert from 'node:assert/strict';
 import {mkdtempSync, mkdirSync, writeFileSync, rmSync} from 'node:fs';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {spawnSync} from 'node:child_process';
-const script = new URL('./ci-sdk.sh', import.meta.url).pathname;
+const script = fileURLToPath(new URL('./ci-sdk.sh', import.meta.url));
+const bash = process.platform === 'win32' ? join(process.env.ProgramFiles ?? 'C:/Program Files', 'Git', 'bin', 'bash.exe') : 'bash';
+function shellPath(file) {
+  if (process.platform !== 'win32') return file;
+  const result = spawnSync(bash, ['-c', 'cygpath -u "$1"', '_', file], {encoding: 'utf8'});
+  assert.equal(result.status, 0, result.stderr || `Could not convert path: ${file}`);
+  return result.stdout.trim();
+}
+const shellScript = shellPath(script);
 function fixture({ndk = true, license = true} = {}) {
   const root = mkdtempSync(join(tmpdir(), 'sign-sdk-'));
   const put = (path, body='fixture', mode=0o644) => {
@@ -16,7 +25,7 @@ function fixture({ndk = true, license = true} = {}) {
   put('cmake/3.31.5/bin/cmake', '#!/bin/sh\nexit 0\n', 0o755);
   if(ndk) put('ndk/27.1.12297006/source.properties', 'Pkg.Revision = 27.1.12297006\n');
   if(license) put('licenses/android-sdk-license');
-  return {root,put,run:()=>spawnSync('bash',[script],{encoding:'utf8',env:{...process.env,ANDROID_HOME:root,ANDROID_SDK_ROOT:root,RUNNER_TEMP:root}}), cleanup:()=>rmSync(root,{recursive:true,force:true})};
+  return {root,put,run:()=>spawnSync(bash,[shellScript],{encoding:'utf8',env:{...process.env,ANDROID_HOME:shellPath(root),ANDROID_SDK_ROOT:shellPath(root),RUNNER_TEMP:shellPath(root)}}), cleanup:()=>rmSync(root,{recursive:true,force:true})};
 }
 test('uses installed exact prerequisites without installer',()=>{
   const f=fixture(); try { const r=f.run(); assert.equal(r.status,0,r.stderr); } finally {f.cleanup();}

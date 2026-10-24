@@ -68,28 +68,32 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
             if (stop()) status("permission_denied"); return
         }
         val token = lease.begin(true, true)
-        val future = ProcessCameraProvider.getInstance(context)
-        future.addListener({
-            if (!requested || disposed || !isAttachedToWindow || !lease.isCurrent(token) ||
-                !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@addListener
-            try {
-                val cameraProvider = future.get()
-                val camera = CameraSelector.DEFAULT_FRONT_CAMERA
-                if (!cameraProvider.hasCamera(camera)) {
-                    if (stop()) status("front_camera_unavailable"); return@addListener
+        try {
+            val future = ProcessCameraProvider.getInstance(context)
+            future.addListener({
+                if (!requested || disposed || !isAttachedToWindow || !lease.isCurrent(token) ||
+                    !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@addListener
+                try {
+                    val cameraProvider = future.get()
+                    val camera = CameraSelector.DEFAULT_FRONT_CAMERA
+                    if (!cameraProvider.hasCamera(camera)) {
+                        if (stop()) status("front_camera_unavailable"); return@addListener
+                    }
+                    val hadRetiredStream = previewView.previewStreamState.value == PreviewView.StreamState.STREAMING
+                    val useCase = Preview.Builder().build()
+                    provider = cameraProvider
+                    preview = useCase
+                    useCase.setSurfaceProvider(previewView.surfaceProvider)
+                    val boundCamera = cameraProvider.bindToLifecycle(owner, camera, useCase)
+                    previewView.visibility = VISIBLE
+                    observeCamera(owner, token, boundCamera.cameraInfo.cameraState, hadRetiredStream)
+                } catch (_: Exception) {
+                    if (stop()) status("camera_unavailable")
                 }
-                val hadRetiredStream = previewView.previewStreamState.value == PreviewView.StreamState.STREAMING
-                val useCase = Preview.Builder().build()
-                provider = cameraProvider
-                preview = useCase
-                useCase.setSurfaceProvider(previewView.surfaceProvider)
-                val boundCamera = cameraProvider.bindToLifecycle(owner, camera, useCase)
-                previewView.visibility = VISIBLE
-                observeCamera(owner, token, boundCamera.cameraInfo.cameraState, hadRetiredStream)
-            } catch (_: Exception) {
-                if (stop()) status("camera_unavailable")
-            }
-        }, ContextCompat.getMainExecutor(context))
+            }, ContextCompat.getMainExecutor(context))
+        } catch (_: Exception) {
+            if (isCurrent(token) && stop()) status("camera_unavailable")
+        }
     }
 
     private fun isCurrent(token: Long) = requested && !disposed &&
