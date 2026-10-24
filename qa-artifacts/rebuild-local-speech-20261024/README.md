@@ -17,3 +17,5 @@ No installable APK, private key, credential file, raw PCM, camera frame, persona
 RAM is low: respect other agents' memory/paging limits, do not change the paging configuration, and do not run local Gradle/emulator or parallel heavy builds. Production signing and separate store builds are deferred.
 
 Before any future device test, coordinate ownership and check the current foreground app. Never use a phone while another app/agent has it open. If readiness checks are next and both phones are in use, end the turn and report that blocker. Return phones to Home in success/failure cleanup whenever no longer using them. The historical orchestration scripts are evidence, not device-ownership arbitration; do not run them blindly. Both phones were returned Home and the three temporary capture helpers removed at this handoff.
+
+Storage exception: a verified duplicate remains locked in the old OneDrive workspace. Its removal was blocked by automatic approval review; an intact move also failed because Windows reports an open handle. See `evidence/final/storage-final-status.json`. Do not close unrelated agents or retry deletion by another mechanism.

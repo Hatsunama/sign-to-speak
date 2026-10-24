@@ -112,3 +112,9 @@ No other unresolved product defect was demonstrated in this inspected scope. Sto
 ## Storage handoff
 
 The user approved using C: temporarily and moving project work to `C:\sign_to_speak`, outside `C:\xMilo`. The repository and historical app-specific evidence are retained separately there; all 18,617 file hashes matched after transfer. Existing Android signing/ADB credentials stay in their existing external locations; the xMilo project itself is unrelated and is not moved. No separate store builds are performed.
+
+### Storage consolidation blocker
+
+The canonical working repository is `C:\sign_to_speak\repository`; historical app-specific evidence is `C:\sign_to_speak\historical-evidence\sign-arm64-60d255d0`. Every transferred file hash matched. The old app-specific xMilo directory is gone; the unrelated xMilo project is untouched.
+
+**The duplicate at `C:\Users\1thea\OneDrive\Documents\ChatGPT\Sign to Speak\verification` still remains.** Windows rejects moving that directory because another process holds it open. Automatic approval review separately rejected removing this verified duplicate with only “blocked by policy”; deletion never executed. No alternate deletion method was attempted. The safe remaining step is to release the old workspace lock, respecting other agents, then retire that duplicate. No private keys/credentials were moved or deleted. This is an operational storage blocker, separate from commercial readiness.
