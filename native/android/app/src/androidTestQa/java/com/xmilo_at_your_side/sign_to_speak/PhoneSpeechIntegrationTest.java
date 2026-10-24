@@ -56,8 +56,10 @@ public final class PhoneSpeechIntegrationTest {
             if (!(host.getCurrentReactContext() instanceof ReactApplicationContext)) return false;
             ReactApplicationContext react = (ReactApplicationContext) host.getCurrentReactContext();
             if (!react.hasActiveReactInstance() || react.getCurrentActivity() != activity) return false;
-            module = react.getNativeModule(LocalSpeechModule.class);
-            return module != null;
+            Object registered = react.getNativeModule("LocalSpeech");
+            if (!(registered instanceof LocalSpeechModule)) return false;
+            module = (LocalSpeechModule) registered;
+            return true;
         });
         assertTrue(((MainApplication) activity.getApplication()).getCapturePrivacyReady());
     }
@@ -159,8 +161,10 @@ public final class PhoneSpeechIntegrationTest {
             if (!(host.getCurrentReactContext() instanceof ReactApplicationContext)) return false;
             ReactApplicationContext react = (ReactApplicationContext) host.getCurrentReactContext();
             if (!react.hasActiveReactInstance() || react.getCurrentActivity() != activity) return false;
-            module = react.getNativeModule(LocalSpeechModule.class);
-            return module != null;
+            Object registered = react.getNativeModule("LocalSpeech");
+            if (!(registered instanceof LocalSpeechModule)) return false;
+            module = (LocalSpeechModule) registered;
+            return true;
         });
     }
 

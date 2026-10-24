@@ -11,6 +11,7 @@ import android.os.Build;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.TextureView;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -94,12 +95,19 @@ public final class PhonePreviewIntegrationTest {
         assertCameraOff("Before Start");
         findLabel(START).click();
         final CameraSnapshot[] streamed = new CameraSnapshot[1];
-        await("physical camera STREAMING", STREAM_WAIT_MS, () -> {
-            CameraSnapshot state = snapshot();
-            if (!state.streaming()) return false;
-            streamed[0] = state;
-            return true;
-        });
+        final CameraSnapshot[] lastMounted = new CameraSnapshot[1];
+        try {
+            await("physical camera STREAMING", STREAM_WAIT_MS, () -> {
+                CameraSnapshot state = snapshot();
+                if (state.mounted != null) lastMounted[0] = state;
+                if (!state.streaming()) return false;
+                streamed[0] = state;
+                return true;
+            });
+        } catch (AssertionError timeout) {
+            throw new AssertionError(timeout.getMessage()
+                    + "; last mounted camera before unmount=" + lastMounted[0], timeout);
+        }
         findLabel(LIVE);
         assertStreaming("After scrolling to live notice", streamed[0]);
         return streamed[0];
@@ -178,6 +186,7 @@ public final class PhonePreviewIntegrationTest {
             Preview preview = view == null ? null : (Preview) field(view, "preview");
             ProcessCameraProvider provider = view == null ? null : (ProcessCameraProvider) field(view, "provider");
             PreviewView surface = view == null ? null : (PreviewView) field(view, "previewView");
+            String surfaceChildren = previewChildren(surface);
             Preview check = previousPreview != null ? previousPreview : preview;
             ProcessCameraProvider checkProvider = previousProvider != null ? previousProvider : provider;
             return new CameraSnapshot(mounted, view, preview, provider,
@@ -189,10 +198,28 @@ public final class PhonePreviewIntegrationTest {
                     surface == null ? null : surface.getPreviewStreamState().getValue(),
                     check != null && checkProvider != null && checkProvider.isBound(check),
                     activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED),
-                    registeredActive, registration.toString());
+                    registeredActive, registration.toString(), surfaceChildren);
         });
     }
 
+    private static String previewChildren(PreviewView surface) {
+        if (surface == null) return "none";
+        StringBuilder children = new StringBuilder();
+        for (int i = 0; i < surface.getChildCount(); i++) {
+            View child = surface.getChildAt(i);
+            if (i > 0) children.append("; ");
+            children.append(child.getClass().getName())
+                    .append("{actual=").append(child.getWidth()).append("x").append(child.getHeight())
+                    .append(",measured=").append(child.getMeasuredWidth()).append("x")
+                    .append(child.getMeasuredHeight())
+                    .append(",attached=").append(child.isAttachedToWindow());
+            if (child instanceof TextureView) {
+                children.append(",available=").append(((TextureView) child).isAvailable());
+            }
+            children.append("}");
+        }
+        return children.length() == 0 ? "none" : children.toString();
+    }
     private static PrivateCameraView findCamera(View root) {
         if (root instanceof PrivateCameraView) return (PrivateCameraView) root;
         if (root instanceof ViewGroup) {
@@ -253,18 +280,18 @@ public final class PhonePreviewIntegrationTest {
         final boolean requested, disposed, attached, bound, resumed, registeredActive;
         final int width, height, surfaceWidth, surfaceHeight;
         final PreviewView.StreamState stream;
-        final String registration;
+        final String registration, surfaceChildren;
         CameraSnapshot(PrivateCameraView mounted, PrivateCameraView view, Preview preview,
                 ProcessCameraProvider provider, boolean requested, boolean disposed, boolean attached,
                 int width, int height, int surfaceWidth, int surfaceHeight,
                 PreviewView.StreamState stream, boolean bound, boolean resumed,
-                boolean registeredActive, String registration) {
+                boolean registeredActive, String registration, String surfaceChildren) {
             this.mounted = mounted; this.view = view; this.preview = preview; this.provider = provider;
             this.requested = requested; this.disposed = disposed; this.attached = attached;
             this.width = width; this.height = height; this.surfaceWidth = surfaceWidth;
             this.surfaceHeight = surfaceHeight; this.stream = stream; this.bound = bound;
             this.resumed = resumed; this.registeredActive = registeredActive;
-            this.registration = registration;
+            this.registration = registration; this.surfaceChildren = surfaceChildren;
         }
         boolean streaming() {
             return mounted == view && view != null && requested && !disposed && attached
@@ -278,7 +305,8 @@ public final class PhonePreviewIntegrationTest {
                     + ",size=" + width + "x" + height + ",surface=" + surfaceWidth + "x" + surfaceHeight
                     + ",stream=" + stream + ",preview=" + (preview != null) + ",provider="
                     + (provider != null) + ",bound=" + bound + ",resumed=" + resumed
-                    + ",registeredActive=" + registeredActive + ",registry=[" + registration + "]}";
+                    + ",registeredActive=" + registeredActive + ",children=[" + surfaceChildren
+                    + "],registry=[" + registration + "]}";
         }
     }
 }
