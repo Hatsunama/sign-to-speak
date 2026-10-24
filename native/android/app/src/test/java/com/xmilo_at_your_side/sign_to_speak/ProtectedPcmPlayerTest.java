@@ -140,6 +140,47 @@ public class ProtectedPcmPlayerTest {
         verify(track).release();
     }
 
+    @Test public void privacyLossAfterPartialWriteStopsBeforeNextWrite() {
+        java.util.concurrent.atomic.AtomicBoolean ready = new java.util.concurrent.atomic.AtomicBoolean(true);
+        AtomicInteger writes = new AtomicInteger();
+        when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
+            .thenAnswer(call -> {
+                writes.incrementAndGet();
+                ready.set(false);
+                return 80;
+            });
+        ProtectedPcmPlayer player = new ProtectedPcmPlayer(context, ready::get,
+            invalidations::incrementAndGet, (attributes, format, bufferBytes) -> {
+                createdAttributes.set(attributes);
+                return track;
+            });
+        assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
+        assertEquals(1, writes.get());
+        verify(track).stop();
+        verify(track).release();
+        verify(audio).abandonAudioFocusRequest(focusRequest.get());
+        assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
+    }
+
+    @Test public void privacyLossDuringDrainStopsBeforeNextHeadPoll() {
+        java.util.concurrent.atomic.AtomicBoolean ready = new java.util.concurrent.atomic.AtomicBoolean(true);
+        AtomicInteger polls = new AtomicInteger();
+        when(track.getPlaybackHeadPosition()).thenAnswer(call -> {
+            polls.incrementAndGet();
+            ready.set(false);
+            return 0;
+        });
+        ProtectedPcmPlayer player = new ProtectedPcmPlayer(context, ready::get,
+            invalidations::incrementAndGet, (attributes, format, bufferBytes) -> {
+                createdAttributes.set(attributes);
+                return track;
+            });
+        assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
+        assertEquals(1, polls.get());
+        verify(track).stop();
+        verify(track).release();
+        verify(audio).abandonAudioFocusRequest(focusRequest.get());
+    }
     @Test @Config(sdk = 28) public void oldAndroidNeverRequestsFocusOrCreatesTrack() {
         assertThrows(IllegalStateException.class, () -> player().play(new short[160], () -> false));
         verifyNoInteractions(audio, track);

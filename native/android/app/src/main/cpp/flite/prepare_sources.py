@@ -15,8 +15,8 @@ ROOT = Path(__file__).resolve().parent
 approved = ROOT / 'source-manifest.json'
 if hashlib.sha256(approved.read_bytes()).hexdigest() != 'e0969bcb5a34628e66f93517e9cbdb092252988c5920007e18c46f595dc54cd8':
     raise ValueError('Approved source manifest identity changed')
-approved_files = json.loads(approved.read_text())['files']
-manifest = json.loads((ROOT / 'source-receipt.json').read_text())
+approved_files = json.loads(approved.read_text(encoding='utf-8'))['files']
+manifest = json.loads((ROOT / 'source-receipt.json').read_text(encoding='utf-8'))
 if [{k: v for k, v in f.items() if k != 'sha256'} for f in manifest['files']] != approved_files:
     raise ValueError('Source receipt differs from approved inventory')
 source = ROOT / 'upstream'
@@ -48,14 +48,14 @@ patches = []
 
 
 def modify(path, replacements, output):
-    old = (source / path).read_text()
+    old = (source / path).read_text(encoding='utf-8')
     new = old
     for before, after in replacements:
         if new.count(before) != 1:
             raise ValueError('Patch anchor changed: ' + path)
         new = new.replace(before, after)
     new = '/* Modified for isolated Sign To Speak candidate; see modifications.patch. */\n' + new
-    write_changed(output, new.encode())
+    write_changed(output, new.encode('utf-8'))
     patches.append(''.join(difflib.unified_diff(old.splitlines(True), new.splitlines(True),
                     fromfile='upstream/' + path, tofile='generated/' + path)))
 
@@ -118,7 +118,7 @@ modify('src/speech/cst_track.c', [
     ('    memmove(n_times,t->times,',
      '    if (num_frames > 0 && t->num_frames > 0)\n        memmove(n_times,t->times,')
 ], generated / 'cst_track.c')
-write_changed(ROOT / 'modifications.patch', ''.join(patches).encode())
+write_changed(ROOT / 'modifications.patch', ''.join(patches).encode('utf-8'))
 
 # Keep only the conservative authorized translation units, excluding platform
 # I/O and runtime functions replaced by local guarded implementations. Linker GC
@@ -139,7 +139,7 @@ replaced = {'src/cg/cst_mlsa.c': 'generated/cst_mlsa.c',
             'src/speech/cst_track.c': 'generated/cst_track.c'}
 units = [replaced.get(f['path'], 'upstream/' + f['path']) for f in manifest['files']
          if f['role'] == 'translation_unit' and f['path'] not in excluded]
-write_changed(ROOT / 'sources.cmake', ('set(FLITE_SOURCES\n' + ''.join('  "${CMAKE_CURRENT_SOURCE_DIR}/' + p + '"\n' for p in units) + ')\n').encode())
+write_changed(ROOT / 'sources.cmake', ('set(FLITE_SOURCES\n' + ''.join('  "${CMAKE_CURRENT_SOURCE_DIR}/' + p + '"\n' for p in units) + ')\n').encode('utf-8'))
 if CHECK:
     for path in sorted(generated.rglob('*')) if generated.exists() else ():
         if path.is_file() and path not in expected_paths:

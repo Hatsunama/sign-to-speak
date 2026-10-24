@@ -212,7 +212,7 @@ static cst_val *add_break(cst_val *l)
 
 static int contains_unicode_single_quote(const char *name)
 {
-    static const char *unicode_single_quote = "â€™";
+    static const char *unicode_single_quote = "’";
     int i;
 
     for (i=0; name[i]; i++)
@@ -228,7 +228,7 @@ static int contains_unicode_single_quote(const char *name)
 
 static char *map_unicode_single_quote(const char *name)
 {
-    static const char *unicode_single_quote = "â€™";
+    static const char *unicode_single_quote = "’";
     int i,j;
     char *aaa = cst_strdup(name);  /* it'll always get shorter */
 
@@ -685,7 +685,7 @@ static cst_val *us_tokentowords_one(cst_item *token, const char *name)
     }
     else if (contains_unicode_single_quote(name))
     {
-        /* A single quote is sometimes rendered as unicode "â€™" */
+        /* A single quote is sometimes rendered as unicode "’" */
         /* so we map it back to an ascii single quote ' */
         aaa = map_unicode_single_quote(name);
         r = us_tokentowords_one(token, aaa);
