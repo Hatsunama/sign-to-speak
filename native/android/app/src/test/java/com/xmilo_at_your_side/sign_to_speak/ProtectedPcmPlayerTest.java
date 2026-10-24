@@ -13,6 +13,7 @@ import android.media.AudioTrack;
 import android.os.Build;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Before;
@@ -59,6 +60,29 @@ public class ProtectedPcmPlayerTest {
                 createdAttributes.set(attributes);
                 return track;
             });
+    }
+
+    private static final class DrainBarrier implements java.util.function.BooleanSupplier {
+        private final CountDownLatch written = new CountDownLatch(1);
+        private final CountDownLatch atDrain = new CountDownLatch(1);
+        private final CountDownLatch resumeDrain = new CountDownLatch(1);
+        private final AtomicBoolean parked = new AtomicBoolean();
+
+        void wrote() { written.countDown(); }
+        boolean awaitDrain() throws InterruptedException { return atDrain.await(2, TimeUnit.SECONDS); }
+        void release() { resumeDrain.countDown(); }
+
+        @Override public boolean getAsBoolean() {
+            if (written.getCount() == 0 && parked.compareAndSet(false, true)) {
+                atDrain.countDown();
+                try { resumeDrain.await(); }
+                catch (InterruptedException failure) {
+                    Thread.currentThread().interrupt();
+                    throw new AssertionError(failure);
+                }
+            }
+            return false;
+        }
     }
 
     @Test public void exactCapturePolicyAndSpeechAttributesAreRequired() {
@@ -122,25 +146,29 @@ public class ProtectedPcmPlayerTest {
     @Test public void writeCompletionIsNotPlaybackCompletionAndCancelStopsDrain() throws Exception {
         when(track.getPlaybackHeadPosition()).thenReturn(0);
         ProtectedPcmPlayer player = player();
-        CountDownLatch wrote = new CountDownLatch(1);
+        DrainBarrier barrier = new DrainBarrier();
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
-            .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
+            .thenAnswer(call -> { barrier.wrote(); return call.getArgument(2); });
         AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
-            try { player.play(new short[160], () -> false); }
+            try { player.play(new short[160], barrier); }
             catch (Throwable t) { failure.set(t); }
         });
         worker.start();
-        assertTrue(wrote.await(2, TimeUnit.SECONDS));
-        assertTrue(worker.isAlive());
-        player.cancel();
-        worker.join(2000);
+        try {
+            assertTrue(barrier.awaitDrain());
+            assertTrue(worker.isAlive());
+            player.cancel();
+            verify(track).pause();
+            verify(track).flush();
+        } finally {
+            barrier.release();
+            worker.join(2000);
+        }
         assertFalse(worker.isAlive());
-        verify(track).pause();
-        verify(track).flush();
+        assertTrue(failure.get() instanceof IllegalStateException);
         verify(track).release();
     }
-
     @Test public void privacyLossAfterPartialWriteStopsBeforeNextWrite() {
         java.util.concurrent.atomic.AtomicBoolean ready = new java.util.concurrent.atomic.AtomicBoolean(true);
         AtomicInteger writes = new AtomicInteger();
@@ -226,62 +254,81 @@ public class ProtectedPcmPlayerTest {
         verify(audio).abandonAudioFocusRequest(any(AudioFocusRequest.class));
     }
 
-    @Test public void cancellationAttemptsPauseAndFlushAndReportsFailure() {
+    @Test public void cancellationAttemptsPauseAndFlushAndReportsFailure() throws Exception {
         when(track.getPlaybackHeadPosition()).thenReturn(0);
         doThrow(new IllegalStateException("test pause failure")).when(track).pause();
         doThrow(new IllegalStateException("test flush failure")).when(track).flush();
         ProtectedPcmPlayer player = player();
-        CountDownLatch wrote = new CountDownLatch(1);
+        DrainBarrier barrier = new DrainBarrier();
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
-            .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
+            .thenAnswer(call -> { barrier.wrote(); return call.getArgument(2); });
+        AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
-            try { player.play(new short[160], () -> false); }
-            catch (IllegalStateException expected) { /* cancellation */ }
+            try { player.play(new short[160], barrier); }
+            catch (Throwable t) { failure.set(t); }
         });
         worker.start();
-        try { assertTrue(wrote.await(2, TimeUnit.SECONDS)); }
-        catch (InterruptedException failure) { throw new AssertionError(failure); }
-        assertThrows(IllegalStateException.class, player::cancel);
-        verify(track).pause();
-        verify(track).flush();
-        try { worker.join(2000); }
-        catch (InterruptedException failure) { throw new AssertionError(failure); }
+        try {
+            assertTrue(barrier.awaitDrain());
+            assertThrows(IllegalStateException.class, player::cancel);
+            verify(track).pause();
+            verify(track).flush();
+        } finally {
+            barrier.release();
+            worker.join(2000);
+        }
         assertFalse(worker.isAlive());
+        assertTrue(failure.get() instanceof IllegalStateException);
     }
     @Test public void focusLossStillInvalidatesWhenPauseFails() throws Exception {
         when(track.getPlaybackHeadPosition()).thenReturn(0);
         doThrow(new IllegalStateException("test pause failure")).when(track).pause();
-        CountDownLatch wrote = new CountDownLatch(1);
+        DrainBarrier barrier = new DrainBarrier();
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
-            .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
+            .thenAnswer(call -> { barrier.wrote(); return call.getArgument(2); });
         ProtectedPcmPlayer player = player();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
-            try { player.play(new short[160], () -> false); }
-            catch (IllegalStateException expected) { /* focus loss */ }
+            try { player.play(new short[160], barrier); }
+            catch (Throwable t) { failure.set(t); }
         });
         worker.start();
-        assertTrue(wrote.await(2, TimeUnit.SECONDS));
-        player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
-        assertEquals(1, invalidations.get());
-        worker.join(2000);
+        try {
+            assertTrue(barrier.awaitDrain());
+            player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
+            assertEquals(1, invalidations.get());
+            verify(track).pause();
+        } finally {
+            barrier.release();
+            worker.join(2000);
+        }
         assertFalse(worker.isAlive());
+        assertTrue(failure.get() instanceof IllegalStateException);
     }
     @Test public void focusLossInvalidatesSessionWithoutAutoResume() throws Exception {
         when(track.getPlaybackHeadPosition()).thenReturn(0);
-        CountDownLatch wrote = new CountDownLatch(1);
+        DrainBarrier barrier = new DrainBarrier();
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
-            .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
+            .thenAnswer(call -> { barrier.wrote(); return call.getArgument(2); });
         ProtectedPcmPlayer player = player();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
-            try { player.play(new short[160], () -> false); }
-            catch (IllegalStateException expected) { /* focus loss stops playback */ }
+            try { player.play(new short[160], barrier); }
+            catch (Throwable t) { failure.set(t); }
         });
         worker.start();
-        assertTrue(wrote.await(2, TimeUnit.SECONDS));
-        player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK);
-        worker.join(2000);
+        try {
+            assertTrue(barrier.awaitDrain());
+            player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK);
+            assertEquals(1, invalidations.get());
+            verify(track).pause();
+            verify(track).flush();
+        } finally {
+            barrier.release();
+            worker.join(2000);
+        }
         assertFalse(worker.isAlive());
-        assertEquals(1, invalidations.get());
+        assertTrue(failure.get() instanceof IllegalStateException);
         assertThrows(IllegalStateException.class, () -> player.play(new short[160], () -> false));
         player.onAudioFocusChange(AudioManager.AUDIOFOCUS_GAIN);
         assertEquals(1, invalidations.get());
@@ -301,39 +348,28 @@ public class ProtectedPcmPlayerTest {
         when(track.getPlaybackHeadPosition()).thenReturn(0);
         doThrow(new IllegalStateException("test pause failure")).when(track).pause();
         doThrow(new IllegalStateException("test flush failure")).when(track).flush();
-        CountDownLatch wrote = new CountDownLatch(1);
-        CountDownLatch atDrain = new CountDownLatch(1);
-        CountDownLatch resumeDrain = new CountDownLatch(1);
+        DrainBarrier barrier = new DrainBarrier();
         when(track.write(any(short[].class), anyInt(), anyInt(), eq(AudioTrack.WRITE_NON_BLOCKING)))
-            .thenAnswer(call -> { wrote.countDown(); return call.getArgument(2); });
+            .thenAnswer(call -> { barrier.wrote(); return call.getArgument(2); });
         ProtectedPcmPlayer player = player();
+        AtomicReference<Throwable> failure = new AtomicReference<>();
         Thread worker = new Thread(() -> {
-            try {
-                player.play(new short[160], () -> {
-                    if (wrote.getCount() == 0) {
-                        atDrain.countDown();
-                        try { resumeDrain.await(); }
-                        catch (InterruptedException failure) {
-                            Thread.currentThread().interrupt();
-                            throw new AssertionError(failure);
-                        }
-                    }
-                    return false;
-                });
-            } catch (IllegalStateException expected) { /* focus loss stops playback */ }
+            try { player.play(new short[160], barrier); }
+            catch (Throwable t) { failure.set(t); }
         });
         worker.start();
         try {
-            assertTrue(atDrain.await(2, TimeUnit.SECONDS));
+            assertTrue(barrier.awaitDrain());
             player.onAudioFocusChange(AudioManager.AUDIOFOCUS_LOSS);
             assertEquals(1, invalidations.get());
             verify(track, times(1)).pause();
             verify(track, times(1)).flush();
         } finally {
-            resumeDrain.countDown();
+            barrier.release();
+            worker.join(2000);
         }
-        worker.join(2000);
         assertFalse(worker.isAlive());
+        assertTrue(failure.get() instanceof IllegalStateException);
         assertThrows(IllegalStateException.class, player::close);
         assertThrows(IllegalStateException.class, player::close);
         verify(track, times(1)).stop();
