@@ -5,13 +5,19 @@ class PhoneQaApkTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
   self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
-  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture'}
+  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','assets/index.android.bundle':b'fixture'}
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
   with zipfile.ZipFile(a,'w') as z:
    for name,data in self.entries.items():z.writestr(name,data)
   qa.verify(m,a)
  def test_valid_unsigned_arm64_qa(self):self.verify()
+ def test_missing_javascript_bundle_rejected(self):
+  del self.entries['assets/index.android.bundle']
+  with self.assertRaisesRegex(AssertionError,'bundled JavaScript'):self.verify()
+ def test_empty_javascript_bundle_rejected(self):
+  self.entries['assets/index.android.bundle']=b''
+  with self.assertRaisesRegex(AssertionError,'bundled JavaScript'):self.verify()
  def test_shipping_id_rejected(self):
   self.xml=self.xml.replace(qa.PACKAGE,qa.PACKAGE.removesuffix('.qa'))
   with self.assertRaises(AssertionError):self.verify()

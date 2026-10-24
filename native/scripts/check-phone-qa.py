@@ -30,6 +30,7 @@ def verify(manifest, apk):
         names=archive.namelist()
         assert archive.testzip() is None, 'APK ZIP CRC failed'
         assert 'AndroidManifest.xml' in names and 'classes.dex' in names
+        assert 'assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript'
         assert not any(re.match(r'META-INF/[^/]+\.(RSA|DSA|EC|SF)$',name,re.I) for name in names), 'Unexpected v1 signature material'
         libraries=[name for name in names if name.startswith('lib/') and name.endswith('.so')]
         assert libraries and {name.split('/')[1] for name in libraries}=={'arm64-v8a'}, 'APK must contain only arm64 native libraries'

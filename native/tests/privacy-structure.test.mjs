@@ -104,13 +104,14 @@ test('unsigned phone QA structural guard rejects identity, signing, bundling and
     ['debuggable QA', build.replace('debuggable false', 'debuggable true'), manifest],
     ['debug inheritance', build.replace('initWith release', 'initWith debug'), manifest],
     ['extra architecture', build.replace('ndk { abiFilters "arm64-v8a" }', 'ndk { abiFilters "arm64-v8a", "x86_64" }'), manifest],
-    ['inherited signer', build.replace('debuggable false\n                signingConfig = null', 'debuggable false'), manifest],
+    ['inherited signer', build.replace(/debuggable false\r?\n\s*signingConfig = null/, 'debuggable false'), manifest],
     ['Metro dependency', build.replace('debuggableVariants = []', 'debuggableVariants = ["qa"]'), manifest],
     ['secret environment read', build + '\nSystem.getenv("SIGNING_SECRET")', manifest],
     ['non-test APK', build, manifest.replace('testOnly="true"', 'testOnly="false"')],
     ['QA network permission', build, manifest.replace('</manifest>', '<uses-permission android:name="android.permission.INTERNET" /></manifest>')],
   ];
   for (const [label, mutatedBuild, mutatedManifest] of mutations) {
+    assert.ok(mutatedBuild !== build || mutatedManifest !== manifest, `Mutation had no effect: ${label}`);
     assert.throws(() => verifyUnsignedPhoneQaStructure(mutatedBuild, mutatedManifest), {name: 'AssertionError'}, label);
   }
 });

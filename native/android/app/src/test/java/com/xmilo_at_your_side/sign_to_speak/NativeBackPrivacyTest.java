@@ -10,6 +10,7 @@ import android.content.ContextWrapper;
 import java.util.Set;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.Executor;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraInfo;
 import androidx.camera.core.CameraState;
@@ -115,6 +116,8 @@ public class NativeBackPrivacyTest {
         future = SettableFuture.create();
         ProviderCompanionShadow.nextFuture = future;
         ProviderCompanionShadow.acquisitionCount = 0;
+        ProviderCompanionShadow.nextFailure = null;
+        ProviderCompanionShadow.beforeFailure = null;
     }
 
     @After public void tearDown() {
@@ -169,6 +172,57 @@ public class NativeBackPrivacyTest {
         view.setActive(true);
         assertStopped();
         assertEquals(0, ProviderCompanionShadow.acquisitionCount);
+        verifyNoInteractions(provider);
+    }
+
+    @Test public void synchronousProviderAcquisitionFailureCancelsAndAllowsExplicitRetry() throws Exception {
+        ProviderCompanionShadow.nextFailure = new IllegalStateException("Injected synchronous acquisition failure");
+        view.setActive(true);
+        assertStopped();
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        assertEquals("camera_unavailable", statuses.get(statuses.size() - 1));
+        verifyNoInteractions(provider);
+
+        ProviderCompanionShadow.nextFailure = null;
+        statuses.clear();
+        view.setActive(true);
+        assertTrue(requested());
+        assertEquals(2, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertNotNull("Explicit retry must bind after the acquisition fault clears", ownedPreview());
+        assertFalse(statuses.contains("camera_unavailable"));
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test public void synchronousProviderListenerFailureCancelsAndAllowsExplicitRetry() throws Exception {
+        ListenableFuture<ProcessCameraProvider> badFuture = mock(ListenableFuture.class);
+        doThrow(new IllegalStateException("Injected listener registration failure"))
+            .when(badFuture).addListener(any(Runnable.class), any(Executor.class));
+        ProviderCompanionShadow.nextFuture = badFuture;
+        view.setActive(true);
+        assertStopped();
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        assertEquals("camera_unavailable", statuses.get(statuses.size() - 1));
+        verifyNoInteractions(provider);
+
+        ProviderCompanionShadow.nextFuture = future;
+        statuses.clear();
+        view.setActive(true);
+        assertEquals(2, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertNotNull("Explicit retry must bind after listener registration recovers", ownedPreview());
+        assertFalse(statuses.contains("camera_unavailable"));
+    }
+
+    @Test public void acquisitionFailureAfterStopCannotPublishStaleFailure() throws Exception {
+        ProviderCompanionShadow.beforeFailure = () -> view.setActive(false);
+        ProviderCompanionShadow.nextFailure = new IllegalStateException("Injected late acquisition failure");
+        view.setActive(true);
+        assertStopped();
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        assertTrue("A canceled lease must stay silent after a late failure", statuses.isEmpty());
         verifyNoInteractions(provider);
     }
 
@@ -672,11 +726,17 @@ public class NativeBackPrivacyTest {
      */
     @Implements(value = ProcessCameraProvider.Companion.class, isInAndroidSdk = false)
     public static class ProviderCompanionShadow {
-        static SettableFuture<ProcessCameraProvider> nextFuture;
+        static ListenableFuture<ProcessCameraProvider> nextFuture;
         static int acquisitionCount;
+        static RuntimeException nextFailure;
+        static Runnable beforeFailure;
 
         @Implementation protected ListenableFuture<ProcessCameraProvider> getInstance(Context context) {
             acquisitionCount++;
+            if (nextFailure != null) {
+                if (beforeFailure != null) beforeFailure.run();
+                throw nextFailure;
+            }
             assertNotNull("Controlled provider must be initialized before native Start", nextFuture);
             return nextFuture;
         }
