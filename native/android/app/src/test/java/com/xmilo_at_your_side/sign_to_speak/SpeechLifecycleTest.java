@@ -96,9 +96,31 @@ public class SpeechLifecycleTest {
             Promise denied = mock(Promise.class);
             bridge.begin(denied);
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            verify(denied).resolve(null);
+            verify(denied).reject(eq("CLEANUP_FAILED"), anyString());
+            verify(denied, never()).resolve(any());
             assertEquals(1, sessions.constructed().size());
             recreated.pause().stop().destroy();
+        }
+    }
+
+    @Test public void beginRejectsLatchedCleanupFaultWithoutPendingSpeechCallback() {
+        try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+             MockedConstruction<SpeechSession> sessions = mockConstruction(SpeechSession.class)) {
+            ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+            MainActivity activity = controller.get();
+            MainApplication app = (MainApplication) activity.getApplication();
+            assertTrue(app.getCapturePrivacyReady());
+            app.recordSpeechCleanupFault();
+            assertTrue(app.getSpeechCleanupFaulted());
+            ReactApplicationContext context = mock(ReactApplicationContext.class);
+            when(context.getCurrentActivity()).thenReturn(activity);
+            Promise denied = mock(Promise.class);
+            new LocalSpeechModule(context).begin(denied);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            verify(denied).reject(eq("CLEANUP_FAILED"), anyString());
+            verify(denied, never()).resolve(any());
+            assertTrue(sessions.constructed().isEmpty());
+            controller.pause().stop().destroy();
         }
     }
 
