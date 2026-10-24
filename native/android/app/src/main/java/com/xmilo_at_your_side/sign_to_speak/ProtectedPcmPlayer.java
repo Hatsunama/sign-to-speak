@@ -146,10 +146,10 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
         } catch (RuntimeException failure) {
             throw new IllegalStateException("Protected playback failed");
         } finally {
-            focusActive = false;
             AudioTrack releasing;
             synchronized (lock) {
                 if (playbackStarted && !trackDrained) silenceQueuedAudioLocked();
+                focusActive = false;
                 releasing = activeTrack;
                 activeTrack = null;
             }
