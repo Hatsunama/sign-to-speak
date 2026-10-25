@@ -1,0 +1,20 @@
+{
+  "reports": 8,
+  "tests": 123,
+  "failures": [
+    {
+      "report": "sign-android-evidence-f80dd60e3674910846a648f4e211bf5e7be98a69-1\\sign-to-speak\\sign-to-speak\\native\\android\\app\\build\\test-results\\testDebugUnitTest\\TEST-com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest.xml",
+      "case": "cleanupFaultSurvivesActivityRecreationAndBlocksBegin",
+      "class": "com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest",
+      "type": "org.mockito.exceptions.verification.WantedButNotInvoked",
+      "message": "org.mockito.exceptions.verification.WantedButNotInvoked: \nWanted but not invoked:\npromise.reject(\n    \"CLEANUP_FAILED\",\n    <any string>\n);\n-> at com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest.cleanupFaultSurvivesActivityRecreationAndBlocksBegin(SpeechLifecycleTest.java:99)\n\nHowever, there was exactly 1 interaction with this mock:\npromise.resolve(null);\n-> at com.xmilo_at_your_side.sign_to_speak.LocalSpeechModule.begin$lambda$0(LocalSpeechModule.kt:17)\n\n"
+    },
+    {
+      "report": "sign-android-evidence-f80dd60e3674910846a648f4e211bf5e7be98a69-1\\sign-to-speak\\sign-to-speak\\native\\android\\app\\build\\test-results\\testDebugUnitTest\\TEST-com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest.xml",
+      "case": "beginRejectsLatchedCleanupFaultWithoutPendingSpeechCallback",
+      "class": "com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest",
+      "type": "org.mockito.exceptions.verification.WantedButNotInvoked",
+      "message": "org.mockito.exceptions.verification.WantedButNotInvoked: \nWanted but not invoked:\npromise.reject(\n    \"CLEANUP_FAILED\",\n    <any string>\n);\n-> at com.xmilo_at_your_side.sign_to_speak.SpeechLifecycleTest.beginRejectsLatchedCleanupFaultWithoutPendingSpeechCallback(SpeechLifecycleTest.java:133)\n\nHowever, there was exactly 1 interaction with this mock:\npromise.resolve(null);\n-> at com.xmilo_at_your_side.sign_to_speak.LocalSpeechModule.begin$lambda$0(LocalSpeechModule.kt:17)\n\n"
+    }
+  ]
+}

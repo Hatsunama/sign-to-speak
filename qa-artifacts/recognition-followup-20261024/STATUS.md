@@ -1,0 +1,68 @@
+# Recognition follow-up — blocked device checkpoint, 24 October 2026
+
+## Status and exact candidate
+
+**Incomplete; release blocked.** Both connected phones had other applications in the foreground when the next required step was device diagnosis. No attempt was made to close those apps or take either phone. The user explicitly requires ending the turn in that condition.
+
+App and instrumentation source tested by the final full Android workflow: `c228bcde31af69af77f2c909d8f7bcfb46160a38`. [Run 40145999489](https://github.com/Hatsunama/sign-to-speak/actions/runs/40145999489) passed. Independently inspected normal Android XML contains 123 tests with no failures, errors or skips. The deliberate isolation counterfactual is separate and has its expected four failures. The full host, native/JNI, type, manifest, isolation, build and APK gates passed. This is compilation and controlled test evidence, not complete device acceptance.
+
+Later commit `d0a21ac5fbfcde9239259770a1ff3ab4bd1517b0` changes only the source-dependency trial workflow's time budget. `git diff c228bcd d0a21ac -- native` is empty. No application, Android build input, SDK AAR or instrumentation source changed after the artifact above.
+
+The exact signed QA app SHA256 is `da4e69c9837ded8939985ded2b25b356b1c80b050d937623032264d6178def7f`; instrumentation SHA256 is `6cfb264f98c14baa128fb6e1212622afb504d85852a4aa75634381e0d860c4bb`. Their ZIP entry payloads match the audited unsigned pair exactly, signatures verify and ZIP alignment passes. Both were installed on Samsung and installed hashes matched. The existing debug certificate is unchanged; no key was generated, exported, copied into the repository or uploaded. Production signing remains unconfigured.
+
+## What failed on the phone
+
+**P2 — unresolved physical journey / strongly suspected test locator ambiguity.** Samsung cold-started the exact candidate. The Stop and explicit retry journey passed through the actual UI, registered bridge, Flite PCM and advancing protected AudioTrack. The invalid-input journey failed before tapping Speak after entering 257 characters: `Clickable actual React control: Speak typed text`.
+
+Exact path: `native/android/app/src/androidTestQa/java/com/xmilo_at_your_side/sign_to_speak/PhoneTypedSpeechIntegrationTest.java`, `typedInputValidatesPlaysCompletesAndBackgroundClearsDraft` line 73, `tap` line 166, `findNode` line 175 and `scrollFor` line 182. The fallback text query can match the section heading in `native/App.tsx:253` instead of the button at line 261; visibility alone is accepted before requiring a clickable ancestor. The qualified resource-ID query may also miss the actual React Native accessibility ID. The actual failed-state hierarchy has not been captured, so this is not yet a proven product defect or a confirmed selector repair.
+
+Impact: invalid-input feedback, completion/background clearing and the full two-phone journey are not certified. Smallest proposed repair: first capture the real accessibility IDs and geometry on a free phone; select the actual button by its observed ID/package and require its clickable ancestor to be fully visible and settled before tapping. Preserve all invalid-input/no-job assertions and production UI. Do not bypass the UI or remove the failing case. Rerun the unchanged journey after any selector repair, then run the full required suite and retest the exact final APK pair on both phones.
+
+Cascade inspected: `PhonePreviewIntegrationTest.findActionButton` lines 257–315 also uses text queries, but checks a clickable ancestor and stable native geometry before returning. No same failure was demonstrated there in this inspection. It has not been rerun on this candidate. `PhoneSpeechIntegrationTest`, `PhoneActivityDriver`, App lifecycle/epoch guards, bridge ownership and speech session cancellation were also traced. No additional issue found in that inspected source scope means that scope only, not proven correctness.
+
+Samsung's test cleanup returned it to Home and restored its prior camera grant and rotation settings. A subsequent diagnostic launch was refused because another application had taken the foreground. Seeker's final candidate test has not run. Neither phone has run the recorded-video probe.
+
+## Original issue status and repairs
+
+| Issue in approved scope | Status / evidence |
+| --- | --- |
+| Recover the historical unpublished candidate | Still unrecovered. The owner approved rebuilding missing integration on verified foundation `cbdd53d`; this work does not claim to reproduce the 477-file candidate. The exact foundation archive and receipt are preserved locally. All new source and the pinned SDK artifact are in Git. |
+| Missing camera recognition | Open. `PrivateCameraView.kt:100` binds CameraX Preview only; `App.tsx:232` still reports recognition unsupported. The opt-in native video probe is research instrumentation, not a customer feature. |
+| Missing ASL translation / fingerspelling | Open. The inspected model outputs 250 isolated labels, not continuous ASL-to-English. App.tsx:217 still discloses translation unavailable. No sentence or fingerspelling capability is claimed. |
+| Missing customer speech flow | Partially implemented: reviewed typed ASCII text, explicit Speak, Stop and Clear use the existing local backend independently of CAMERA. The physical failure above prevents acceptance. Customer microphone captions remain absent. |
+| Cleanup fault hidden at speech admission | Repaired. `LocalSpeechModule.kt:13–23` rejects `CLEANUP_FAILED` from the application fault latch. `native/src/local-speech.mjs:19–25` and line 35 propagate current and retired faults to the UI. Actual RED [40139742507](https://github.com/Hatsunama/sign-to-speak/actions/runs/40139742507) had exactly two failures from resolving null; unchanged native regressions now pass. App recreation and cancellation without a pending speech callback are covered at `SpeechLifecycleTest.java:66,106`. |
+| Test/data evaluation credibility | Added a byte/hash and split validator plus supplied-prediction metrics. Leakage, alias and completeness defects found while implementing it were repaired. It does not decode or infer. Four real private research videos exist, but no video prediction result exists and training overlap / feature parity are unverified. |
+| Original code licensing | Apache 2.0 selected by the owner and added, with original-code and third-party terms separated. App APK license assets were checked in the actual final archive. |
+
+## Deduplicated additional findings and change impacts
+
+1. **P2, proven, repaired in QA dependency graph — published tracker initializes telemetry.** `phone-qa.gradle:9–45` now substitutes a pinned offline source build only on QA instrumentation classpaths. The earlier [40140649088](https://github.com/Hatsunama/sign-to-speak/actions/runs/40140649088) actual test APK contained INTERNET, ACCESS_NETWORK_STATE and DataTransport components. Published Tasks Core 1.1.1 constructs the remote logging client; excluding transport alone would break construction. The fix uses official runtime Java source with the upstream dummy logger, preserves the byte-identical published JNI and lifecycle APIs, and omits telemetry dependencies. The final actual app and test manifests have no network permission or unexpected background components. Native tracking execution remains unverified.
+2. **P2, proven audit gap, repaired — component additions escaped a permission-only audit.** `check-phone-instrumentation.py:46` now rejects unplanned services, receivers and providers. Three injected-component cases failed before the guard repair. Existing AndroidX test activities remain allowed. This strengthens the actual APK gate rather than removing unwanted manifest entries after the fact.
+3. **P2, proven packaging gap, repaired — SDK notices were absent from the test APK.** The technically passing `7ba5490` archive contained only the JUnit license. `phone-qa.gradle:69–72` now adds QA-only SDK assets; `check-phone-instrumentation.py:20–30,57–63` requires their exact pinned bytes. Six missing/changed-asset cases failed before repair. Independent inspection of the final c228bcd APK verified the MediaPipe NOTICE, Apache terms and complete LiteRT license. These assets do not enter the production app. This does not claim to audit every transitive dependency's deployment terms.
+4. **Build harness failures, separately identified.** The first native RED setup attempted an inaccessible Kotlin internal method and did not compile; it was corrected to exercise real cancellation before recording the meaningful two-test RED. The SDK source trial first lacked SDK toolchain registration. A later build and AAR audit succeeded but a redundant cleanup trap failed on read-only Bazel outputs; disposal is now delegated to the mandatory ephemeral hosted runner. A repeat reached 4,908/4,921 actions before the 25-minute cap. [Latest bounded trial 40146406354](https://github.com/Hatsunama/sign-to-speak/actions/runs/40146406354) allows 27 minutes and was still running at this checkpoint. Do not report that rerun as passed.
+5. **Signing-tool verification failure, corrected before installation.** Default signing added v1 metadata despite v1 being reported unused. Explicitly disabling v1 produced the final signed pair with identical original ZIP payloads; only this pair was installed for the Samsung check. The key did not change.
+
+The renderer and production camera implementation were preserved. No service API, account, microphone permission, store build, production key, class shadow, reflective tracker bypass or binary factory patch was introduced. Dependency build configuration restores public SDK declarations and a byte-identical published notice target; the runtime Java source is upstream code.
+
+## Remaining commercial-readiness blockers and evidence gaps
+
+- No connected, validated sign recognition, segmentation, fingerspelling or continuous ASL translation. A tracker is insufficient to supply these features.
+- Typed speech's invalid-input/completion/background journey is unresolved; remaining native speech/camera paths and the complete exact artifact have not passed both phones.
+- No actual recorded-video tracking/inference result. Feature topology, handedness/mirroring, cadence/preprocessing parity, representative unseen-video errors, unknown/non-signing rejection, calibration, latency, RAM, thermal and battery behavior need evidence. Four diagnostic clips would not establish general accuracy even if all matched.
+- Selected model/data release rights and fitness need admission before bundling; ASL Citizen inputs are private noncommercial research material, not redistributable app assets. No raw video, records or landmarks were committed. Video evaluation is the approved approach; recruiting Deaf testers is not a prerequisite. Live conversational performance remains unverified.
+- Customer microphone-to-local-caption flow is absent. Only printable ASCII up to 256 characters is currently supported for typed speech; API 26–28 reject speech under the privacy boundary.
+- Full-app 16 KiB runtime and the supported-device matrix remain unverified. Static alignment is insufficient. Prior capture/privacy evidence belongs to prior exact artifacts; full current customer-flow and active-preview privacy acceptance is incomplete.
+- Production identity/signing and exact store-delivered artifact acceptance are absent. Future Play AAB and Solana APK keys must differ and remain outside Git. Separate store builds are intentionally deferred.
+- The latest dependency-source rebuild is pending; preserve its result and compare normalized AAR payloads with the vendored receipt before claiming reproducibility.
+
+## Actionable continuation
+
+Repository: `C:\sign_to_speak\repository`, branch `codex/native-recognition-flow-20261024`, draft [PR 4](https://github.com/Hatsunama/sign-to-speak/pull/4). All project work stays under `C:\sign_to_speak`; signing material stays protected outside the repository. Leave the pre-existing untracked exact-source, java-check and Python cache directories alone.
+
+1. Read the latest source-build run and preserve success/failure evidence; do not infer success from this report.
+2. Recheck live foreground and active instrumentation. Use a phone only when free at Home. If both are busy, stop and report. Never close another app to obtain the device.
+3. On a free phone, recover the exact installed candidate by the signed hashes above, capture the failed-state hierarchy with synthetic input, and confirm/fix only the selector root cause. The read-only selector agent made no edits.
+4. After any code or Android configuration change: run full required CI, inspect the actual APK notices/permissions and signed payloads, then cold-start and complete the affected journeys on both phones. Return Home and restore settings after each session.
+5. Run the explicit opt-in video probe using only the pinned local assets and private clip manifest. Keep raw results private; report aggregate diagnostics and limitations. Do not turn a passing test into an accuracy claim or activate recognition before its gates are met.
+
+Local detailed evidence, APKs, private model/video assets and receipts are under `C:\sign_to_speak\recognition-evidence-20261024`, `C:\sign_to_speak\models` and `C:\sign_to_speak\private-benchmarks`. Those private research assets are not GitHub inputs. No installation recommendation or commercial release is made.

@@ -1,0 +1,25 @@
+
+com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest:
+Error in typedInputValidatesPlaysCompletesAndBackgroundClearsDraft(com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest):
+java.lang.AssertionError: Clickable actual React control: Speak typed text
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertNotNull(Assert.java:713)
+	at com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest.tap(PhoneTypedSpeechIntegrationTest.java:170)
+	at com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest.typedInputValidatesPlaysCompletesAndBackgroundClearsDraft(PhoneTypedSpeechIntegrationTest.java:75)
+.
+
+Time: 26.524
+There was 1 failure:
+1) typedInputValidatesPlaysCompletesAndBackgroundClearsDraft(com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest)
+java.lang.AssertionError: Clickable actual React control: Speak typed text
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertNotNull(Assert.java:713)
+	at com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest.tap(PhoneTypedSpeechIntegrationTest.java:170)
+	at com.xmilo_at_your_side.sign_to_speak.PhoneTypedSpeechIntegrationTest.typedInputValidatesPlaysCompletesAndBackgroundClearsDraft(PhoneTypedSpeechIntegrationTest.java:75)
+
+FAILURES!!!
+Tests run: 2,  Failures: 1
+
+
