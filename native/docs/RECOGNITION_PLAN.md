@@ -1,5 +1,7 @@
 # Recognition, translation and customer flow
 
+The [commercial readiness plan](COMMERCIAL_READINESS_PLAN.md) is the current delivery roadmap and release gate list. This document retains the detailed recognition research contracts and provenance.
+
 ## Approved scope and preserved foundation
 
 Work continues from `cbdd53df5dd53b9ecaa80c4cdc2d30df2146f918`, not the historical Next.js prototype or the unrecovered 477-file candidate. An exact Git archive is retained locally with SHA256 `674b518dc7b297301f4dfc27539de93b3ab8c1f5ee5022cf6b744ae0cd5c1a25`.
@@ -11,7 +13,7 @@ Evaluation uses existing annotated signing videos. Recruiting Deaf testers is no
 ## Current implementation boundaries
 
 - CameraX still provides preview only. No analyzer, tracker or sign recognizer is connected to the customer UI.
-- The candidate adds explicit typed text review, Speak, Stop and Clear through the existing native Flite backend. This is manual text-to-speech, not recognition or translation. Final CI and exact-artifact phone verification are separate gates.
+- The candidate adds explicit typed text review, Speak, Stop and Clear through the existing native Flite backend. This is manual text-to-speech, not recognition or translation. The current typed-speech/camera QA checkpoint is recorded in the [two-phone evidence](../../qa-artifacts/rear-camera-20261025/evidence.json). Voice quality and full release acceptance remain separate gates.
 - Speech accepts nonblank printable ASCII up to 256 characters; unsupported text is rejected visibly. No silent truncation or spelling substitution is permitted. Native synthesis also bounds generated audio.
 - Speech and camera stop on Back, leaving the screen or backgrounding. Draft text is cleared on leaving/backgrounding; it is not saved or logged. Cleanup failures latch and require reopening rather than silently retrying.
 - Customer microphone captions and continuous ASL translation remain absent.
@@ -44,7 +46,7 @@ Add ImageAnalysis to the existing CameraX owner only after the selected tracker/
 
 The first opt-in phone probe compiled, and all 123 normal Android tests passed at source `2678f22c95691ea5befd25aae85b3101054f8637`, but [CI 40140649088](https://github.com/Hatsunama/sign-to-speak/actions/runs/40140649088) correctly failed the final instrumentation APK audit. Published MediaPipe `tasks-vision:1.1.1` pulls `tasks-core:1.1.1`, whose published logger factory initializes DataTransport. The merged test manifest contained INTERNET, ACCESS_NETWORK_STATE and transport services/receiver. The production app manifest passed its no-network gate. No phone recognition result exists.
 
-Removing permissions or excluding transport while retaining that factory would hide or break the dependency. The official source at commit `50505c8312c7eacb1bd411cecdc4cc9fd08d53cb` instead generates `TasksStatsDummyLogger` by default. A bounded hosted trial will build that source variant, retaining the exact published native library and notices. It must pass artifact/class/dependency inspection, the unchanged actual-APK network gate and physical execution before adoption. Source configuration alone is insufficient evidence. No binary factory patch or reflective constructor bypass is acceptable.
+Removing permissions or excluding transport while retaining that factory would hide or break the dependency. The official source at commit `50505c8312c7eacb1bd411cecdc4cc9fd08d53cb` instead generates `TasksStatsDummyLogger` by default. That source-built variant is now pinned for QA instrumentation, retaining the published native library and notices. [Source rebuild 40146406354](https://github.com/Hatsunama/sign-to-speak/actions/runs/40146406354) completed successfully. See the [vendored SDK inventory](../vendor/mediapipe-offline/README.md); production tracker execution and model inference remain unverified. It must pass artifact/class/dependency inspection, the unchanged actual-APK network gate and physical execution before adoption. Source configuration alone is insufficient evidence. No binary factory patch or reflective constructor bypass is acceptable.
 
 The instrumentation audit now also rejects unplanned services, receivers and providers even if they request no additional permission. Three injected-component cases failed before the guard repair. This is an artifact-audit repair; it does not establish that all possible SDK behavior has been inspected.
 

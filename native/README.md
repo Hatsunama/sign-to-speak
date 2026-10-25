@@ -2,7 +2,7 @@
 
 The current candidate adds reviewed typed text to the existing local Flite speech backend while preserving the Hatsu renderer and original intro/camera arrangement. Camera recognition, continuous ASL translation and customer microphone captions are still absent. The recorded-video tracker/model probe is opt-in instrumentation research, not an application feature.
 
-See [the current phase plan](docs/RECOGNITION_PLAN.md) for boundaries and acceptance gates. New customer-flow phone verification is pending; historical results below apply only to their named artifacts. Production release remains blocked.
+See the [commercial readiness plan](docs/COMMERCIAL_READINESS_PLAN.md) for the full phase sequence, dependencies and exit gates, and the [recognition research plan](docs/RECOGNITION_PLAN.md) for model contracts. Rear-default camera switching and typed-speech QA passed on both phones at the [current exact-artifact checkpoint](../qa-artifacts/rear-camera-20261025/evidence.json). Historical results below apply only to their named artifacts. Production release remains blocked.
 
 ## Historical foundation checkpoint
 
