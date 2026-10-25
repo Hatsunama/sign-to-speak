@@ -45,6 +45,7 @@ public final class PhonePreviewIntegrationTest {
     private static final String LIVE = "Live preview only. Recognition: unsupported.";
     private static final long STREAM_WAIT_MS = 20000;
     private static final long SCROLL_STABLE_MS = 400;
+    private static final int TARGET_SCROLL_SPEED_PX_PER_SEC = 200;
     private static final String QA_LOG = "PhonePreviewQA";
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
@@ -263,73 +264,106 @@ public final class PhonePreviewIntegrationTest {
         int movementResets = 0;
         boolean downward = true;
         String last = "label absent";
+        String lastGesture = "none";
         while (SystemClock.elapsedRealtime() < end) {
             UiObject2 text = device.findObject(By.pkg(QA_PACKAGE).text(label));
             if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
             UiObject2 button = text;
             while (button != null && !button.isClickable()) button = button.getParent();
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (button != null && scroll != null) {
-                Rect visible = button.getVisibleBounds();
-                Rect viewport = scroll.getVisibleBounds();
-                Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
-                ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-                last = "clickable=" + button.isClickable() + ",enabled=" + button.isEnabled()
-                        + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
-                        + ",scrollViewport=" + viewport + ",screen=" + screen;
-                if (fullyVisible(button, visible, viewport, screen, nativeBounds)) {
-                    if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
-                    long now = SystemClock.elapsedRealtime();
-                    if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
-                            || !nativeBounds.full.equals(lastFull))) movementResets++;
-                    if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
-                            || !nativeBounds.full.equals(lastFull)) stableSince = now;
-                    lastScrollY = nativeBounds.scrollY;
-                    lastFull = new Rect(nativeBounds.full);
-                    if (now - stableSince >= SCROLL_STABLE_MS) {
-                        if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
-                                + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
-                                + ",fixedLabels=" + fixedUiLabels());
-                        // Re-read the accessibility node and native geometry immediately before the tap.
-                        UiObject2 fresh = device.findObject(By.pkg(QA_PACKAGE).text(label));
-                        if (fresh == null) fresh = device.findObject(By.pkg(QA_PACKAGE).desc(label));
-                        while (fresh != null && !fresh.isClickable()) fresh = fresh.getParent();
-                        ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-                        if (fresh != null && latest != null && latest.scrollY == lastScrollY
-                                && latest.full.equals(lastFull)
-                                && fullyVisible(fresh, fresh.getVisibleBounds(), viewport, screen, latest)) {
-                            Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
-                                    + ",phase=settled,label=" + label + ",firstFullyVisible="
-                                    + firstFullyVisible + ",final=" + latest
-                                    + ",movementResets=" + movementResets);
-                            return fresh;
-                        }
-                        stableSince = -1;
+            Rect viewport = scroll == null ? null : scroll.getVisibleBounds();
+            Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
+            ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+            Rect visible = button == null ? null : button.getVisibleBounds();
+            boolean nativeVisible = nativeFullyVisible(nativeBounds, viewport, screen);
+            boolean ready = button != null && nativeVisible
+                    && fullyVisible(button, visible, viewport, screen, nativeBounds);
+            last = "nativeVisible=" + nativeVisible + ",UIAready=" + ready
+                    + ",clickable=" + (button != null && button.isClickable())
+                    + ",enabled=" + (button != null && button.isEnabled())
+                    + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
+                    + ",scrollViewport=" + viewport + ",screen=" + screen
+                    + ",stableForMs=" + (stableSince < 0 ? "waiting" :
+                    SystemClock.elapsedRealtime() - stableSince)
+                    + ",lastGesture=" + lastGesture;
+            if (ready) {
+                if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
+                long now = SystemClock.elapsedRealtime();
+                if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
+                        || !nativeBounds.full.equals(lastFull))) movementResets++;
+                if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
+                        || !nativeBounds.full.equals(lastFull)) stableSince = now;
+                lastScrollY = nativeBounds.scrollY;
+                lastFull = new Rect(nativeBounds.full);
+                if (now - stableSince >= SCROLL_STABLE_MS) {
+                    if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
+                            + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
+                            + ",fixedLabels=" + fixedUiLabels());
+                    // Re-read accessibility, native geometry and viewport immediately before the tap.
+                    UiObject2 fresh = device.findObject(By.pkg(QA_PACKAGE).text(label));
+                    if (fresh == null) fresh = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+                    while (fresh != null && !fresh.isClickable()) fresh = fresh.getParent();
+                    UiObject2 freshScroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
+                    Rect freshViewport = freshScroll == null ? null : freshScroll.getVisibleBounds();
+                    Rect freshScreen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
+                    ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+                    if (fresh != null && freshViewport != null && latest != null
+                            && latest.scrollY == lastScrollY && latest.full.equals(lastFull)
+                            && fullyVisible(fresh, fresh.getVisibleBounds(),
+                                    freshViewport, freshScreen, latest)) {
+                        Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
+                                + ",phase=settled,label=" + label + ",firstFullyVisible="
+                                + firstFullyVisible + ",final=" + latest
+                                + ",movementResets=" + movementResets);
+                        return fresh;
                     }
-                    SystemClock.sleep(50);
-                    continue;
+                    stableSince = -1;
+                    last = "fresh UIA/native/viewport check changed; previous=" + last
+                            + ",freshVisible=" + (fresh == null ? null : fresh.getVisibleBounds())
+                            + ",freshNative=" + latest + ",freshViewport=" + freshViewport;
                 }
-            } else {
-                last = "label=" + (text != null) + ",clickableAncestor=" + (button != null)
-                        + ",scroll=" + (scroll != null);
+                SystemClock.sleep(50);
+                continue;
             }
             if (stableSince >= 0) movementResets++;
             stableSince = -1;
             lastFull = null;
-            if (scroll == null) SystemClock.sleep(100);
-            else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+            // Native geometry can settle before UI Automator exposes the label. Keep the
+            // already visible target still while accessibility catches up.
+            if (nativeVisible || scroll == null) {
+                SystemClock.sleep(50);
+                continue;
+            }
+            Direction direction;
+            if (nativeBounds != null && nativeBounds.full.top < viewport.top) {
+                direction = Direction.UP;
+            } else if (nativeBounds != null && nativeBounds.full.bottom > viewport.bottom) {
+                direction = Direction.DOWN;
+            } else {
+                direction = downward ? Direction.DOWN : Direction.UP;
+            }
+            boolean moved = scroll.scroll(direction, 0.20f, TARGET_SCROLL_SPEED_PX_PER_SEC);
+            lastGesture = direction + "(20%,moved=" + moved + ",target=" + nativeBounds + ")";
+            if (!moved) downward = direction == Direction.UP;
+            else downward = direction == Direction.DOWN;
         }
-        throw new AssertionError("QA button '" + label + "' never fully visible and scroll-stable; " + last
+        throw new AssertionError("QA button '" + label + "' did not become accessible, fully visible and scroll-stable; " + last
+                + "; movementResets=" + movementResets + "; lastGesture=" + lastGesture
                 + "; fixed QA labels=" + fixedUiLabels() + "; " + snapshot());
     }
 
-    private static boolean fullyVisible(UiObject2 button, Rect visible, Rect viewport, Rect screen,
-            ButtonGeometry nativeBounds) {
-        return button.isEnabled() && nativeBounds != null && nativeBounds.scrollY >= 0
-                && !visible.isEmpty() && visible.equals(nativeBounds.full)
+    private static boolean nativeFullyVisible(ButtonGeometry nativeBounds, Rect viewport, Rect screen) {
+        return nativeBounds != null && nativeBounds.scrollY >= 0 && !nativeBounds.full.isEmpty()
+                && viewport != null && !viewport.isEmpty()
                 && nativeBounds.localVisible.equals(new Rect(0, 0, nativeBounds.full.width(),
                         nativeBounds.full.height()))
                 && viewport.contains(nativeBounds.full) && screen.contains(nativeBounds.full);
+    }
+    private static boolean fullyVisible(UiObject2 button, Rect visible, Rect viewport, Rect screen,
+            ButtonGeometry nativeBounds) {
+        return button.isEnabled() && visible != null && !visible.isEmpty()
+                && nativeFullyVisible(nativeBounds, viewport, screen)
+                && visible.equals(nativeBounds.full);
     }
 
     private void tapActionButton(String label) throws Exception {
