@@ -1,0 +1,7 @@
+Starting: Intent { cmp=com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity }
+Status: ok
+LaunchState: COLD
+Activity: com.xmilo_at_your_side.sign_to_speak.qa/com.xmilo_at_your_side.sign_to_speak.MainActivity
+TotalTime: 311
+WaitTime: 322
+Complete

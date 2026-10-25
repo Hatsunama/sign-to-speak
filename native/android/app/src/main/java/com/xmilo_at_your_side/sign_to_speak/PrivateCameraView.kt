@@ -28,6 +28,11 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
     private var provider: ProcessCameraProvider? = null
     private var preview: Preview? = null
     private val lease = PreviewLease()
+    private enum class Lens(val selector: CameraSelector, val unavailableStatus: String) {
+        BACK(CameraSelector.DEFAULT_BACK_CAMERA, "rear_camera_unavailable"),
+        FRONT(CameraSelector.DEFAULT_FRONT_CAMERA, "front_camera_unavailable"),
+    }
+    private var selectedLens: Lens? = Lens.BACK
     private var requested = false
     private var observing = false
     private var disposed = false
@@ -60,6 +65,40 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         addView(previewView, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT))
     }
 
+    fun setLensFacing(lensFacing: String?) {
+        if (disposed) return
+        val next = when (lensFacing) {
+            "back" -> Lens.BACK
+            "front" -> Lens.FRONT
+            else -> null
+        }
+        if (next == selectedLens) return
+        val wasRequested = requested
+        // Invalidate the previous lease and release its owned Preview before a new bind.
+        val released = if (wasRequested) stop() else true
+        selectedLens = next
+        if (next == null) {
+            if (released) {
+                if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) reportCleanupFailure()
+                else status("camera_unavailable")
+            }
+            return
+        }
+        if (!wasRequested || !released || disposed) return
+        registerWithActivity()
+        if (cameraActivity?.capturePrivacyReady != true ||
+            cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0 ||
+            !isAttachedToWindow) {
+            if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) reportCleanupFailure()
+            else if (cameraActivity?.capturePrivacyReady != true) status("capture_privacy_unavailable")
+            return
+        }
+        val owner = reactContext.currentActivity as? LifecycleOwner
+        if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
+        requested = true
+        start()
+    }
+
     fun setActive(active: Boolean) {
         if (!active) { stop(); return }
         if (disposed || requested) return
@@ -72,11 +111,27 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
         if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
             reportCleanupFailure(); return
         }
+        if (selectedLens == null) { status("camera_unavailable"); return }
         requested = true
         if (isAttachedToWindow) start()
     }
 
     private fun start() {
+        if (!requested || disposed || !isAttachedToWindow) return
+        registerWithActivity()
+        if (cameraActivity?.capturePrivacyReady != true) {
+            if (stop()) status("capture_privacy_unavailable")
+            return
+        }
+        if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+            if (stop()) reportCleanupFailure()
+            return
+        }
+        val lens = selectedLens
+        if (lens == null) {
+            if (stop()) status("camera_unavailable")
+            return
+        }
         val owner = reactContext.currentActivity as? LifecycleOwner
         if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
             if (stop()) status("stopped"); return
@@ -90,11 +145,22 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
             future.addListener({
                 if (!requested || disposed || !isAttachedToWindow || !lease.isCurrent(token) ||
                     !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return@addListener
+                // A different view may have recorded an Activity-wide cleanup fault
+                // while this request was waiting for its provider.
+                registerWithActivity()
+                if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+                    if (stop()) reportCleanupFailure()
+                    return@addListener
+                }
+                if (cameraActivity?.capturePrivacyReady != true) {
+                    if (stop()) status("capture_privacy_unavailable")
+                    return@addListener
+                }
                 try {
                     val cameraProvider = future.get()
-                    val camera = CameraSelector.DEFAULT_FRONT_CAMERA
+                    val camera = lens.selector
                     if (!cameraProvider.hasCamera(camera)) {
-                        if (stop()) status("front_camera_unavailable"); return@addListener
+                        if (stop()) status(lens.unavailableStatus); return@addListener
                     }
                     val hadRetiredStream = previewView.previewStreamState.value == PreviewView.StreamState.STREAMING
                     val useCase = Preview.Builder().build()

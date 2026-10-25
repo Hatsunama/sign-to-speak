@@ -1,0 +1,1022 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" tests="96" skipped="0" failures="24" errors="0" timestamp="2026-10-25T21:21:50.471Z" hostname="runnervmtai0g" time="11.365">
+  <properties/>
+  <testcase name="backWithNoCameraStillReachesReact[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="2.76"/>
+  <testcase name="lensChangeAfterPauseAndResumeDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.075">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterPauseAndResumeDoesNotRestart(NativeBackPrivacyTest.java:842)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="asynchronousCameraErrorCancelsCurrentLeaseAndRemovesObservers[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.08"/>
+  <testcase name="repeatedBackIsIdempotentAndResumeDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.044"/>
+  <testcase name="cameraErrorCleanupFailureHasPriorityAndIsCountedOnce[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.042"/>
+  <testcase name="synchronousProviderAcquisitionFailureCancelsAndAllowsExplicitRetry[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.039"/>
+  <testcase name="latePreviewTextureGetsLaidOutWithoutAnotherFabricLayout[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.044"/>
+  <testcase name="sharedCleanupFailureOnManagerDropFinalizesAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.052"/>
+  <testcase name="pendingLatePreviewLayoutCancelsOnDetachAndWorksAfterReattach[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.038"/>
+  <testcase name="cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.041"/>
+  <testcase name="defaultRearUnavailableNeverFallsBackToFront[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.036">
+    <failure message="java.lang.AssertionError: Native camera request must be canceled synchronously" type="java.lang.AssertionError">java.lang.AssertionError: Native camera request must be canceled synchronously
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertFalse(Assert.java:65)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.assertStopped(NativeBackPrivacyTest.java:1031)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultRearUnavailableNeverFallsBackToFront(NativeBackPrivacyTest.java:787)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="retiredCachedStreamingCannotClaimNewBindingIsLive[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.039"/>
+  <testcase name="backBeforeAttachmentCancelsQueuedStart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.036"/>
+  <testcase name="lateActiveOnDisposedViewNeverEmitsPrivacyFailure[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.035"/>
+  <testcase name="bindingIdleDoesNotClaimStreamingAndCurrentStreamingDoes[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.049"/>
+  <testcase name="surfaceDetachFailureStillAttemptsOwnedUnbind[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.082"/>
+  <testcase name="synchronousProviderListenerFailureCancelsAndAllowsExplicitRetry[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.069"/>
+  <testcase name="selectedLensUnavailableNeverFallsBackToOtherLens[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.032">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectedLensUnavailableNeverFallsBackToOtherLens(NativeBackPrivacyTest.java:770)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="backUnbindsOwnedPreviewBeforeReactNavigation[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.031"/>
+  <testcase name="lensChangeAfterBackDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.052">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterBackDoesNotRestart(NativeBackPrivacyTest.java:828)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="lateOldStreamAndErrorCallbacksCannotAffectNewLease[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.048"/>
+  <testcase name="explicitFrontSelectionBeforeStartBindsFront[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.043">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.explicitFrontSelectionBeforeStartBindsFront(NativeBackPrivacyTest.java:701)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="initialIdleCanWaitButIdleAfterStreamingStopsTruthfully[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.035"/>
+  <testcase name="defaultCameraBindsRearAfterActualProviderAcquisition[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.072">
+    <failure message="org.mockito.exceptions.verification.junit.ArgumentsAreDifferent: &#10;Argument(s) are different! Wanted:&#10;processCameraProvider.hasCamera(&#10;    androidx.camera.core.CameraSelector@1c0d7cb&#10;);&#10;-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)&#10;Actual invocations have different arguments:&#10;processCameraProvider.hasCamera(&#10;    androidx.camera.core.CameraSelector@6976a11c&#10;);&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)&#10;processCameraProvider.bindToLifecycle(&#10;    com.xmilo_at_your_side.sign_to_speak.MainActivity@5a34d62c,&#10;    androidx.camera.core.CameraSelector@6976a11c,&#10;    Preview:androidx.camera.core.Preview-a3e4c6c6-3449-474c-a47f-9c365b1c7855&#10;);&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;" type="org.mockito.exceptions.verification.junit.ArgumentsAreDifferent">Argument(s) are different! Wanted:
+processCameraProvider.hasCamera(
+    androidx.camera.core.CameraSelector@1c0d7cb
+);
+-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)
+Actual invocations have different arguments:
+processCameraProvider.hasCamera(
+    androidx.camera.core.CameraSelector@6976a11c
+);
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)
+processCameraProvider.bindToLifecycle(
+    com.xmilo_at_your_side.sign_to_speak.MainActivity@5a34d62c,
+    androidx.camera.core.CameraSelector@6976a11c,
+    Preview:androidx.camera.core.Preview-a3e4c6c6-3449-474c-a47f-9c365b1c7855
+);
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+
+	at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultCameraBindsRearAfterActualProviderAcquisition(NativeBackPrivacyTest.java:696)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="sharedCleanupFailureOnDirectDisposeIsAccountedAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.037"/>
+  <testcase name="sharedCleanupFailureOnHostDestroyIsAccountedAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.033"/>
+  <testcase name="separateActivitiesCannotCancelEachOthersViews[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.039"/>
+  <testcase name="nativeCameraRefusesPolicyFailureEvenIfJavaScriptRequestsStart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.03"/>
+  <testcase name="lensChangeAfterStopDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.031">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterStopDoesNotRestart(NativeBackPrivacyTest.java:814)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="backInvalidatesPendingProviderBeforeReactNavigation[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.051"/>
+  <testcase name="lateActiveOnDisposedViewNeverReregisters[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.028"/>
+  <testcase name="acquisitionFailureAfterStopCannotPublishStaleFailure[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.028"/>
+  <testcase name="hostPauseCancelsPendingAcquisitionAndResumeDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.028"/>
+  <testcase name="sharedCleanupFailureOnHostPauseIsAccountedAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.027"/>
+  <testcase name="hostDestroyCancelsPendingAcquisitionAndRejectsRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.046"/>
+  <testcase name="activeFrontPreviewCanSwitchBack[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.036">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.activeFrontPreviewCanSwitchBack(NativeBackPrivacyTest.java:756)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="detachUnbindsAndReattachDoesNotRestart[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.063"/>
+  <testcase name="failedCleanupDuringLensChangeBlocksRebind[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.026">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.failedCleanupDuringLensChangeBlocksRebind(NativeBackPrivacyTest.java:800)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="queuedLatePreviewLayoutUsesCurrentHostBounds[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.028"/>
+  <testcase name="cleanupFailureOnBackStillCancelsEveryViewAndDelegates[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.031"/>
+  <testcase name="pendingNewViewCannotBindAfterRetiredViewCleanupFails[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.029">
+    <failure message="org.mockito.exceptions.verification.TooManyActualInvocations: &#10;processCameraProvider.bindToLifecycle(&#10;    &lt;any androidx.lifecycle.LifecycleOwner&gt;,&#10;    &lt;any androidx.camera.core.CameraSelector&gt;,&#10;    &lt;any androidx.camera.core.Preview&gt;&#10;);&#10;Wanted 1 time:&#10;-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)&#10;But was 2 times:&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;&#10;" type="org.mockito.exceptions.verification.TooManyActualInvocations">org.mockito.exceptions.verification.TooManyActualInvocations: 
+processCameraProvider.bindToLifecycle(
+    &lt;any androidx.lifecycle.LifecycleOwner&gt;,
+    &lt;any androidx.camera.core.CameraSelector&gt;,
+    &lt;any androidx.camera.core.Preview&gt;
+);
+Wanted 1 time:
+-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)
+But was 2 times:
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+
+
+	at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingNewViewCannotBindAfterRetiredViewCleanupFails(NativeBackPrivacyTest.java:627)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+</failure>
+  </testcase>
+  <testcase name="activeLensChangeReleasesOldPreviewAndIgnoresRetiredObservers[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.045">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.activeLensChangeReleasesOldPreviewAndIgnoresRetiredObservers(NativeBackPrivacyTest.java:738)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="pendingLensChangeInvalidatesOldProviderCallback[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.031">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingLensChangeInvalidatesOldProviderCallback(NativeBackPrivacyTest.java:718)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="sharedCleanupFailureDuringBindErrorRetainsFaultStatus[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.038"/>
+  <testcase name="sharedCleanupFailureOnActualDetachFinalizesAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.033"/>
+  <testcase name="sharedCleanupFailureOnInactivePropIsAccountedAndBlocksFreshView[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.037"/>
+  <testcase name="actualActivityDestroyCancelsPendingWithoutReactLifecycleDelivery[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.025"/>
+  <testcase name="disposalIsIdempotentAndRejectsFutureStarts[28]" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.023"/>
+  <testcase name="backWithNoCameraStillReachesReact" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="3.956"/>
+  <testcase name="lensChangeAfterPauseAndResumeDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.09">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterPauseAndResumeDoesNotRestart(NativeBackPrivacyTest.java:842)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="asynchronousCameraErrorCancelsCurrentLeaseAndRemovesObservers" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.149"/>
+  <testcase name="repeatedBackIsIdempotentAndResumeDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.051"/>
+  <testcase name="cameraErrorCleanupFailureHasPriorityAndIsCountedOnce" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.049"/>
+  <testcase name="synchronousProviderAcquisitionFailureCancelsAndAllowsExplicitRetry" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.046"/>
+  <testcase name="latePreviewTextureGetsLaidOutWithoutAnotherFabricLayout" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.059"/>
+  <testcase name="sharedCleanupFailureOnManagerDropFinalizesAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.047"/>
+  <testcase name="pendingLatePreviewLayoutCancelsOnDetachAndWorksAfterReattach" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.04"/>
+  <testcase name="cleanupFailureOnDestroyStillUnregistersEveryViewAndDelegates" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.043"/>
+  <testcase name="defaultRearUnavailableNeverFallsBackToFront" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.041">
+    <failure message="java.lang.AssertionError: Native camera request must be canceled synchronously" type="java.lang.AssertionError">java.lang.AssertionError: Native camera request must be canceled synchronously
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.assertTrue(Assert.java:42)
+	at org.junit.Assert.assertFalse(Assert.java:65)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.assertStopped(NativeBackPrivacyTest.java:1031)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultRearUnavailableNeverFallsBackToFront(NativeBackPrivacyTest.java:787)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+</failure>
+  </testcase>
+  <testcase name="retiredCachedStreamingCannotClaimNewBindingIsLive" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.041"/>
+  <testcase name="backBeforeAttachmentCancelsQueuedStart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.043"/>
+  <testcase name="lateActiveOnDisposedViewNeverEmitsPrivacyFailure" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.055"/>
+  <testcase name="bindingIdleDoesNotClaimStreamingAndCurrentStreamingDoes" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.041"/>
+  <testcase name="surfaceDetachFailureStillAttemptsOwnedUnbind" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.114"/>
+  <testcase name="synchronousProviderListenerFailureCancelsAndAllowsExplicitRetry" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.098"/>
+  <testcase name="selectedLensUnavailableNeverFallsBackToOtherLens" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.036">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectedLensUnavailableNeverFallsBackToOtherLens(NativeBackPrivacyTest.java:770)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="backUnbindsOwnedPreviewBeforeReactNavigation" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.087"/>
+  <testcase name="lensChangeAfterBackDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.07">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterBackDoesNotRestart(NativeBackPrivacyTest.java:828)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="lateOldStreamAndErrorCallbacksCannotAffectNewLease" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.067"/>
+  <testcase name="explicitFrontSelectionBeforeStartBindsFront" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.069">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.explicitFrontSelectionBeforeStartBindsFront(NativeBackPrivacyTest.java:701)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="initialIdleCanWaitButIdleAfterStreamingStopsTruthfully" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.049"/>
+  <testcase name="defaultCameraBindsRearAfterActualProviderAcquisition" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.051">
+    <failure message="org.mockito.exceptions.verification.junit.ArgumentsAreDifferent: &#10;Argument(s) are different! Wanted:&#10;processCameraProvider.hasCamera(&#10;    androidx.camera.core.CameraSelector@7e91269b&#10;);&#10;-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)&#10;Actual invocations have different arguments:&#10;processCameraProvider.hasCamera(&#10;    androidx.camera.core.CameraSelector@4d045888&#10;);&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)&#10;processCameraProvider.bindToLifecycle(&#10;    com.xmilo_at_your_side.sign_to_speak.MainActivity@3aaa7c2,&#10;    androidx.camera.core.CameraSelector@4d045888,&#10;    Preview:androidx.camera.core.Preview-93725753-352f-4700-bf76-66d8f2ace2d2&#10;);&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;" type="org.mockito.exceptions.verification.junit.ArgumentsAreDifferent">Argument(s) are different! Wanted:
+processCameraProvider.hasCamera(
+    androidx.camera.core.CameraSelector@7e91269b
+);
+-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)
+Actual invocations have different arguments:
+processCameraProvider.hasCamera(
+    androidx.camera.core.CameraSelector@4d045888
+);
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)
+processCameraProvider.bindToLifecycle(
+    com.xmilo_at_your_side.sign_to_speak.MainActivity@3aaa7c2,
+    androidx.camera.core.CameraSelector@4d045888,
+    Preview:androidx.camera.core.Preview-93725753-352f-4700-bf76-66d8f2ace2d2
+);
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+
+	at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultCameraBindsRearAfterActualProviderAcquisition(NativeBackPrivacyTest.java:696)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+</failure>
+  </testcase>
+  <testcase name="sharedCleanupFailureOnDirectDisposeIsAccountedAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.048"/>
+  <testcase name="sharedCleanupFailureOnHostDestroyIsAccountedAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.037"/>
+  <testcase name="separateActivitiesCannotCancelEachOthersViews" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.05"/>
+  <testcase name="nativeCameraRefusesPolicyFailureEvenIfJavaScriptRequestsStart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.037"/>
+  <testcase name="lensChangeAfterStopDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.04">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.lensChangeAfterStopDoesNotRestart(NativeBackPrivacyTest.java:814)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="backInvalidatesPendingProviderBeforeReactNavigation" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.037"/>
+  <testcase name="lateActiveOnDisposedViewNeverReregisters" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.034"/>
+  <testcase name="acquisitionFailureAfterStopCannotPublishStaleFailure" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.039"/>
+  <testcase name="hostPauseCancelsPendingAcquisitionAndResumeDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.03"/>
+  <testcase name="sharedCleanupFailureOnHostPauseIsAccountedAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.027"/>
+  <testcase name="hostDestroyCancelsPendingAcquisitionAndRejectsRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.032"/>
+  <testcase name="activeFrontPreviewCanSwitchBack" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.026">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.activeFrontPreviewCanSwitchBack(NativeBackPrivacyTest.java:756)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="detachUnbindsAndReattachDoesNotRestart" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.031"/>
+  <testcase name="failedCleanupDuringLensChangeBlocksRebind" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.029">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.failedCleanupDuringLensChangeBlocksRebind(NativeBackPrivacyTest.java:800)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="queuedLatePreviewLayoutUsesCurrentHostBounds" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.034"/>
+  <testcase name="cleanupFailureOnBackStillCancelsEveryViewAndDelegates" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.056"/>
+  <testcase name="pendingNewViewCannotBindAfterRetiredViewCleanupFails" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.035">
+    <failure message="org.mockito.exceptions.verification.TooManyActualInvocations: &#10;processCameraProvider.bindToLifecycle(&#10;    &lt;any androidx.lifecycle.LifecycleOwner&gt;,&#10;    &lt;any androidx.camera.core.CameraSelector&gt;,&#10;    &lt;any androidx.camera.core.Preview&gt;&#10;);&#10;Wanted 1 time:&#10;-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)&#10;But was 2 times:&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)&#10;&#10;" type="org.mockito.exceptions.verification.TooManyActualInvocations">org.mockito.exceptions.verification.TooManyActualInvocations: 
+processCameraProvider.bindToLifecycle(
+    &lt;any androidx.lifecycle.LifecycleOwner&gt;,
+    &lt;any androidx.camera.core.CameraSelector&gt;,
+    &lt;any androidx.camera.core.Preview&gt;
+);
+Wanted 1 time:
+-&gt; at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)
+But was 2 times:
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+-&gt; at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)
+
+
+	at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingNewViewCannotBindAfterRetiredViewCleanupFails(NativeBackPrivacyTest.java:627)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+</failure>
+  </testcase>
+  <testcase name="activeLensChangeReleasesOldPreviewAndIgnoresRetiredObservers" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.04">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.activeLensChangeReleasesOldPreviewAndIgnoresRetiredObservers(NativeBackPrivacyTest.java:738)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="pendingLensChangeInvalidatesOldProviderCallback" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.041">
+    <failure message="java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection" type="java.lang.AssertionError">java.lang.AssertionError: Native view must expose setLensFacing(String) for front/rear selection
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1012)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingLensChangeInvalidatesOldProviderCallback(NativeBackPrivacyTest.java:718)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)
+	at org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)
+	at org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)
+	at org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)
+	at org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)
+	at org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)
+	at org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)
+	at org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)
+	at org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)
+	at org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)
+	at org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)
+	at org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)
+	at org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)
+	at org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)
+	at org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)
+	at org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)
+	at java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+Caused by: java.lang.NoSuchMethodException: com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.setLensFacing(java.lang.String)
+	at java.base/java.lang.Class.getMethod(Class.java:2397)
+	at com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.selectLens(NativeBackPrivacyTest.java:1010)
+	... 26 more
+</failure>
+  </testcase>
+  <testcase name="sharedCleanupFailureDuringBindErrorRetainsFaultStatus" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.06"/>
+  <testcase name="sharedCleanupFailureOnActualDetachFinalizesAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.042"/>
+  <testcase name="sharedCleanupFailureOnInactivePropIsAccountedAndBlocksFreshView" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.045"/>
+  <testcase name="actualActivityDestroyCancelsPendingWithoutReactLifecycleDelivery" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.044"/>
+  <testcase name="disposalIsIdempotentAndRejectsFutureStarts" classname="com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest" time="0.028"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build as described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org.mockito/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (/tmp/byteBuddyAgent6197006690895087573.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+Invalid ID 0x00000000.
+]]></system-err>
+</testsuite>

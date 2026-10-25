@@ -17,7 +17,10 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
+import androidx.camera.core.UseCase;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.lifecycle.Lifecycle;
@@ -28,6 +31,7 @@ import androidx.test.uiautomator.Direction;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -42,6 +46,8 @@ public final class PhonePreviewIntegrationTest {
     private static final String QA_PACKAGE = "com.xmilo_at_your_side.sign_to_speak.qa";
     private static final String START = "Start local preview";
     private static final String STOP = "Stop camera";
+    private static final String SWITCH_TO_FRONT = "Switch to front camera";
+    private static final String SWITCH_TO_REAR = "Switch to rear camera";
     private static final String LIVE = "Live preview only. Recognition: unsupported.";
     private static final long STREAM_WAIT_MS = 20000;
     private static final long SCROLL_STABLE_MS = 400;
@@ -101,6 +107,89 @@ public final class PhonePreviewIntegrationTest {
         await("Launcher resumes Activity", 10000, () -> snapshot().resumed);
         findActionButton(START);
         assertNoAutomaticRestart();
+    }
+
+    @Test(timeout = 210000) public void rearDefaultAndLiveLensFlipsBindTheActualRequestedCamera()
+            throws Exception {
+        assertEquals("Test only the installed QA application", QA_PACKAGE, target.getPackageName());
+        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());
+        assertTrue("Run on an ARM64 physical phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
+        assertFalse("An emulator cannot certify a physical camera", Build.FINGERPRINT.contains("generic")
+                || Build.MODEL.toLowerCase().contains("emulator"));
+        assertEquals("Grant CAMERA before the run; this test never changes permissions",
+                PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
+        driver = new PhoneActivityDriver(instrumentation);
+        activity = driver.launch();
+        assertTrue("Capture privacy must be ready before mounting Home",
+                ((MainApplication) activity.getApplication()).getCapturePrivacyReady());
+        assertCameraOff("Launch");
+
+        CameraSnapshot rear = startAndAwaitStreaming();
+        assertBoundLens("Default Start", rear, CameraSelector.LENS_FACING_BACK);
+
+        CameraSnapshot front = flipAndAwaitStreaming(SWITCH_TO_FRONT, rear,
+                CameraSelector.LENS_FACING_FRONT);
+        CameraSnapshot rearAgain = flipAndAwaitStreaming(SWITCH_TO_REAR, front,
+                CameraSelector.LENS_FACING_BACK);
+
+        tapActionButton(STOP);
+        await("Stop accepted (Start local preview rendered)", 5000,
+                () -> nativeActionRendered(START));
+        assertReleased("Stop after live flips", rearAgain);
+        assertCameraOff("After Stop");
+
+        tapActionButton(SWITCH_TO_FRONT);
+        assertCameraOff("Flip while preview is off");
+        assertNoAutomaticRestart();
+        CameraSnapshot offFlipFront = startAndAwaitStreaming();
+        assertBoundLens("Start after off-preview flip", offFlipFront,
+                CameraSelector.LENS_FACING_FRONT);
+        tapActionButton(STOP);
+        await("Final Stop accepted (Start local preview rendered)", 5000,
+                () -> nativeActionRendered(START));
+        assertReleased("Final Stop", offFlipFront);
+        assertCameraOff("Final Stop");
+    }
+
+    private CameraSnapshot flipAndAwaitStreaming(String action, CameraSnapshot previous,
+            int expectedLens) throws Exception {
+        assertStreaming("Before " + action, previous);
+        tapActionButton(action);
+        await(action + " retires old Preview binding and request", 10000, () -> onMain(() ->
+                !Boolean.TRUE.equals(field(previous.view, "requested"))
+                        && field(previous.view, "preview") == null
+                        && field(previous.view, "provider") == null
+                        && !previous.provider.isBound(previous.preview)));
+        assertEquals("No native cleanup failure after " + action, 0,
+                ((Number) onMain(() -> field(activity, "cameraCleanupFailures"))).intValue());
+        final CameraSnapshot[] streamed = new CameraSnapshot[1];
+        await(action + " binds a new physical STREAMING Preview", STREAM_WAIT_MS, () -> {
+            CameraSnapshot now = snapshot();
+            if (!now.streaming() || now.view == previous.view || now.preview == previous.preview)
+                return false;
+            streamed[0] = now;
+            return true;
+        });
+        assertStreaming("After " + action, streamed[0]);
+        assertBoundLens("After " + action, streamed[0], expectedLens);
+        return streamed[0];
+    }
+
+    private void assertBoundLens(String step, CameraSnapshot expected, int lensFacing) throws Exception {
+        CameraSnapshot current = snapshot(expected.view, expected.preview, expected.provider);
+        assertTrue(step + " requires its owned, bound STREAMING Preview: " + current,
+                current.streaming() && current.view == expected.view
+                        && current.preview == expected.preview);
+        int actual = onMain(() -> {
+            // CameraX exposes the camera bound to this UseCase for library use. Read the
+            // Preview itself, not the React selection or the camera-switch button label.
+            Method getter = UseCase.class.getDeclaredMethod("getCamera");
+            getter.setAccessible(true);
+            Camera camera = (Camera) getter.invoke(expected.preview);
+            assertNotNull(step + ": bound Preview lost its Camera", camera);
+            return camera.getCameraInfo().getLensFacing();
+        });
+        assertEquals(step + ": bound CameraInfo lens facing", lensFacing, actual);
     }
 
     private CameraSnapshot startAndAwaitStreaming() throws Exception {

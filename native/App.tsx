@@ -11,6 +11,7 @@ import {createLocalSpeech} from './src/local-speech.mjs';
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
+  lensFacing: 'back' | 'front';
   onStatus: (event: NativeSyntheticEvent<{status: string}>) => void;
 }>('PrivateCameraPreview');
 
@@ -32,6 +33,7 @@ function Home() {
   const [route, setRoute] = useState<'home' | 'thanks'>('home');
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [preview, setPreview] = useState<number | null>(null);
+  const [lensFacing, setLensFacing] = useState<'back' | 'front'>('back');
   const [requesting, setRequesting] = useState(false);
   const [cleanupFailed, setCleanupFailed] = useState(false);
   const [notice, setNotice] = useState('Camera is off.');
@@ -43,6 +45,7 @@ function Home() {
   const speechAttempt = useRef(false);
   const speechEpoch = useRef(0);
   const request = useRef<{canStart: boolean} | null>(null);
+  const cameraViewRevision = useRef(0);
   const mounted = useRef(true);
   const speech = useRef(createLocalSpeech(localSpeechBridge(), () => {
     if (!mounted.current || speechFaultRef.current) return;
@@ -198,6 +201,15 @@ function Home() {
     }
   }
 
+  function flipCamera() {
+    if (requesting || request.current || cleanupFailed || AppState.currentState !== 'active') return;
+    cameraViewRevision.current++;
+    setLensFacing(current => current === 'back' ? 'front' : 'back');
+    if (preview) setNotice('Starting local preview. Translation is unavailable.');
+  }
+
+  const renderedCameraViewRevision = cameraViewRevision.current;
+
   return <View style={styles.screen}>
     <HatsuBackground pointerEvents="none" active={foreground} style={StyleSheet.absoluteFill} />
     <SafeAreaView style={styles.safe}>
@@ -222,12 +234,14 @@ function Home() {
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>Live camera</Text>
-            {preview ? <CameraPreview active={true} style={styles.preview}
+            {preview ? <CameraPreview key={`${preview}:${renderedCameraViewRevision}`} active={true}
+              lensFacing={lensFacing} style={styles.preview}
               onStatus={({nativeEvent}) => {
                 if (!mounted.current) return;
                 // Cleanup uncertainty is Activity-wide and must latch even for
-                // a retired view. Ordinary events belong only to this preview.
-                if (nativeEvent.status !== 'camera_cleanup_failed' && !gate.isCurrent(preview)) return;
+                // a retired view. Ordinary events belong only to this view.
+                if (nativeEvent.status !== 'camera_cleanup_failed' &&
+                  (!gate.isCurrent(preview) || renderedCameraViewRevision !== cameraViewRevision.current)) return;
                 if (nativeEvent.status === 'preview_only') {
                   setNotice('Live preview only. Recognition: unsupported.');
                 } else {
@@ -235,6 +249,8 @@ function Home() {
                   if (nativeEvent.status === 'camera_cleanup_failed') setCleanupFailed(true);
                   setNotice(nativeEvent.status === 'camera_cleanup_failed'
                     ? 'Camera cleanup could not be confirmed. Fully close and reopen the app before starting again.'
+                    : nativeEvent.status === 'rear_camera_unavailable'
+                      ? 'A rear camera is not available on this device.'
                     : nativeEvent.status === 'front_camera_unavailable'
                       ? 'A front camera is not available on this device.'
                       : 'Camera stopped. Tap Start to try again.');
@@ -246,6 +262,10 @@ function Home() {
             {preview || requesting
               ? <Button onPress={stop}>Stop camera</Button>
               : <Button onPress={startPreview} disabled={cleanupFailed}>Start local preview</Button>}
+            <Button testID="camera-flip" onPress={flipCamera}
+              disabled={requesting || cleanupFailed || !foreground}>
+              {lensFacing === 'back' ? 'Switch to front camera' : 'Switch to rear camera'}
+            </Button>
             <Text style={styles.small}>Leaving this screen or putting the app in the background stops the camera. Starting again is always your choice.</Text>
           </View>
           </View>

@@ -1,0 +1,313 @@
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ mounted React Stop, navigation, Back, background and unmount cancel the real native token (220.368ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React home handles permission cancellation, native stop, local thanks and Back (71.8799ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: resume before result (26.2477ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: result before resume (20.8689ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: result before pause (36.0056ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: resume before result (31.2225ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: result before resume (31.7618ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: result before pause (32.3356ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React paused grant requires another Start (resume first: false) (34.2107ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React paused grant requires another Start (resume first: true) (23.9615ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and denied cannot restore capture eligibility (19.4831ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and never_ask_again cannot restore capture eligibility (17.2452ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and granted cannot restore capture eligibility (19.0409ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React permission error after pause stays specific and allows an explicit retry (33.5296ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React background Start cannot request permission or start capture (13.4711ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending denied outcome (11.8304ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending granted outcome (14.0995ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending error outcome (13.1648ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending denied outcome (15.5874ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending granted outcome (16.0583ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending error outcome (15.6576ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending denied outcome (27.4285ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending granted outcome (20.0741ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending error outcome (20.2555ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending denied outcome (15.7646ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending granted outcome (18.3946ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending error outcome (16.4295ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending denied outcome (23.8197ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending granted outcome (21.1804ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending error outcome (22.4742ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old denied (26.4373ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late denied (24.7427ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old granted (27.0867ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late granted (20.8977ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old error (22.445ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late error (27.563ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React ignores inactive preview status after denial and after a newer preview (35.5187ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React stale native cleanup failure still fails closed over newer permission (28.444ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React stale native cleanup failure stops a newer live preview too (25.1304ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending denied after pause (17.5769ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending granted after pause (14.247ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending error after pause (18.4013ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy missing blocks first render and lifecycle without permission requests (5.6868ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy uninitialized blocks first render and lifecycle without permission requests (3.8909ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy failed blocks first render and lifecycle without permission requests (7.3254ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy invalid truthy blocks first render and lifecycle without permission requests (4.4741ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy native error blocks first render and lifecycle without permission requests (3.9544ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed speech speaks exact reviewed text without camera permission and retains it for retry (22.6269ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed speech rejects unsupported characters and length visibly without changing text (39.9153ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ double Speak in one React batch starts only one native utterance (30.9797ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ pending begin and speech results cannot revive stopped or cleared private draft (37.2205ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Back and route navigation clear typed draft and cancel native speech (24.2812ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ native speech statuses are understandable and cleanup failure requires fresh app session (58.3868ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ editing during playback cancels old result and only a fresh tap speaks edited text (35.3149ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ route change and unmount invalidate pending begin without speech or leaked draft (30.8339ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ unavailable bridge and rejected native speech report retryable status without camera (51.159ms)
+An update to Home inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Home inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ begin cleanup rejection latches React speech warning and disables Speak (29.158ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ late begin cleanup rejection latches over a newer speech attempt (38.9194ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ ordinary begin rejection remains retryable in React (34.0265ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ retired cleanup failure latches across Stop and newer normal result (45.4905ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed input prevents keyboard suggestions and wide layout preserves intro/camera row (9.6391ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ camera defaults to rear and offers an accessible flip before permission (12.4885ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ flipping before Start selects front without requesting permission or acquiring a camera (11.5908ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ live flip changes selected native lens and accepts only the current lens status (14.2211ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ live flip still latches cleanup failure from retired lens (13.6459ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ selected back camera unavailability is explicit and never falls back (13.6238ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ selected front camera unavailability is explicit and never falls back (7.103ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ selected front camera remains stopped after Stop camera and foreground return (9.3796ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✖ selected front camera remains stopped after Back and foreground return (6.7375ms)
+✖ selected front camera remains stopped after background and foreground return (9.1867ms)
+ℹ tests 70
+ℹ suites 0
+ℹ pass 61
+ℹ fail 9
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4317.7154
+
+✖ failing tests:
+
+test at tests\app.test.mjs:661:1
+✖ camera defaults to rear and offers an accessible flip before permission (12.4885ms)
+  AssertionError [ERR_ASSERTION]: camera flip control is present before Start
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:664:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:675:1
+✖ flipping before Start selects front without requesting permission or acquiring a camera (11.5908ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:677:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:688:1
+✖ live flip changes selected native lens and accepts only the current lens status (14.2211ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'back'
+  
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:693:10)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'back',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:711:1
+✖ live flip still latches cleanup failure from retired lens (13.6459ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:716:11)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:728:3
+✖ selected back camera unavailability is explicit and never falls back (13.6238ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+  
+  + undefined
+  - 'back'
+  
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:733:12)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: 'back',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:728:3
+✖ selected front camera unavailability is explicit and never falls back (7.103ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:730:35)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:747:3
+✖ selected front camera remains stopped after Stop camera and foreground return (9.3796ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:749:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:747:3
+✖ selected front camera remains stopped after Back and foreground return (6.7375ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:749:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+
+test at tests\app.test.mjs:747:3
+✖ selected front camera remains stopped after background and foreground return (9.1867ms)
+  AssertionError [ERR_ASSERTION]: button exists: Switch to front camera
+      at Object.press (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:62:12)
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/tests/app.test.mjs:749:13)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }

@@ -1,0 +1,8 @@
+
+com.xmilo_at_your_side.sign_to_speak.PhonePreviewIntegrationTest:.
+
+Time: 21.061
+
+OK (1 test)
+
+

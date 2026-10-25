@@ -692,7 +692,6 @@ public class NativeBackPrivacyTest {
     @Test public void defaultCameraBindsRearAfterActualProviderAcquisition() throws Exception {
         Preview owned = startBoundPreview();
         // startBoundPreview proves the real Kotlin start path acquired and bound a use case.
-        // The current front-camera implementation fails at this product assertion.
         verify(provider).hasCamera(CameraSelector.DEFAULT_BACK_CAMERA);
         verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_BACK_CAMERA, owned);
     }
@@ -705,6 +704,46 @@ public class NativeBackPrivacyTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         Preview owned = ownedPreview();
         assertNotNull("Explicit front Start must bind a preview", owned);
+        verify(provider).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+    }
+
+    @Test public void activeThenFrontLensBeforeAttachmentKeepsQueuedStart() throws Exception {
+        root.removeView(view);
+        assertFalse(view.isAttachedToWindow());
+        view.setActive(true);
+        assertTrue("Detached Start must remain queued", requested());
+        selectLens("front");
+        assertTrue("Changing the lens must preserve a detached Start request", requested());
+        assertEquals("A detached view cannot acquire a provider", 0,
+            ProviderCompanionShadow.acquisitionCount);
+        root.addView(view);
+        assertEquals("Attachment must acquire the selected lens exactly once", 1,
+            ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview owned = ownedPreview();
+        assertNotNull("Queued front request must bind after attachment", owned);
+        verify(provider).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+    }
+
+    @Test public void frontLensThenActiveBeforeAttachmentBindsOnAttachment() throws Exception {
+        root.removeView(view);
+        assertFalse(view.isAttachedToWindow());
+        selectLens("front");
+        assertFalse("Lens selection alone cannot request a camera", requested());
+        view.setActive(true);
+        assertTrue("Detached Start must remain queued after lens selection", requested());
+        assertEquals("A detached view cannot acquire a provider", 0,
+            ProviderCompanionShadow.acquisitionCount);
+        root.addView(view);
+        assertEquals("Attachment must acquire the selected lens exactly once", 1,
+            ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview owned = ownedPreview();
+        assertNotNull("Queued front request must bind after attachment", owned);
         verify(provider).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
         verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
     }

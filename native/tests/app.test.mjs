@@ -655,3 +655,164 @@ test('typed input prevents keyboard suggestions and wide layout preserves intro/
   assert.notEqual(headers[1].parent.parent, headers[2].parent.parent);
   assert.doesNotMatch(h.text(), /\uFFFD/);
 });
+
+// Camera lens selection is an explicit UI choice. The mocked native preview
+// reports status only; these assertions exercise the actual App component.
+test('camera defaults to rear and offers an accessible flip before permission', async t => {
+  const h = await renderHome(t);
+  const flip = h.app.root.findAllByType('Pressable').find(node => node.props.testID === 'camera-flip');
+  assert.ok(flip, 'camera flip control is present before Start');
+  assert.equal(flip.props.disabled, false);
+  assert.equal(h.button('Switch to front camera'), flip);
+  assert.equal(h.permissions.length, 0);
+  assert.equal(h.starts.length, 0);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'back', 'first preview explicitly requests the rear camera');
+});
+
+test('flipping before Start selects front without requesting permission or acquiring a camera', async t => {
+  const h = await renderHome(t);
+  await h.press('Switch to front camera');
+  assert.equal(h.permissions.length, 0);
+  assert.equal(h.starts.length, 0);
+  assert.equal(h.cameras().length, 0);
+  assert.ok(h.button('Switch to rear camera'));
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+});
+
+test('live flip changes selected native lens and accepts only the current lens status', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const oldStatus = h.cameras()[0].props.onStatus;
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+  await h.press('Switch to front camera');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  assert.ok(h.button('Switch to rear camera'));
+  assert.equal(h.permissions.length, 1, 'live flip does not acquire permission again');
+  for (const value of ['stopped', 'preview_only', 'rear_camera_unavailable']) {
+    await h.status(oldStatus, value);
+    assert.equal(h.cameras().length, 1, `retired rear ${value} cannot stop front preview`);
+    assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  }
+  await h.status(h.cameras()[0].props.onStatus, 'preview_only');
+  assert.match(h.notice(), /Live preview only/);
+  await h.press('Switch to rear camera');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+});
+
+test('live flip still latches cleanup failure from retired lens', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const oldStatus = h.cameras()[0].props.onStatus;
+  await h.press('Switch to front camera');
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  await h.status(oldStatus, 'camera_cleanup_failed');
+  assert.equal(h.cameras().length, 0);
+  assert.match(h.notice(), /Camera cleanup could not be confirmed/);
+  assert.equal(h.button('Start local preview').props.disabled, true);
+});
+
+test('rapid rear-front-rear flip rejects events from the first rear view', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const firstRear = h.cameras()[0].props.onStatus;
+  await h.press('Switch to front camera');
+  const front = h.cameras()[0].props.onStatus;
+  await h.press('Switch to rear camera');
+  const lastRear = h.cameras()[0].props.onStatus;
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+  for (const retired of [firstRear, front]) {
+    await h.status(retired, 'stopped');
+    assert.equal(h.cameras().length, 1);
+    await h.status(retired, 'preview_only');
+    assert.doesNotMatch(h.notice(), /Live preview only/);
+  }
+  await h.status(lastRear, 'preview_only');
+  assert.match(h.notice(), /Live preview only/);
+});
+
+test('live camera flip leaves typed speech in progress', async t => {
+  let finishSpeech;
+  const cancelled = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'speech-token',
+    speak: () => new Promise(resolve => {finishSpeech = resolve;}),
+    cancel: token => cancelled.push(token),
+  });
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /Speaking typed text/);
+  const cancelledBeforeFlip = cancelled.length;
+  await h.press('Switch to front camera');
+  assert.equal(cancelled.length, cancelledBeforeFlip);
+  assert.match(h.speechStatus(), /Speaking typed text/);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  await act(() => finishSpeech('COMPLETED'));
+  assert.match(h.speechStatus(), /Typed text spoken/);
+});
+
+test('flip is disabled during permission request and after camera cleanup fault or background', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+  await h.resolve('granted');
+  const status = h.cameras()[0].props.onStatus;
+  await h.state('background');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+  await h.state('active');
+  await h.status(status, 'camera_cleanup_failed');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+});
+
+for (const [lens, unavailable, message] of [
+  ['back', 'rear_camera_unavailable', /rear camera is not available/i],
+  ['front', 'front_camera_unavailable', /front camera is not available/i],
+]) {
+  test(`selected ${lens} camera unavailability is explicit and never falls back`, async t => {
+    const h = await renderHome(t);
+    if (lens === 'front') await h.press('Switch to front camera');
+    await h.press('Start local preview');
+    await h.resolve('granted');
+    assert.equal(h.cameras()[0].props.lensFacing, lens);
+    await h.status(h.cameras()[0].props.onStatus, unavailable);
+    assert.equal(h.cameras().length, 0);
+    assert.match(h.notice(), message);
+    assert.equal(h.permissions.length, 1, 'no implicit retry for another camera');
+    assert.equal(h.starts.length, 1, 'no silent session restart');
+    await h.state('background');
+    await h.state('active');
+    assert.equal(h.cameras().length, 0);
+    assert.equal(h.starts.length, 1);
+  });
+}
+
+for (const action of ['Stop camera', 'Back', 'background']) {
+  test(`selected front camera remains stopped after ${action} and foreground return`, async t => {
+    const h = await renderHome(t);
+    await h.press('Switch to front camera');
+    await h.press('Start local preview');
+    await h.resolve('granted');
+    assert.equal(h.cameras()[0].props.lensFacing, 'front');
+    if (action === 'Stop camera') await h.press('Stop camera');
+    else if (action === 'Back') assert.deepEqual(await h.back(), [true]);
+    else await h.state('background');
+    await h.state('background');
+    await h.state('active');
+    assert.equal(h.cameras().length, 0);
+    assert.equal(h.permissions.length, 1);
+    assert.equal(h.starts.length, 1);
+    assert.ok(h.button('Start local preview'));
+  });
+}

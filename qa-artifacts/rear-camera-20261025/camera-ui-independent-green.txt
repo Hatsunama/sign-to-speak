@@ -1,0 +1,175 @@
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ mounted React Stop, navigation, Back, background and unmount cancel the real native token (214.1489ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React home handles permission cancellation, native stop, local thanks and Back (104.4899ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: resume before result (41.6132ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: result before resume (24.8031ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains denied: result before pause (40.9407ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: resume before result (38.6679ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: result before resume (45.2483ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React retains never_ask_again: result before pause (30.4187ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React paused grant requires another Start (resume first: false) (25.6675ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React paused grant requires another Start (resume first: true) (29.2981ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and denied cannot restore capture eligibility (17.6879ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and never_ask_again cannot restore capture eligibility (23.9838ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React batched inactive/resume and granted cannot restore capture eligibility (20.1647ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React permission error after pause stays specific and allows an explicit retry (33.4487ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React background Start cannot request permission or start capture (18.3168ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending denied outcome (23.2719ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending granted outcome (25.5061ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Stop cancels a pending error outcome (16.7708ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending denied outcome (19.5071ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending granted outcome (16.4482ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back cancels a pending error outcome (14.0247ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending denied outcome (22.0375ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending granted outcome (24.7622ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React Back after pause cancels a pending error outcome (21.9876ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending denied outcome (16.9959ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending granted outcome (19.4703ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation cancels a pending error outcome (23.2133ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending denied outcome (26.0231ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending granted outcome (24.9127ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React navigation after pause cancels a pending error outcome (25.8865ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old denied (36.764ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late denied (25.813ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old granted (35.2848ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late granted (33.3123ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React newer Start owns its pending and denied state over old error (28.4192ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React latest denial survives older late error (32.9651ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React ignores inactive preview status after denial and after a newer preview (49.3292ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React stale native cleanup failure still fails closed over newer permission (43.6562ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React stale native cleanup failure stops a newer live preview too (38.5363ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending denied after pause (30.4969ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending granted after pause (30.7887ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ actual React unmount cancels pending error after pause (25.585ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy missing blocks first render and lifecycle without permission requests (7.1077ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy uninitialized blocks first render and lifecycle without permission requests (6.496ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy failed blocks first render and lifecycle without permission requests (4.3827ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy invalid truthy blocks first render and lifecycle without permission requests (8.0992ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ privacy native error blocks first render and lifecycle without permission requests (6.1692ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed speech speaks exact reviewed text without camera permission and retains it for retry (48.1968ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed speech rejects unsupported characters and length visibly without changing text (51.3384ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ double Speak in one React batch starts only one native utterance (28.1906ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ pending begin and speech results cannot revive stopped or cleared private draft (36.1781ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ Back and route navigation clear typed draft and cancel native speech (39.2598ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ native speech statuses are understandable and cleanup failure requires fresh app session (62.7291ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ editing during playback cancels old result and only a fresh tap speaks edited text (50.0052ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ route change and unmount invalidate pending begin without speech or leaked draft (35.9992ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ unavailable bridge and rejected native speech report retryable status without camera (63.4507ms)
+An update to Home inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+An update to Home inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ begin cleanup rejection latches React speech warning and disables Speak (33.2754ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ late begin cleanup rejection latches over a newer speech attempt (34.1078ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ ordinary begin rejection remains retryable in React (35.1056ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ retired cleanup failure latches across Stop and newer normal result (49.5289ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ typed input prevents keyboard suggestions and wide layout preserves intro/camera row (13.4796ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ camera defaults to rear and offers an accessible flip before permission (16.0677ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ flipping before Start selects front without requesting permission or acquiring a camera (21.6595ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ live flip changes selected native lens and accepts only the current lens status (33.1165ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ live flip still latches cleanup failure from retired lens (40.5661ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ rapid rear-front-rear flip rejects events from the first rear view (34.7863ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ live camera flip leaves typed speech in progress (76.9191ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ flip is disabled during permission request and after camera cleanup fault or background (41.8214ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ selected back camera unavailability is explicit and never falls back (34.7467ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ selected front camera unavailability is explicit and never falls back (41.4101ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ selected front camera remains stopped after Stop camera and foreground return (47.4041ms)
+react-test-renderer is deprecated. See https://react.dev/warnings/react-test-renderer
+✔ selected front camera remains stopped after Back and foreground return (42.85ms)
+✔ selected front camera remains stopped after background and foreground return (35.2381ms)
+ℹ tests 73
+ℹ suites 0
+ℹ pass 73
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3748.2761
