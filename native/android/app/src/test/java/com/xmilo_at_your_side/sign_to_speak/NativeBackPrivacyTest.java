@@ -36,6 +36,7 @@ import com.facebook.react.uimanager.ThemedReactContext;
 import com.google.common.util.concurrent.SettableFuture;
 import com.google.common.util.concurrent.ListenableFuture;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -95,14 +96,14 @@ public class NativeBackPrivacyTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue("Fixture must attach the actual native view", view.isAttachedToWindow());
         provider = mock(ProcessCameraProvider.class);
-        when(provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)).thenReturn(true);
+        when(provider.hasCamera(any(CameraSelector.class))).thenReturn(true);
         Camera camera = mock(Camera.class);
         CameraInfo cameraInfo = mock(CameraInfo.class);
         cameraStates = new MutableLiveData<>(CameraState.create(CameraState.Type.OPENING));
         when(camera.getCameraInfo()).thenReturn(cameraInfo);
         when(cameraInfo.getCameraState()).thenReturn(cameraStates);
         when(provider.bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
-            eq(CameraSelector.DEFAULT_FRONT_CAMERA), any(Preview.class))).thenReturn(camera);
+            any(CameraSelector.class), any(Preview.class))).thenReturn(camera);
         when(reactContext.hasActiveCatalystInstance()).thenReturn(true); // ThemedReactContext delegates here in RN 0.86.3.
         view.setId(101);
         EventDispatcher dispatcher = mock(EventDispatcher.class);
@@ -605,7 +606,7 @@ public class NativeBackPrivacyTest {
             doThrow(new UnsupportedOperationException("Injected cleanup failure")).when(provider).unbind(owned);
             injectedUnbindFaults = new Preview[] {owned};
             throw new IllegalArgumentException("Injected bind failure");
-        }).when(provider).bindToLifecycle(eq(activity), eq(CameraSelector.DEFAULT_FRONT_CAMERA), any(Preview.class));
+        }).when(provider).bindToLifecycle(eq(activity), any(CameraSelector.class), any(Preview.class));
         view.setActive(true);
         future.set(provider);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
@@ -647,6 +648,151 @@ public class NativeBackPrivacyTest {
         assertTrue(cameraStates.hasObservers());
         streamStates().setValue(PreviewView.StreamState.STREAMING);
         assertEquals("preview_only", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void defaultCameraBindsRearAfterActualProviderAcquisition() throws Exception {
+        Preview owned = startBoundPreview();
+        // startBoundPreview proves the real Kotlin start path acquired and bound a use case.
+        // The current front-camera implementation fails at this product assertion.
+        verify(provider).hasCamera(CameraSelector.DEFAULT_BACK_CAMERA);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_BACK_CAMERA, owned);
+    }
+
+    @Test public void explicitFrontSelectionBeforeStartBindsFront() throws Exception {
+        selectLens("front");
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview owned = ownedPreview();
+        assertNotNull("Explicit front Start must bind a preview", owned);
+        verify(provider).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+    }
+
+    @Test public void pendingLensChangeInvalidatesOldProviderCallback() throws Exception {
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        SettableFuture<ProcessCameraProvider> retired = future;
+        future = SettableFuture.create();
+        ProviderCompanionShadow.nextFuture = future;
+        selectLens("front");
+        assertEquals("Changing a pending lens starts a fresh acquisition", 2,
+            ProviderCompanionShadow.acquisitionCount);
+        retired.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verifyNoInteractions(provider);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview owned = ownedPreview();
+        assertNotNull("New front request must bind", owned);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+        verify(provider, never()).bindToLifecycle(eq(activity), eq(CameraSelector.DEFAULT_BACK_CAMERA), any(Preview.class));
+    }
+
+    @Test public void activeLensChangeReleasesOldPreviewAndIgnoresRetiredObservers() throws Exception {
+        Preview old = startBoundPreview();
+        Observer<PreviewView.StreamState> oldStream = observer(streamStates());
+        Observer<CameraState> oldError = observer(cameraStates);
+        long retiredToken = leaseToken(view);
+        statuses.clear();
+        selectLens("front");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(((PreviewLease) field("lease")).isCurrent(retiredToken));
+        verify(provider).unbind(old);
+        Preview current = ownedPreview();
+        assertNotNull("Lens change must bind a new preview", current);
+        assertNotSame(old, current);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, current);
+        oldStream.onChanged(PreviewView.StreamState.STREAMING);
+        oldError.onChanged(CameraState.create(CameraState.Type.PENDING_OPEN,
+            CameraState.StateError.create(CameraState.ERROR_CAMERA_IN_USE)));
+        assertSame(current, ownedPreview());
+        assertTrue(requested());
+        assertFalse("Retired callbacks cannot claim new frames", statuses.contains("preview_only"));
+        assertFalse("Retired errors cannot stop the new binding", statuses.contains("camera_unavailable"));
+    }
+
+    @Test public void activeFrontPreviewCanSwitchBack() throws Exception {
+        selectLens("front");
+        Preview old = startBoundPreview();
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, old);
+        selectLens("back");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verify(provider).unbind(old);
+        Preview current = ownedPreview();
+        assertNotNull("Switching back must bind a new preview", current);
+        assertNotSame(old, current);
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_BACK_CAMERA, current);
+    }
+
+    @Test public void selectedLensUnavailableNeverFallsBackToOtherLens() throws Exception {
+        when(provider.hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA)).thenReturn(false);
+        selectLens("front");
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertStopped();
+        verify(provider).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
+        verify(provider, never()).bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
+            any(CameraSelector.class), any(Preview.class));
+        assertEquals("front_camera_unavailable", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void failedCleanupDuringLensChangeBlocksRebind() throws Exception {
+        Preview old = startBoundPreview();
+        doThrow(new UnsupportedOperationException("Injected lens-switch cleanup failure"))
+            .when(provider).unbind(old);
+        injectedUnbindFaults = new Preview[] {old};
+        selectLens("front");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verify(provider).unbind(old);
+        verify(provider, times(1)).bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
+            any(CameraSelector.class), any(Preview.class));
+        assertEquals(1, cleanupFailures());
+        assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+        assertStopped();
+    }
+
+    @Test public void lensChangeAfterStopDoesNotRestart() throws Exception {
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        view.setActive(false);
+        selectLens("front");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(requested());
+        assertEquals("A lens preference cannot restart a stopped session", 1,
+            ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verifyNoInteractions(provider);
+    }
+
+    @Test public void lensChangeAfterBackDoesNotRestart() throws Exception {
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        committedBack();
+        selectLens("front");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(requested());
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verifyNoInteractions(provider);
+    }
+
+    @Test public void lensChangeAfterPauseAndResumeDoesNotRestart() throws Exception {
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        view.onHostPause();
+        view.onHostResume();
+        selectLens("front");
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertFalse(requested());
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        verifyNoInteractions(provider);
     }
 
     @Test public void asynchronousCameraErrorCancelsCurrentLeaseAndRemovesObservers() throws Exception {
@@ -778,7 +924,7 @@ public class NativeBackPrivacyTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         Preview owned = (Preview) field(second, "preview");
         assertNotNull("Precondition: second view must really bind before fault injection", owned);
-        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+        verify(provider).bindToLifecycle(eq(activity), any(CameraSelector.class), eq(owned));
         assertEquals(2, ProviderCompanionShadow.acquisitionCount);
         return second;
     }
@@ -805,6 +951,16 @@ public class NativeBackPrivacyTest {
         return failures.getInt(activity);
     }
 
+    private void selectLens(String lensFacing) throws Exception {
+        Method setter;
+        try {
+            setter = PrivateCameraView.class.getMethod("setLensFacing", String.class);
+        } catch (NoSuchMethodException missing) {
+            throw new AssertionError("Native view must expose setLensFacing(String) for front/rear selection", missing);
+        }
+        setter.invoke(view, lensFacing);
+    }
+
     private Preview startBoundPreview() throws Exception {
         view.setActive(true);
         assertEquals("Actual Kotlin acquisition must use the controlled future", 1,
@@ -813,7 +969,7 @@ public class NativeBackPrivacyTest {
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         Preview owned = ownedPreview();
         assertNotNull("Precondition: actual start() must bind a Preview", owned);
-        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_FRONT_CAMERA, owned);
+        verify(provider).bindToLifecycle(eq(activity), any(CameraSelector.class), eq(owned));
         assertEquals(View.VISIBLE, previewView().getVisibility());
         return owned;
     }
