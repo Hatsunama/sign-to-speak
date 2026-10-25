@@ -9,20 +9,85 @@ const workflow = yaml.parse(readFileSync(new URL('../../.github/workflows/sign-s
 const requirements = readFileSync(new URL('../vendor/pocket-tts-audition/requirements-cpu.txt', import.meta.url), 'utf8');
 const manifest = JSON.parse(readFileSync(new URL('../vendor/pocket-tts-audition/manifest.json', import.meta.url), 'utf8'));
 
+// Evaluate the supported GitHub Actions boolean syntax, rather than accepting
+// a condition that merely mentions each required guard somewhere in its text.
+function evaluateJobIf(expression, context) {
+  const tokens = expression.match(/\s*(?:&&|\|\||==|\(|\)|'(?:[^']*)'|[A-Za-z_][\w.]*)/g)?.map(x => x.trim()) ?? [];
+  assert.equal(tokens.join(''), expression.replace(/\s+/g, ''), 'unsupported job condition syntax');
+  let i = 0;
+  function atom() {
+    const token = tokens[i++];
+    if (token === '(') {
+      const result = or();
+      assert.equal(tokens[i++], ')');
+      return result;
+    }
+    assert.ok(token, 'incomplete job condition');
+    if (token.startsWith("'")) return token.slice(1, -1);
+    if (token === 'true') return true;
+    if (token === 'false') return false;
+    assert.match(token, /^github(?:\.[A-Za-z_][\w]*)+$/);
+    return token.split('.').slice(1).reduce((value, key) => value?.[key], context.github);
+  }
+  function comparison() {
+    const left = atom();
+    if (tokens[i] !== '==') return left;
+    i++;
+    return left === atom();
+  }
+  function and() {
+    let result = comparison();
+    while (tokens[i] === '&&') { i++; const right = comparison(); result = Boolean(result && right); }
+    return result;
+  }
+  function or() {
+    let result = and();
+    while (tokens[i] === '||') { i++; const right = and(); result = Boolean(result || right); }
+    return result;
+  }
+  const result = or();
+  assert.equal(i, tokens.length, 'trailing job condition syntax');
+  return Boolean(result);
+}
+
+function event(name, {repository = 'Hatsunama/sign-to-speak', privateRepo = false,
+  ref = 'refs/heads/codex/native-recognition-flow-20261024',
+  headRepo = 'Hatsunama/sign-to-speak', headRef = 'codex/native-recognition-flow-20261024'} = {}) {
+  return {github: {event_name: name, repository, ref, event: {
+    repository: {private: privateRepo},
+    pull_request: {head: {repo: {full_name: headRepo}, ref: headRef}},
+  }}};
+}
+
+const permittedEvents = [event('workflow_dispatch'), event('pull_request', {ref: 'refs/pull/4/merge'})];
+const deniedEvents = [
+  event('pull_request', {ref: 'refs/pull/4/merge', headRepo: 'someone/fork'}),
+  event('pull_request', {ref: 'refs/pull/4/merge', headRef: 'main'}),
+  event('pull_request', {ref: 'refs/pull/4/merge', privateRepo: true}),
+  event('pull_request', {ref: 'refs/pull/4/merge', repository: 'someone/other'}),
+  event('workflow_dispatch', {ref: 'refs/heads/main'}),
+  event('workflow_dispatch', {privateRepo: true}),
+  event('push'),
+];
+
 function audit(w, deps = requirements, assets = manifest) {
-  assert.deepEqual(Object.keys(w.on), ['workflow_dispatch']);
+  assert.deepEqual(Object.keys(w.on), ['workflow_dispatch', 'pull_request']);
+  assert.deepEqual(w.on.pull_request.types, ['opened', 'synchronize', 'reopened']);
+  assert.deepEqual(w.on.pull_request.paths, [
+    '.github/workflows/sign-speech-audition.yml',
+    'native/scripts/pocket-tts-audition.py',
+    'native/scripts/pocket-tts-audition.test.py',
+    'native/scripts/speech-audition-policy.test.mjs',
+    'native/vendor/pocket-tts-audition/**',
+  ]);
   assert.deepEqual(w.permissions, {contents: 'read'});
   assert.equal(w.concurrency['cancel-in-progress'], true);
   assert.deepEqual(Object.keys(w.jobs), ['audition']);
   const job = w.jobs.audition;
   assert.equal(job['runs-on'], 'ubuntu-24.04');
   assert.equal(job['timeout-minutes'], 30);
-  for (const term of [
-    "github.event_name == 'workflow_dispatch'",
-    "github.repository == 'Hatsunama/sign-to-speak'",
-    "github.ref == 'refs/heads/codex/native-recognition-flow-20261024'",
-    'github.event.repository.private == false',
-  ]) assert.ok(job.if.includes(term), term);
+  for (const sample of permittedEvents) assert.equal(evaluateJobIf(job.if, sample), true);
+  for (const sample of deniedEvents) assert.equal(evaluateJobIf(job.if, sample), false);
   assert.equal(job.env.POCKET_SOURCE_COMMIT, assets.source.commit);
   assert.equal(job.env.POCKET_SOURCE_ARCHIVE_SHA256, assets.source.archive_sha256);
   assert.equal(assets.source.commit, 'a922b912dfa366975294afb568d815b305acde5d');
@@ -34,8 +99,12 @@ function audit(w, deps = requirements, assets = manifest) {
   assert.equal(steps.length, 8);
   const [checkout, source, provision, unit, download, synthesis, notices, upload] = steps;
   assert.equal(checkout.uses, 'actions/checkout@11d5960a326750d5838078e36cf38b85af677262');
-  assert.deepEqual(checkout.with, {'persist-credentials': false, ref: '${{ github.sha }}'});
-  assert.match(source.run, /git rev-parse HEAD.*GITHUB_SHA/);
+  const expectedSha = "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}";
+  assert.deepEqual(checkout.with, {'persist-credentials': false, ref: expectedSha});
+  assert.equal(job.env.EXPECTED_SOURCE_SHA, expectedSha);
+  assert.match(source.run, /git rev-parse HEAD.*EXPECTED_SOURCE_SHA/);
+  assert.match(provision.run, /'app_source_sha':.*EXPECTED_SOURCE_SHA/);
+  assert.equal(upload.with.name, 'pocket-tts-audition-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}');
   assert.ok(unit['timeout-minutes'] <= 2);
   assert.ok(provision['timeout-minutes'] <= 14);
   assert.match(provision.run, /download\.pytorch\.org\/whl\/cpu/);
@@ -103,6 +172,10 @@ for (const [name, mutation] of [
   ['push trigger', w => {w.on.push = {branches: ['main']};}],
   ['private repository', w => {w.jobs.audition.if = 'true';}],
   ['wrong candidate branch', w => {w.jobs.audition.if = w.jobs.audition.if.replace('codex/native-recognition-flow-20261024', 'main');}],
+  ['fork PR execution', w => {w.jobs.audition.if = w.jobs.audition.if.replace("github.event.pull_request.head.repo.full_name == 'Hatsunama/sign-to-speak' &&", 'true &&');}],
+  ['PR wrong branch execution', w => {w.jobs.audition.if = w.jobs.audition.if.replace("github.event.pull_request.head.ref == 'codex/native-recognition-flow-20261024'", 'true');}],
+  ['broad PR paths', w => {w.on.pull_request.paths.push('native/**');}],
+  ['PR on push event', w => {w.on.push = {branches: ['main']};}],
   ['write token', w => {w.permissions.contents = 'write';}],
   ['paid runner', w => {w.jobs.audition['runs-on'] = 'ubuntu-24.04-16core';}],
   ['long job', w => {w.jobs.audition['timeout-minutes'] = 60;}],
