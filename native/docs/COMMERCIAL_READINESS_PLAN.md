@@ -34,6 +34,8 @@ The source-build result is [40146406354](https://github.com/Hatsunama/sign-to-sp
 - Keep work under C:/sign_to_speak for now. Protect signing material and credentials outside the Git worktree. Do not change paging or close other agents' apps.
 - Use a phone only when it is free at Home with no active instrumentation. Restore its permissions/rotation and return it Home afterward.
 - Continue one QA delivery path. Do not create separate store builds until Phase 11, when testing genuine commercial readiness.
+- Use fresh-context subagents with a medium reasoning ceiling for bounded implementation tasks. Give each a clear file scope; independently review its work and evidence afterward. Avoid simultaneous heavy builds on the low-RAM PC.
+- Phase exits are acceptance gates, not routine confirmation prompts. Continue when the gate passes. Pause only for a genuine missing decision, rights/resource blocker or required publishing action. If device checks are next and both phones are busy, end the turn and report. Give an estimate and pause while simply waiting.
 
 Working first-release scope is ASL to English, English spoken replies to captions, and reviewed speech output. Phase 0 must fix the supported vocabulary/domains, devices, regions and OS floor. API 29+ is the recommended full-feature starting floor because current speech privacy enforcement is unavailable on API 26–28. Retaining those older versions requires an explicitly accepted limited mode; do not silently re-enable speech there.
 
