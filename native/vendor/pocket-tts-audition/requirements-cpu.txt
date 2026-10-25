@@ -1,0 +1,19 @@
+# Direct upstream 4.0.1 runtime requirements, pinned for this audition.
+# Torch is installed separately from the official CPU-only index.
+# Transitive resolution and wheel SHA-256 values are recorded by pip --report.
+numpy==2.3.2
+pydantic==2.11.7
+sentencepiece==0.2.1
+tokenizers==0.22.1
+safetensors==0.6.2
+typer==0.16.0
+typing_extensions==4.14.1
+fastapi==0.116.1
+uvicorn==0.35.0
+python-multipart==0.0.21
+scipy==1.16.1
+einops==0.8.1
+huggingface_hub==0.34.4
+requests==2.32.4
+soundfile==0.13.1
+PyYAML==6.0.2

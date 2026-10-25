@@ -1,0 +1,151 @@
+name: Pocket TTS English 18M speech audition
+
+# Manual, owner-reviewed experiment. WAVs need human listening; this is not Android evidence.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-speech-audition-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  audition:
+    if: >-
+      github.event_name == 'workflow_dispatch' &&
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.ref == 'refs/heads/codex/native-recognition-flow-20261024' &&
+      github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      POCKET_SOURCE_COMMIT: a922b912dfa366975294afb568d815b305acde5d
+      POCKET_SOURCE_ARCHIVE_SHA256: 08dd2e7405609e788a9811f2786cdfc3f8f21f5e083a321108923fcae8f44b06
+    steps:
+      - name: Checkout exact dispatch source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.sha }}
+      - name: Verify source and runner budget
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          python3 --version
+          mkdir -p "$RUNNER_TEMP/pocket-tts-audition"
+      - name: Provision pinned CPU runtime and source
+        timeout-minutes: 14
+        env:
+          SOURCE_DIR: ${{ runner.temp }}/pocket-tts-source
+          VENV_DIR: ${{ runner.temp }}/pocket-tts-venv
+        run: |
+          set -euo pipefail
+          python3 -m venv "$VENV_DIR"
+          "$VENV_DIR/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
+            --timeout 30 --retries 2 --report "$RUNNER_TEMP/pocket-torch-install.json" \
+            --index-url https://download.pytorch.org/whl/cpu \
+            --extra-index-url https://pypi.org/simple 'torch==2.14.0+cpu'
+          "$VENV_DIR/bin/python" - <<'PY'
+          import torch
+          assert torch.version.cuda is None, 'CPU-only Torch required'
+          assert not torch.cuda.is_available(), 'CUDA unexpectedly available'
+          PY
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            "https://codeload.github.com/kyutai-labs/pocket-tts/tar.gz/$POCKET_SOURCE_COMMIT" \
+            -o "$RUNNER_TEMP/pocket-tts-source.tar.gz"
+          printf '%s  %s\n' "$POCKET_SOURCE_ARCHIVE_SHA256" "$RUNNER_TEMP/pocket-tts-source.tar.gz" | sha256sum --check --status
+          mkdir -p "$SOURCE_DIR"
+          tar -xzf "$RUNNER_TEMP/pocket-tts-source.tar.gz" -C "$SOURCE_DIR" --strip-components=1
+          printf '%s\n' 'torch==2.14.0+cpu' > "$RUNNER_TEMP/pocket-torch-constraint.txt"
+          "$VENV_DIR/bin/python" -m pip install --disable-pip-version-check --no-cache-dir \
+            --timeout 30 --retries 2 --report "$RUNNER_TEMP/pocket-deps-install.json" \
+            -c "$RUNNER_TEMP/pocket-torch-constraint.txt" \
+            -r native/vendor/pocket-tts-audition/requirements-cpu.txt
+          "$VENV_DIR/bin/python" -m pip check
+          "$VENV_DIR/bin/python" - <<'PY'
+          import torch
+          assert torch.version.cuda is None, 'provisioning replaced CPU Torch'
+          PY
+          "$VENV_DIR/bin/python" - "$SOURCE_DIR" "$RUNNER_TEMP/pocket-tts-source.tar.gz" "$RUNNER_TEMP/pocket-tts-audition" "$RUNNER_TEMP/pocket-torch-install.json" "$RUNNER_TEMP/pocket-deps-install.json" <<'PY'
+          import hashlib, importlib.metadata, json, pathlib, sys
+          source, archive, output, *reports = map(pathlib.Path, sys.argv[1:])
+          packages = sorted(({'name': d.metadata['Name'], 'version': d.version} for d in importlib.metadata.distributions()), key=lambda x: x['name'].lower())
+          wheels = []
+          for report in reports:
+              for entry in json.loads(report.read_text())['install']:
+                  info = entry.get('download_info', {})
+                  digest = info.get('archive_info', {}).get('hashes', {}).get('sha256')
+                  if not digest:
+                      raise RuntimeError('missing wheel SHA-256 in pip report')
+                  wheels.append({'name': entry['metadata']['name'], 'version': entry['metadata']['version'], 'sha256': digest})
+          receipt = {
+              'app_source_sha': __import__('os').environ['GITHUB_SHA'],
+              'upstream_source_commit': __import__('os').environ['POCKET_SOURCE_COMMIT'],
+              'upstream_archive_sha256': hashlib.sha256(archive.read_bytes()).hexdigest(),
+              'direct_requirements_sha256': hashlib.sha256(pathlib.Path('native/vendor/pocket-tts-audition/requirements-cpu.txt').read_bytes()).hexdigest(),
+              'python_packages': packages,
+              'installed_wheels': sorted(wheels, key=lambda x: x['name'].lower()),
+              'torch_cpu_only': True,
+              'runner_image': __import__('os').environ.get('ImageVersion', 'unknown'),
+              'run_id': __import__('os').environ['GITHUB_RUN_ID'],
+              'run_attempt': __import__('os').environ['GITHUB_RUN_ATTEMPT'],
+          }
+          (output / 'provision-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+      - name: Run audition harness unit tests
+        timeout-minutes: 2
+        run: $RUNNER_TEMP/pocket-tts-venv/bin/python native/scripts/pocket-tts-audition.test.py
+      - name: Download exact 18M and Alba assets
+        timeout-minutes: 4
+        env:
+          ASSET_DIR: ${{ runner.temp }}/pocket-tts-assets
+        run: |
+          set -euo pipefail
+          python3 native/scripts/pocket-tts-audition.py download --asset-dir "$ASSET_DIR"
+      - name: Synthesize five fixed utterances without network access
+        timeout-minutes: 8
+        env:
+          ASSET_DIR: ${{ runner.temp }}/pocket-tts-assets
+          OUTPUT_DIR: ${{ runner.temp }}/pocket-tts-audition
+          VENV_DIR: ${{ runner.temp }}/pocket-tts-venv
+        run: |
+          set -euo pipefail
+          # Failure to create the network namespace is a failure of this run.
+          timeout --signal=TERM --kill-after=10s 8m \
+            sudo unshare --net -- runuser -u "$(id -un)" -- \
+            "$VENV_DIR/bin/python" native/scripts/pocket-tts-audition.py audition \
+              --asset-dir "$ASSET_DIR" --source-dir "$RUNNER_TEMP/pocket-tts-source" \
+              --source-archive "$RUNNER_TEMP/pocket-tts-source.tar.gz" \
+              --output-dir "$OUTPUT_DIR"
+          test -s "$OUTPUT_DIR/result.json"
+          test "$(find "$OUTPUT_DIR" -maxdepth 1 -name '*.wav' -type f | wc -l)" -eq 5
+          test "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 -type f ! -name '*.wav' ! -name '*.json' ! -name '*.txt' | wc -l)" -eq 0
+      - name: Record required attribution and listening gate
+        run: |
+          cat > "$RUNNER_TEMP/pocket-tts-audition/NOTICES.txt" <<'NOTICE'
+          Experimental reference Python synthesis from Kyutai Pocket TTS v4.0.1
+          source commit a922b912dfa366975294afb568d815b305acde5d (MIT).
+          Model english_18m_2026-10 from kyutai/pocket-tts-without-voice-cloning
+          revision a7056f505a4a8ca72d8b5fb1440071d6f1a35739 (CC BY 4.0).
+          Alba voice embedding derives from Alba MacKenna voice material (CC BY 4.0).
+          This artifact is for owner listening and pronunciation review only.
+          It does not establish speech quality, Android viability, or release acceptance.
+          NOTICE
+      - name: Upload successful audition WAVs and sanitized records
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-audition-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-tts-audition/*.wav
+            ${{ runner.temp }}/pocket-tts-audition/*.json
+            ${{ runner.temp }}/pocket-tts-audition/*.txt
