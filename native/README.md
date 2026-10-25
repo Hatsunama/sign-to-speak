@@ -4,6 +4,8 @@ The current candidate adds reviewed typed text to the existing local Flite speec
 
 See the [commercial readiness plan](docs/COMMERCIAL_READINESS_PLAN.md) for the full phase sequence, dependencies and exit gates, and the [recognition research plan](docs/RECOGNITION_PLAN.md) for model contracts. Rear-default camera switching and typed-speech QA passed on both phones at the [current exact-artifact checkpoint](../qa-artifacts/rear-camera-20261025/evidence.json). Historical results below apply only to their named artifacts. Production release remains blocked.
 
+The [October 25 execution checkpoint](docs/READINESS_CHECKPOINT_20261025.md) records workspace preservation, release gates, the repaired operator readiness guard and the unresolved recorded-video input failure. It also links the model admission and natural-voice feasibility records.
+
 ## Historical foundation checkpoint
 
 An isolated **React Native Android app**, not a wrapper around the existing web prototype. This milestone implements home, the canonical Hatsu background, a local thank-you page and camera **preview only**. ASL recognition, landmark inference and speech are unavailable. It does not claim interpreter capability or HIPAA certification.

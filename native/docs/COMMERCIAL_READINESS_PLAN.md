@@ -6,6 +6,8 @@ The target is a free, open-source Android app that supports an ASL signer and a 
 
 Continuous ASL-to-English quality and lawful model/data use are the largest uncertainties. Run their feasibility gate early. A hand tracker, a 250-label classifier or a typed-speech demonstration does not complete that product.
 
+Execution evidence and the current unresolved failures are in the [October 25 checkpoint](READINESS_CHECKPOINT_20261025.md). The [release contract](RELEASE_CONTRACT.md) and [model admission record](MODEL_ADMISSION.md) distinguish verified baselines, proposed gates and remaining decisions.
+
 ## Verified starting point
 
 | Area | Current evidence | Remaining work |
