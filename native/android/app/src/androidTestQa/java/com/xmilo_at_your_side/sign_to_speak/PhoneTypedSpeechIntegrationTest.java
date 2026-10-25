@@ -138,10 +138,10 @@ public final class PhoneTypedSpeechIntegrationTest {
     }
 
     private UiObject2 findInput() throws Exception {
-        UiObject2 found = findNode("typed-speech-input", "Text to speak");
+        UiObject2 found = findNode("typed-speech-input");
         if (found != null) return found;
         scrollFor("typed-speech-input", "Text to speak");
-        found = findNode("typed-speech-input", "Text to speak");
+        found = findNode("typed-speech-input");
         assertNotNull("Actual React TextInput must be accessible", found);
         return found;
     }
@@ -165,27 +165,24 @@ public final class PhoneTypedSpeechIntegrationTest {
 
     private void tap(String id, String label) throws Exception {
         scrollFor(id, label);
-        UiObject2 node = findNode(id, label);
-        while (node != null && !node.isClickable()) node = node.getParent();
-        assertNotNull("Clickable actual React control: " + label, node);
+        UiObject2 node = findNode(id);
+        assertNotNull("Actual React control: " + label, node);
+        assertTrue("Clickable actual React control: " + label, node.isClickable());
         assertTrue("Enabled actual React control: " + label, node.isEnabled());
         node.click(100L);
     }
 
-    private UiObject2 findNode(String id, String label) {
-        UiObject2 node = device.findObject(By.res(QA_PACKAGE, id));
-        if (node == null) node = device.findObject(By.pkg(QA_PACKAGE).desc(label));
-        if (node == null) node = device.findObject(By.pkg(QA_PACKAGE).text(label));
-        return node;
+    private UiObject2 findNode(String id) {
+        return device.findObject(By.res(id).pkg(QA_PACKAGE));
     }
 
     private void scrollFor(String id, String label) throws Exception {
         long until = SystemClock.elapsedRealtime() + 15000;
         boolean down = true;
         while (SystemClock.elapsedRealtime() < until) {
-            UiObject2 node = findNode(id, label);
+            UiObject2 node = findNode(id);
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (node != null && !node.getVisibleBounds().isEmpty()
+            if (node != null && node.isClickable() && !node.getVisibleBounds().isEmpty()
                     && node.getVisibleBounds().top >= 0
                     && node.getVisibleBounds().bottom <= device.getDisplayHeight()
                     && (scroll == null || scroll.getVisibleBounds().contains(node.getVisibleBounds()))) return;
