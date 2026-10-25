@@ -4,6 +4,16 @@ import tempfile
 import unittest
 import zipfile
 
+REPO = pathlib.Path(__file__).resolve().parents[2]
+NOTICE = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/mediapipe-tasks-1.1.1-NOTICE'
+APACHE = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/Apache-2.0-LICENSE'
+LITERT = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/litert-1.4.2-LICENSE'
+LICENSE_ASSETS = {
+    'assets/sdk-licenses/mediapipe-tasks-1.1.1-NOTICE': NOTICE,
+    'assets/sdk-licenses/Apache-2.0-LICENSE': APACHE,
+    'assets/sdk-licenses/litert-1.4.2-LICENSE': LITERT,
+}
+
 SCRIPT = pathlib.Path(__file__).with_name('check-phone-instrumentation.py')
 spec = importlib.util.spec_from_file_location('phone_instrumentation', SCRIPT)
 audit = importlib.util.module_from_spec(spec)
@@ -18,6 +28,7 @@ class InstrumentationArtifact(unittest.TestCase):
         self.root = pathlib.Path(temporary.name)
         self.xml = f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{QA}.test"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.REORDER_TASKS"/><application android:testOnly="true"/><instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="{QA}"/></manifest>'''
         self.entries = {'AndroidManifest.xml': b'manifest', 'classes.dex': b'dex'}
+        self.entries.update({name: path.read_bytes() for name, path in LICENSE_ASSETS.items()})
 
     def verify(self):
         manifest = self.root / 'manifest.xml'
@@ -35,6 +46,25 @@ class InstrumentationArtifact(unittest.TestCase):
 
     def test_valid(self):
         self.verify()
+
+    def test_missing_sdk_license_assets(self):
+        for name in LICENSE_ASSETS:
+            with self.subTest(name=name):
+                data = self.entries.pop(name)
+                try:
+                    with self.assertRaises(AssertionError): self.verify()
+                finally:
+                    self.entries[name] = data
+
+    def test_changed_sdk_license_assets(self):
+        for name in LICENSE_ASSETS:
+            with self.subTest(name=name):
+                original = self.entries[name]
+                self.entries[name] = original + b'changed'
+                try:
+                    with self.assertRaises(AssertionError): self.verify()
+                finally:
+                    self.entries[name] = original
 
     def test_arm64_library_allowed(self):
         self.entries['lib/arm64-v8a/libfoo.so'] = b'native'

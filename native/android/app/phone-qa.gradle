@@ -64,6 +64,12 @@ if (phoneQaEnabled) {
         throw new GradleException("Phone QA requires arm64-v8a and cannot combine with emulator QA")
     }
     android {
+        sourceSets {
+            // AGP strips AAR META-INF notices. Put source copies in the QA test APK.
+            androidTestQa {
+                assets.srcDir file("../../vendor/mediapipe-offline/licenses")
+            }
+        }
         defaultConfig {
             testApplicationId "com.xmilo_at_your_side.sign_to_speak.qa.test"
             testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"

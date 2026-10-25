@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Audit the unsigned phone QA instrumentation APK before local signing."""
 import importlib.util
+import hashlib
 import pathlib
 import re
 import sys
@@ -15,6 +16,17 @@ ANDROID = phone_qa.ANDROID
 QA = phone_qa.PACKAGE
 RUNNER = 'androidx.test.runner.AndroidJUnitRunner'
 PERMISSION = 'android.permission.REORDER_TASKS'
+LICENSE_DIR = HERE.parent / 'vendor/mediapipe-offline/licenses/sdk-licenses'
+LICENSE_ASSETS = {
+    'assets/sdk-licenses/mediapipe-tasks-1.1.1-NOTICE': LICENSE_DIR / 'mediapipe-tasks-1.1.1-NOTICE',
+    'assets/sdk-licenses/Apache-2.0-LICENSE': LICENSE_DIR / 'Apache-2.0-LICENSE',
+    'assets/sdk-licenses/litert-1.4.2-LICENSE': LICENSE_DIR / 'litert-1.4.2-LICENSE',
+}
+LICENSE_SHA256 = {
+    'mediapipe-tasks-1.1.1-NOTICE': '8db2ce1a7fb4fa13d2261bcc4cd1f1c3044d94b59fb0e4b35a5c0b4ecb6a56d2',
+    'Apache-2.0-LICENSE': 'cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30',
+    'litert-1.4.2-LICENSE': '71c6915d04265772a0339bed47276942c678b45cc01534210ebe6984fd1aec65',
+}
 
 
 def verify(manifest, apk):
@@ -42,6 +54,13 @@ def verify(manifest, apk):
         assert len(names) == len(set(names)), 'Duplicate APK ZIP entry'
         assert archive.testzip() is None, 'APK ZIP CRC failed'
         assert 'AndroidManifest.xml' in names and 'classes.dex' in names
+        for name, source in LICENSE_ASSETS.items():
+            expected = LICENSE_SHA256[source.name]
+            source_bytes = source.read_bytes()
+            assert hashlib.sha256(source_bytes).hexdigest() == expected, f'Changed pinned SDK license source: {source}'
+            assert name in names, f'Missing SDK license asset: {name}'
+            assert archive.read(name) == source_bytes, \
+                f'Changed SDK license asset: {name}'
         assert not any(re.match(r'META-INF/[^/]+\.(RSA|DSA|EC|SF)$', name, re.I) for name in names), 'Unexpected v1 signature'
         libraries = [name for name in names if name.startswith('lib/') and name.endswith('.so')]
         assert all(name.split('/')[1] == 'arm64-v8a' for name in libraries), 'Instrumentation must use only arm64 native libraries'
