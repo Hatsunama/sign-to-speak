@@ -1,17 +1,16 @@
 {
   "date": "2026-10-25",
-  "status": "FINAL_PHONE_ACCEPTANCE_BLOCKED_DEVICES_IN_USE",
+  "status": "SAMSUNG_VERIFIED_SEEKER_ACCEPTANCE_BLOCKED_IN_USE",
   "tested_source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
   "workflow": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40229832606",
   "workflow_conclusion": "success",
   "scope": "Instrumentation-only locator and preview navigation repairs. App UI/runtime source, dependencies and build configuration unchanged.",
   "failures": [
-    "Baseline typed-input test selected a same-label heading after missing raw React resource IDs; raw-ID lookup repaired and passed earlier Samsung artifacts. Final pair repeat pending.",
-    "Clean landscape preview test failed navigation; native geometry and slow scroll repair passed at 62036ee.",
-    "62036ee introduced portrait navigation deadline regression. Native-first lookup and distance-based scroll repair implemented at e3525b9; exact physical retest pending."
+    "Historical invalid-input locator failure: repaired; final exact pair passed Samsung typed journeys. Seeker repeat pending.",
+    "Historical preview landscape and follow-on portrait navigation failures: repaired; final exact pair passed Samsung portrait and both landscape runs. Seeker repeat pending."
   ],
   "interrupted_run": "Owner accidentally touched first landscape run; excluded from failure evidence.",
-  "device_checkpoint": "Both connected phones have another app open and no active instrumentation seen. Neither was operated at final readiness checkpoint; final pair not installed.",
+  "device_checkpoint": "Samsung exact pair verified and returned Home with original CAMERA/rotation restored. Seeker still has another app foreground; owner confirmed another agent is using it. Seeker was left untouched.",
   "latest_unsigned": {
     "source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
     "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40229832606",
@@ -83,16 +82,17 @@
     "Typed speech limited to printable ASCII up to 256 characters; API26-28 speech disabled by privacy policy",
     "Recorded-video tracking/model inference, feature parity, accuracy, rejection and phone performance unverified",
     "Commercial model/data licensing and deployment admission incomplete",
-    "Exact final artifact on both phones, capture/privacy/support matrix and full-app 16KiB runtime acceptance incomplete",
-    "Production identity/signing and store artifact acceptance deferred; future Play and Solana keys must differ"
+    "Exact final artifact on Seeker, capture/privacy/support matrix and full-app 16KiB runtime acceptance incomplete",
+    "Production identity/signing and store artifact acceptance deferred; future Play and Solana keys must differ",
+    "Current speech voice quality is unacceptable to the owner; more natural fully offline speech requires evaluation and verification"
   ],
-  "next_step": "Use only a free phone at Home; verify installed exact signed hashes, cold-start, portrait and landscape preview, typed speech and native speech; repeat on the second phone. Restore original permissions/rotation and return owned phones Home. No release or installation recommendation.",
+  "next_step": "When Seeker is free at Home and no instrumentation is active, install the same signed e3525b9 QA pair, verify installed hashes, cold-start and run portrait/landscape preview (including repeat), typed and native speech. Restore its original CAMERA/rotation and return it Home. Samsung needs repeat only if code/build/artifact changes. No commercial release or installation recommendation.",
   "original_issues": [
     "Shared manifest/ZIP admission: repaired; original malformed probes and optimized Python checks retained in ../standard-solutions-repair-20261025/evidence.json",
     "Duplicated Gradle forbidden-task guard: consolidated; existing workflow and fixture checks pass",
     "Superseded browser prototype: retired from active tree; Git history preserves provenance",
-    "Samsung invalid-input journey: proven locator defect repaired; latest exact pair needs repeat",
-    "Preview navigation: repair implemented; portrait regression physical retest unresolved"
+    "Samsung invalid-input journey: repaired and passed final exact pair on Samsung; Seeker pending",
+    "Preview navigation: repaired and passed portrait plus repeated landscape on final exact Samsung pair; Seeker pending"
   ],
   "related_paths_inspected": [
     "PhoneTypedSpeechIntegrationTest.findNode/tap/scrollFor, lines166-190; raw testIDs in native/App.tsx",
@@ -100,5 +100,77 @@
     "PhoneActivityDriver launch/close; native speech job/PCM/AudioTrack cleanup assertions; camera provider/preview state and registered-view lifecycle assertions",
     "Shared actual APK manifest/ZIP validators and downloaded unsigned/signed payloads"
   ],
-  "historical_evidence_gap": "Historical candidate source remains unrecovered. The owner approved rebuilding missing integration on the verified foundation; that candidate is not required to reproduce this new Git-recorded source."
+  "historical_evidence_gap": "Historical candidate source remains unrecovered. The owner approved rebuilding missing integration on the verified foundation; that candidate is not required to reproduce this new Git-recorded source.",
+  "samsung_final": {
+    "source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
+    "installed": [
+      {
+        "role": "app",
+        "sha256": "8147498b9ff787991b4c97c0b07549931e08f280cef84fb9bfa8630dc81d6f9f",
+        "matches_receipt": true
+      },
+      {
+        "role": "test",
+        "sha256": "037d30a59ef673b40aef4a60d2a8ff4c50e3a726acd0ceded1f50c9282880b67",
+        "matches_receipt": true
+      }
+    ],
+    "cold_start_ms": 143,
+    "journeys": [
+      {
+        "journey": "preview-portrait",
+        "tests": 1,
+        "failures": 0,
+        "seconds": 32.587,
+        "raw_log": "samsung-e3525b9/preview-portrait.txt",
+        "sha256": "0ab8de7b2add6fcfb548e51eb435e36463a72f01d70d95a4efc6a9157342148e"
+      },
+      {
+        "journey": "preview-landscape",
+        "tests": 1,
+        "failures": 0,
+        "seconds": 26.155,
+        "raw_log": "samsung-e3525b9/preview-landscape.txt",
+        "sha256": "2fff306cc97c6d1b9d3e6da7c9b2c16c39100409f34f92ef46c601df0bd69be1"
+      },
+      {
+        "journey": "preview-landscape-repeat",
+        "tests": 1,
+        "failures": 0,
+        "seconds": 31.909,
+        "raw_log": "samsung-e3525b9/preview-landscape-repeat.txt",
+        "sha256": "cd7312b2faf364eb9a2dbdf8b809b63301f655b4adb0ea5804b575e83254cced"
+      },
+      {
+        "journey": "typed-speech",
+        "tests": 2,
+        "failures": 0,
+        "seconds": 56.189,
+        "raw_log": "samsung-e3525b9/typed-speech.txt",
+        "sha256": "a0f7ced96e0f2e1452930723f464aebd06d6dbd414acb1232d60f3a2ddebf3a7"
+      },
+      {
+        "journey": "native-speech",
+        "tests": 4,
+        "failures": 0,
+        "seconds": 33.435,
+        "raw_log": "samsung-e3525b9/native-speech.txt",
+        "sha256": "cf48e114bc5974f3b2e1e305d94968622ddb9aaf6b5f03b08208c3cddc32f957"
+      }
+    ],
+    "total_tests": 9,
+    "failures": 0,
+    "original_settings_restored": true,
+    "returned_home": true,
+    "started_utc": "2026-10-25T20:59:30.9287315Z",
+    "finished_utc": "2026-10-25T21:02:48.2020617Z",
+    "limits": "Bounded instrumentation acceptance; does not establish recognition, voice quality, full visual/privacy/support matrix or commercial readiness."
+  },
+  "voice_quality": {
+    "status": "OWNER_REPORTED_COMMERCIAL_READINESS_BLOCKER",
+    "observation": "Owner confirmed synthetic audio works but found its voice unacceptable. No real-user speech was recorded.",
+    "current_voice": "Flite CMU US SLT, selected in native/android/app/src/main/cpp/flite/private_runtime.c:203",
+    "confidence": "Owner-reported quality failure; no measured quality benchmark or root cause established",
+    "required_verification": "Compare engine PCM and actual phone playback including sample rate/prosody before selecting a better fully offline voice. Preserve cancellation, memory cleanup and capture policy, review code/model licenses, then repeat exact final artifact checks on both phones. No speech engine or voice change in this pass."
+  }
 }
