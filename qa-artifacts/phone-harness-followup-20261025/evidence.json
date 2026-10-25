@@ -84,8 +84,7 @@
     "Recorded-video tracking/model inference, feature parity, accuracy, rejection and phone performance unverified",
     "Commercial model/data licensing and deployment admission incomplete",
     "Exact final artifact on both phones, capture/privacy/support matrix and full-app 16KiB runtime acceptance incomplete",
-    "Production identity/signing and store artifact acceptance deferred; future Play and Solana keys must differ",
-    "Historical candidate source unrecovered; current work is approved foundation reconstruction"
+    "Production identity/signing and store artifact acceptance deferred; future Play and Solana keys must differ"
   ],
   "next_step": "Use only a free phone at Home; verify installed exact signed hashes, cold-start, portrait and landscape preview, typed speech and native speech; repeat on the second phone. Restore original permissions/rotation and return owned phones Home. No release or installation recommendation.",
   "original_issues": [
@@ -100,5 +99,6 @@
     "PhonePreviewIntegrationTest.findActionButton/nativeFullyVisible/tapActionButton, lines254-386; callers initial Start, Stop, Back, Home/reopen",
     "PhoneActivityDriver launch/close; native speech job/PCM/AudioTrack cleanup assertions; camera provider/preview state and registered-view lifecycle assertions",
     "Shared actual APK manifest/ZIP validators and downloaded unsigned/signed payloads"
-  ]
+  ],
+  "historical_evidence_gap": "Historical candidate source remains unrecovered. The owner approved rebuilding missing integration on the verified foundation; that candidate is not required to reproduce this new Git-recorded source."
 }
