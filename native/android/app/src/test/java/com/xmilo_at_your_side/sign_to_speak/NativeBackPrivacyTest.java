@@ -598,6 +598,45 @@ public class NativeBackPrivacyTest {
         fresh.dispose();
     }
 
+    @Test public void pendingNewViewCannotBindAfterRetiredViewCleanupFails() throws Exception {
+        Preview retired = startBoundPreview();
+        SettableFuture<ProcessCameraProvider> pending = SettableFuture.create();
+        ProviderCompanionShadow.nextFuture = pending;
+        PrivateCameraView next = new PrivateCameraView(
+            new ThemedReactContext(reactContext, new ContextWrapper(activity), "PendingAfterFault", 5));
+        next.setId(102);
+        root.addView(next, new FrameLayout.LayoutParams(320, 240));
+        try {
+            next.setActive(true);
+            assertEquals("New view must actually be waiting for its provider", 2,
+                ProviderCompanionShadow.acquisitionCount);
+            assertFalse(pending.isDone());
+            assertTrue((Boolean) field(next, "requested"));
+            assertNull(field(next, "preview"));
+
+            doThrow(new UnsupportedOperationException("Injected retired-view cleanup failure"))
+                .when(provider).unbind(retired);
+            injectedUnbindFaults = new Preview[] {retired};
+            view.setActive(false); // Actual owned cleanup records the shared Activity fault.
+            verify(provider).unbind(retired);
+            assertEquals(1, cleanupFailures());
+            statuses.clear();
+
+            pending.set(provider);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            verify(provider, times(1)).bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
+                any(CameraSelector.class), any(Preview.class));
+            assertFalse("Late provider must cancel the pending request after shared cleanup failure",
+                (Boolean) field(next, "requested"));
+            assertNull(field(next, "preview"));
+            assertEquals(View.INVISIBLE, ((PreviewView) field(next, "previewView")).getVisibility());
+            assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+            assertEquals("Late callback must preserve the Activity fault latch", 1, cleanupFailures());
+        } finally {
+            next.dispose();
+        }
+    }
+
     @Test public void sharedCleanupFailureDuringBindErrorRetainsFaultStatus() throws Exception {
         doAnswer(call -> {
             Preview owned = call.getArgument(2);
@@ -737,6 +776,20 @@ public class NativeBackPrivacyTest {
         verify(provider, never()).bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
             any(CameraSelector.class), any(Preview.class));
         assertEquals("front_camera_unavailable", statuses.get(statuses.size() - 1));
+    }
+
+    @Test public void defaultRearUnavailableNeverFallsBackToFront() throws Exception {
+        when(provider.hasCamera(CameraSelector.DEFAULT_BACK_CAMERA)).thenReturn(false);
+        view.setActive(true);
+        assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertStopped();
+        verify(provider).hasCamera(CameraSelector.DEFAULT_BACK_CAMERA);
+        verify(provider, never()).hasCamera(CameraSelector.DEFAULT_FRONT_CAMERA);
+        verify(provider, never()).bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class),
+            any(CameraSelector.class), any(Preview.class));
+        assertEquals("rear_camera_unavailable", statuses.get(statuses.size() - 1));
     }
 
     @Test public void failedCleanupDuringLensChangeBlocksRebind() throws Exception {
