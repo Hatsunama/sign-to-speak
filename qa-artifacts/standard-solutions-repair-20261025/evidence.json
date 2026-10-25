@@ -1,0 +1,132 @@
+{
+  "date": "2026-10-25",
+  "status": "IMPLEMENTATION_VERIFIED_RELEASE_BLOCKED",
+  "tested_source": "6a0e373223e2c9d8ef3e6a8fb17322d1c26ca44c",
+  "base": "11b6aa4a76b6b1c0ea32b50babd3b732f601d236",
+  "scope": "Approved standard-solutions audit repairs; no native UI/runtime source, model, dependency or signing changes",
+  "issues": [
+    {
+      "issue": "Copied manifest policies missed emulator component/debuggable rejection",
+      "status": "REPAIRED",
+      "change": "Both entrypoints now call the same application/instrumentation validators; ABI and dependency-specific asset policies remain separate"
+    },
+    {
+      "issue": "Python optimization removed admission/evidence checks",
+      "status": "REPAIRED",
+      "change": "Five validators use unconditional explicit rejection; CLI regressions cover -O and PYTHONOPTIMIZE"
+    },
+    {
+      "issue": "Duplicate ZIP names accepted by app validators",
+      "status": "REPAIRED",
+      "change": "All APK entrypoints use common ZIP integrity, uniqueness and unsigned checks; existing SDK signature checks remain"
+    },
+    {
+      "issue": "Duplicated Gradle forbidden-task predicate",
+      "status": "CONSOLIDATED",
+      "change": "Both QA variants execute one compiled predicate and fixture matrix; Python graph checker stays independent"
+    }
+  ],
+  "related_repairs": [
+    "Duplicate uses-sdk rejection in shared manifest policy",
+    "Exact counterfactual suite/case class attribution",
+    "Duplicate inspected task-path rejection"
+  ],
+  "test_history": {
+    "authentic_initial_red_logs": {
+      "phone_app_failures": 3,
+      "phone_instrumentation_failures": 2,
+      "emulator_failures": 8
+    },
+    "independent_counterfactual_replay": "New duplicate-SDK regressions reject exact 11b6aa4 validators while valid controls pass",
+    "follow_on_failure": "One Node structural policy test still expected the old inline class check; repaired to follow and mutation-test both actual helper connections"
+  },
+  "verification": {
+    "local_node_tests": 156,
+    "local_node_failures": 0,
+    "all_script_python_suites": "passed",
+    "independent_original_malformed_probes": {
+      "normal": {
+        "rejected": 11,
+        "accepted": 0
+      },
+      "optimized": {
+        "rejected": 11,
+        "accepted": 0
+      }
+    },
+    "android_workflow": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40222853454",
+    "emulator_workflow": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40222855630",
+    "both_workflows": "success",
+    "actual_emulator_graph": "independently accepted normally and under -O"
+  },
+  "final_artifact": {
+    "tested_source": "6a0e373223e2c9d8ef3e6a8fb17322d1c26ca44c",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40222853454",
+    "normal_android": {
+      "tests": 123,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "deliberate_counterfactual": [
+      {
+        "tests": 4,
+        "failures": 4,
+        "errors": 0,
+        "skipped": 0
+      }
+    ],
+    "actual_unsigned_apk_audits": "passed independently",
+    "artifacts": [
+      {
+        "name": "app-qa-unsigned.apk",
+        "sha256": "49beacbf53548d131f0ef7c6dfe3953a8a601e2e579d9f0aff3d92e96fdecc51",
+        "matches_ci_receipt": true,
+        "entry_count": 497,
+        "payload_differences_from_c228bcd": [
+          "resources.arsc"
+        ]
+      },
+      {
+        "name": "app-qa-androidTest.apk",
+        "sha256": "063bc65141a4a63e3362d77f3d5839d16b9017bfbca9ec3119ab1d2df101ea5a",
+        "matches_ci_receipt": true,
+        "entry_count": 22,
+        "payload_differences_from_c228bcd": [
+          "resources.arsc"
+        ]
+      }
+    ],
+    "runtime_acceptance": "NOT_ESTABLISHED",
+    "resource_table_comparison": {
+      "tool": "Android SDK build-tools 36.0.0 aapt2 dump resources",
+      "app_and_instrumentation": "Only decoded change is string/react_native_dev_server_ip",
+      "baseline_value": "10.1.6.0",
+      "candidate_value": "10.1.0.56",
+      "reason": "React Native 0.86.3 Gradle plugin derives this resource from build-host IP",
+      "developer_support": false,
+      "runtime_equivalence": "Not established by this comparison"
+    }
+  },
+  "device_checkpoint": {
+    "connected_phones": 2,
+    "available_at_home": 0,
+    "reason": "Both phones have other applications in foreground",
+    "actions": "Readiness queries only; no installation, launch, rotation, permission change or Home action",
+    "required_final_artifact_runtime_checks": "NOT_RUN; release blocked"
+  },
+  "remaining_acceptance": [
+    "Existing Samsung invalid-input journey needs failed-state accessibility hierarchy and diagnosis",
+    "Cold-start and affected feature checks of exact final phone artifact on both phones"
+  ],
+  "other_commercial_blockers": [
+    "Camera recognition, segmentation, fingerspelling and continuous translation incomplete",
+    "Local customer microphone captions absent; typed text/platform limitations remain",
+    "Recorded-video tracking/inference, feature parity, accuracy/rejection and performance not established",
+    "Model/data deployment admission incomplete",
+    "Current privacy/device matrix and full-app 16 KiB runtime acceptance incomplete",
+    "Production signing/store identity and exact store artifact acceptance deferred"
+  ],
+  "signing": "No key created, read, copied, exported or uploaded in this repair pass; no signing/store builds",
+  "continuation": "Use a phone only when free at Home; verify/sign the exact candidate using the existing authorized debug identity only when device work can proceed; inspect the actual invalid-input hierarchy before a selector repair; after any code/build change rerun checks and both-device exact-artifact acceptance. Return owned phones Home and restore settings after use."
+}
