@@ -1,0 +1,104 @@
+{
+  "date": "2026-10-25",
+  "status": "FINAL_PHONE_ACCEPTANCE_BLOCKED_DEVICES_IN_USE",
+  "tested_source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
+  "workflow": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40229832606",
+  "workflow_conclusion": "success",
+  "scope": "Instrumentation-only locator and preview navigation repairs. App UI/runtime source, dependencies and build configuration unchanged.",
+  "failures": [
+    "Baseline typed-input test selected a same-label heading after missing raw React resource IDs; raw-ID lookup repaired and passed earlier Samsung artifacts. Final pair repeat pending.",
+    "Clean landscape preview test failed navigation; native geometry and slow scroll repair passed at 62036ee.",
+    "62036ee introduced portrait navigation deadline regression. Native-first lookup and distance-based scroll repair implemented at e3525b9; exact physical retest pending."
+  ],
+  "interrupted_run": "Owner accidentally touched first landscape run; excluded from failure evidence.",
+  "device_checkpoint": "Both connected phones have another app open and no active instrumentation seen. Neither was operated at final readiness checkpoint; final pair not installed.",
+  "latest_unsigned": {
+    "source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40229832606",
+    "android": {
+      "tests": 123,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "deliberate_counterfactual": {
+      "tests": 4,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0
+    },
+    "unsigned": [
+      {
+        "role": "app",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-e3525b9\\unsigned\\qa\\app-qa-unsigned.apk",
+        "unsigned_sha256": "23d75d7c60c9f4db7bbc3f3574ccfcb1fef9e5b19c11a9a96d6c6ae728b67881",
+        "changed_payloads_from_62036ee": [
+          "resources.arsc"
+        ]
+      },
+      {
+        "role": "test",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-e3525b9\\unsigned\\androidTest\\qa\\app-qa-androidTest.apk",
+        "unsigned_sha256": "3b6cac53f885776d0ecdbf3a1358501f7ccf538a492a4257512c1ad218d77875",
+        "changed_payloads_from_62036ee": [
+          "classes.dex",
+          "resources.arsc"
+        ]
+      }
+    ],
+    "actual_apk_audits": "passed independently"
+  },
+  "latest_signed": {
+    "source": "e3525b994d1bea5fc301508b98007ca7b71fb29c",
+    "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+    "key_unchanged": true,
+    "artifacts": [
+      {
+        "role": "app",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-e3525b9\\signed\\app-signed.apk",
+        "unsigned_sha256": "23d75d7c60c9f4db7bbc3f3574ccfcb1fef9e5b19c11a9a96d6c6ae728b67881",
+        "signed_sha256": "8147498b9ff787991b4c97c0b07549931e08f280cef84fb9bfa8630dc81d6f9f",
+        "payloads_identical_to_unsigned": true
+      },
+      {
+        "role": "test",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-e3525b9\\signed\\test-signed.apk",
+        "unsigned_sha256": "3b6cac53f885776d0ecdbf3a1358501f7ccf538a492a4257512c1ad218d77875",
+        "signed_sha256": "037d30a59ef673b40aef4a60d2a8ff4c50e3a726acd0ceded1f50c9282880b67",
+        "payloads_identical_to_unsigned": true
+      }
+    ]
+  },
+  "prior_samsung_62036ee": {
+    "preview_portrait": "FAILED initial navigation; camera never started",
+    "preview_landscape": "1 passed",
+    "typed_speech": "2 passed",
+    "native_speech": "4 passed"
+  },
+  "signing": "Existing local development key unchanged; no new key, key copy, upload or store build.",
+  "review": "No additional evidenced issue found in inspected changed locator/scroll/lifecycle paths. Physical correctness not established.",
+  "commercial_blockers": [
+    "Camera recognition, segmentation, fingerspelling and continuous translation absent from customer flow",
+    "Local customer microphone captions absent",
+    "Typed speech limited to printable ASCII up to 256 characters; API26-28 speech disabled by privacy policy",
+    "Recorded-video tracking/model inference, feature parity, accuracy, rejection and phone performance unverified",
+    "Commercial model/data licensing and deployment admission incomplete",
+    "Exact final artifact on both phones, capture/privacy/support matrix and full-app 16KiB runtime acceptance incomplete",
+    "Production identity/signing and store artifact acceptance deferred; future Play and Solana keys must differ",
+    "Historical candidate source unrecovered; current work is approved foundation reconstruction"
+  ],
+  "next_step": "Use only a free phone at Home; verify installed exact signed hashes, cold-start, portrait and landscape preview, typed speech and native speech; repeat on the second phone. Restore original permissions/rotation and return owned phones Home. No release or installation recommendation.",
+  "original_issues": [
+    "Shared manifest/ZIP admission: repaired; original malformed probes and optimized Python checks retained in ../standard-solutions-repair-20261025/evidence.json",
+    "Duplicated Gradle forbidden-task guard: consolidated; existing workflow and fixture checks pass",
+    "Superseded browser prototype: retired from active tree; Git history preserves provenance",
+    "Samsung invalid-input journey: proven locator defect repaired; latest exact pair needs repeat",
+    "Preview navigation: repair implemented; portrait regression physical retest unresolved"
+  ],
+  "related_paths_inspected": [
+    "PhoneTypedSpeechIntegrationTest.findNode/tap/scrollFor, lines166-190; raw testIDs in native/App.tsx",
+    "PhonePreviewIntegrationTest.findActionButton/nativeFullyVisible/tapActionButton, lines254-386; callers initial Start, Stop, Back, Home/reopen",
+    "PhoneActivityDriver launch/close; native speech job/PCM/AudioTrack cleanup assertions; camera provider/preview state and registered-view lifecycle assertions",
+    "Shared actual APK manifest/ZIP validators and downloaded unsigned/signed payloads"
+  ]
+}
