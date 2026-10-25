@@ -84,32 +84,20 @@ class PrivateCameraView(private val reactContext: ThemedReactContext) :
             }
             return
         }
-        if (!wasRequested || !released || disposed) return
-        registerWithActivity()
-        if (cameraActivity?.capturePrivacyReady != true ||
-            cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0 ||
-            !isAttachedToWindow) {
-            if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) reportCleanupFailure()
-            else if (cameraActivity?.capturePrivacyReady != true) status("capture_privacy_unavailable")
-            return
-        }
-        val owner = reactContext.currentActivity as? LifecycleOwner
-        if (owner == null || !owner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) return
-        requested = true
-        start()
+        if (wasRequested && released) setActive(true)
     }
 
     fun setActive(active: Boolean) {
         if (!active) { stop(); return }
         if (disposed || requested) return
         registerWithActivity()
+        if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
+            reportCleanupFailure(); return
+        }
         if (cameraActivity?.capturePrivacyReady != true) {
             stop()
             status("capture_privacy_unavailable")
             return
-        }
-        if (cleanupFailed || (cameraActivity?.cameraCleanupFailures ?: 0) > 0) {
-            reportCleanupFailure(); return
         }
         if (selectedLens == null) { status("camera_unavailable"); return }
         requested = true

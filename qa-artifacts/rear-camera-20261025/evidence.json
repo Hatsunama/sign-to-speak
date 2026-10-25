@@ -1,5 +1,5 @@
 {
-  "status": "NATIVE_REPAIR_IN_PROGRESS_REQUIRED_FINAL_ARTIFACT_NOT_VERIFIED",
+  "status": "REPAIR_IMPLEMENTED_FINAL_CI_AND_BOTH_PHONES_PENDING",
   "requested_change": "Rear default; explicit front/rear selection before and during preview. One new control matching existing button styling; all other appearance/behavior preserved.",
   "baseline_source": "919fa3f6c9856096a2ef4b3ed7c95f3a5f298641",
   "baseline_run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40234744090",
@@ -55,5 +55,29 @@
     "https://developer.android.com/reference/androidx/camera/core/CameraSelector",
     "https://developer.android.com/reference/androidx/camera/core/CameraInfo#getLensFacing()"
   ],
-  "required_next": "Finish native repair, keep cleanup counterfactual valid, full CI, independently audit/sign exact APK pair, cold-start and exercise actual default/pre-start/live lens selection and cleanup on both free phones; restore settings/Home. Release blocked until required checks complete."
+  "required_next": "Finish native repair, keep cleanup counterfactual valid, full CI, independently audit/sign exact APK pair, cold-start and exercise actual default/pre-start/live lens selection and cleanup on both free phones; restore settings/Home. Release blocked until required checks complete.",
+  "prop_order_regression": {
+    "source": "b5f1f85bb45833579c1c8ee0ee4ce3ddf35ab2b9",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40235776082",
+    "normal_native": {
+      "tests": 151,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    "failures": [
+      {
+        "name": "activeThenFrontLensBeforeAttachmentKeepsQueuedStart[28]",
+        "type": "java.lang.AssertionError",
+        "message": "java.lang.AssertionError: Changing the lens must preserve a detached Start request"
+      },
+      {
+        "name": "activeThenFrontLensBeforeAttachmentKeepsQueuedStart",
+        "type": "java.lang.AssertionError",
+        "message": "java.lang.AssertionError: Changing the lens must preserve a detached Start request"
+      }
+    ],
+    "root_cause": "Lens change stopped a queued detached request and refused to requeue until attached. React props may arrive before attachment.",
+    "fix": "Restore the requested activation through existing setActive(true), preserving queued intent and central guards instead of duplicating restart checks."
+  }
 }
