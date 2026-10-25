@@ -51,4 +51,6 @@ No new APK/AAB was built or recommended. Android/Flite compiled tests and the no
 | Exact final two-phone verification | No commercial artifact exists; Seeker currently disconnected. |
 | Distribution | Production identity, distinct Play/Solana keys, notices, store eligibility/testing and delivered-artifact checks deferred to their gates. |
 
+The pinned reference-CPU audition harness and manual workflow are now implemented with eight asset/PCM behavior tests and 23 workflow mutation checks. They have not yet produced voice or Android evidence. The official CPU wheel index was checked for the exact Python 3.12/Linux torch 2.14.0+cpu wheel before execution.
+
 Next work is a bounded research-input diagnosis and small Pocket TTS conversion experiment on an appropriate Linux conversion host, while selecting a lawful sentence-video subset and a viable continuous model/training route. Existing hosted CI may handle conversion experiments; do not launch paid GPU jobs, large corpus downloads or new training without a resource decision. Release remains blocked, and no unverified candidate is published for installation.

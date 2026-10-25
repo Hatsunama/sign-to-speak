@@ -60,4 +60,3 @@ All numbers are proposed roadmap targets, not owner-approved gates or measured r
 | Owner/publisher | Check Play account type and conditional general-tester requirement early, identity/regions, package IDs, distinct Play/Solana signing custody/recovery, listings and disclosures. Store testers, if required, need not be Deaf. No new key or store build belongs to this contract. |
 
 Dependency chain: scope and rights → lawful annotated data/models and frozen evaluation → tracker parity and sentence feasibility → local voice/reply captions → reviewed conversation → privacy/accessibility/performance and exact QA candidate → channel identities/artifacts → store testing and approval. Missing core features or rights fail readiness; optional probes remain NOT_RUN.
-
