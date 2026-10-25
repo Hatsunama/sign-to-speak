@@ -1,4 +1,4 @@
-import importlib.util,pathlib,struct,tempfile,unittest,zipfile
+import importlib.util,os,pathlib,struct,subprocess,sys,tempfile,unittest,zipfile
 spec=importlib.util.spec_from_file_location('qa',pathlib.Path(__file__).with_name('check-phone-qa.py'))
 qa=importlib.util.module_from_spec(spec);spec.loader.exec_module(qa)
 class PhoneQaApkTest(unittest.TestCase):
@@ -73,6 +73,9 @@ class PhoneQaApkTest(unittest.TestCase):
  def test_wrong_sdk_rejected(self):
   self.xml=self.xml.replace('targetSdkVersion="36"','targetSdkVersion="35"')
   with self.assertRaises(AssertionError):self.verify()
+ def test_duplicate_sdk_rejected(self):
+  self.xml=self.xml.replace('</manifest>','<uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/></manifest>')
+  with self.assertRaises(AssertionError):self.verify()
  def test_missing_playback_capture_policy_rejected(self):
   self.xml=self.xml.replace(' android:allowAudioPlaybackCapture="false"','')
   with self.assertRaises(AssertionError):self.verify()
@@ -85,4 +88,22 @@ class PhoneQaApkTest(unittest.TestCase):
  def test_duplicate_applications_rejected(self):
   self.xml=self.xml.replace('</manifest>','<application android:allowAudioPlaybackCapture="true"/></manifest>')
   with self.assertRaises(AssertionError):self.verify()
+ def test_duplicate_zip_name_rejected(self):
+  manifest=self.root/'manifest.xml';manifest.write_text(self.xml,encoding='utf-8')
+  apk=self.root/'app.apk'
+  with zipfile.ZipFile(apk,'w') as archive:
+   for name,data in self.entries.items():archive.writestr(name,data)
+   archive.writestr('classes.dex',b'shadow')
+  with self.assertRaisesRegex(AssertionError,'Duplicate APK ZIP entry'):qa.verify(manifest,apk)
+ def test_optimized_cli_rejects_wrong_identity(self):
+  self.xml=self.xml.replace(qa.PACKAGE,qa.PACKAGE.removesuffix('.qa'))
+  manifest=self.root/'manifest.xml';manifest.write_text(self.xml,encoding='utf-8')
+  apk=self.root/'app.apk'
+  with zipfile.ZipFile(apk,'w') as archive:
+   for name,data in self.entries.items():archive.writestr(name,data)
+  for args,environment in ((['-O'],os.environ.copy()),([],dict(os.environ,PYTHONOPTIMIZE='1'))):
+   with self.subTest(mode=args or 'PYTHONOPTIMIZE'):
+    result=subprocess.run([sys.executable,*args,str(pathlib.Path(qa.__file__)),str(manifest),str(apk)],capture_output=True,text=True,env=environment)
+    self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+    self.assertIn('APK must use the isolated QA identity',result.stderr)
 if __name__=='__main__':unittest.main()

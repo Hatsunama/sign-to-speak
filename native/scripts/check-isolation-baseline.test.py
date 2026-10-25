@@ -5,6 +5,7 @@ import shutil
 import subprocess
 import os
 import unittest
+import sys
 import xml.etree.ElementTree as ET
 spec = importlib.util.spec_from_file_location('checker', pathlib.Path(__file__).with_name('check-isolation-baseline.py'))
 checker = importlib.util.module_from_spec(spec)
@@ -17,10 +18,10 @@ class BaselineCheckerTest(unittest.TestCase):
         self.report = pathlib.Path(self.tmp.name) / 'result.xml'
         self.source = pathlib.Path(self.tmp.name) / 'NativeBackPrivacyTest.java'
         self.source.write_text('\n'.join(f'assertNull("{msg}", escaped);' for msg in checker.MESSAGES.values()))
-        self.root = ET.Element('testsuite', failures='4', errors='0')
+        self.root = ET.Element('testsuite', name=checker.CLASS_NAME, failures='4', errors='0')
         for line, (name, message) in enumerate(checker.MESSAGES.items(), 1):
             for suffix in ('[28]', ''):
-                case = ET.SubElement(self.root, 'testcase', name=name + suffix)
+                case = ET.SubElement(self.root, 'testcase', name=name + suffix, classname=checker.CLASS_NAME)
                 fail = ET.SubElement(case, 'failure', type='java.lang.AssertionError', message=message + ' expected null, but was:<java.lang.UnsupportedOperationException: Injected CameraX cleanup failure>')
                 fail.text = f'at x.NativeBackPrivacyTest.{name}(NativeBackPrivacyTest.java:{line})'
     def verify(self):
@@ -33,6 +34,9 @@ class BaselineCheckerTest(unittest.TestCase):
     def test_unapproved_prefix_rejected(self):
         failure = self.root.find('testcase/failure')
         failure.set('message', 'RuntimeError: ' + failure.get('message'))
+        with self.assertRaises(AssertionError): self.verify()
+    def test_wrong_class_rejected(self):
+        self.root.find('testcase').set('classname', 'other.NativeBackPrivacyTest')
         with self.assertRaises(AssertionError): self.verify()
     def test_wrong_line_rejected(self):
         self.root.find('testcase/failure').text = 'NativeBackPrivacyTest.java:999'
@@ -116,5 +120,41 @@ class RestoreIntegrationTest(unittest.TestCase):
             git('diff', '--exit-code', 'HEAD', '--', *originals)
     def test_restores_after_gradle_failure_without_reports(self): self.exercise(1)
     def test_restores_after_unexpected_green(self): self.exercise(0)
+
+class OptimizedCliTest(unittest.TestCase):
+    setUp = BaselineCheckerTest.setUp
+    def test_malformed_real_report_rejected_with_optimization(self):
+        fixture = pathlib.Path(__file__).with_name('fixtures') / 'run4-isolation-baseline.xml'
+        real = ET.parse(fixture).getroot()
+        for case in real.findall('testcase'):
+            for extra in case.findall('failure')[1:]:
+                case.remove(extra)
+        for mode in ('flag', 'environment'):
+            for mutation in ('extra_teardown', 'wrong_assertion', 'wrong_api', 'wrong_class'):
+                root = ET.fromstring(ET.tostring(real))
+                first = root.find('testcase')
+                if mutation == 'extra_teardown':
+                    ET.SubElement(first, 'failure', type='java.lang.IllegalStateException', message='teardown failed')
+                elif mutation == 'wrong_assertion':
+                    first.find('failure').set('message', 'Precondition: setup failed')
+                elif mutation == 'wrong_api':
+                    first.set('name', 'unexpected[28]')
+                else:
+                    first.set('classname', 'other.NativeBackPrivacyTest')
+                ET.ElementTree(root).write(self.report)
+                # The authentic XML uses assertion source lines 204 and 232.
+                lines = [''] * 232
+                for line, message in zip((204, 232), checker.MESSAGES.values()):
+                    lines[line - 1] = f'assertNull("{message}", escaped);'
+                self.source.write_text('\n'.join(lines), encoding='utf-8')
+                command = [sys.executable]
+                environment = os.environ.copy()
+                environment.pop('PYTHONOPTIMIZE', None)
+                if mode == 'flag': command.append('-O')
+                else: environment['PYTHONOPTIMIZE'] = '1'
+                command.extend([str(pathlib.Path(checker.__file__)), str(self.report), str(self.source)])
+                result = subprocess.run(command, env=environment, capture_output=True, text=True)
+                with self.subTest(mode=mode, mutation=mutation):
+                    self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
 
 if __name__ == '__main__': unittest.main()

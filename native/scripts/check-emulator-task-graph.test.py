@@ -1,4 +1,4 @@
-import importlib.util,json,pathlib,unittest
+import importlib.util,json,pathlib,unittest,subprocess,tempfile,os,sys
 p=pathlib.Path(__file__).with_name('check-emulator-task-graph.py')
 s=importlib.util.spec_from_file_location('graph',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 TASKS=[':app:'+t for t in ['verifyUnsignedEmulatorQaIsolation','assembleEmulatorQa','assembleEmulatorQaAndroidTest']]
@@ -38,7 +38,34 @@ class Graph(unittest.TestCase):
  def test_reject_ready(self):
   r=record();r['variants']['app']['signingReady']=True
   with self.assertRaises(AssertionError):m.verify(output(r))
+ def test_reject_duplicate_inspected_path(self):
+  r=record();r['tasks'].append({'path':TASKS[0],'type':'AnotherTask'})
+  with self.assertRaises(AssertionError):m.verify(output(r))
  def test_reject_fallback_enabled(self):
   r=record();r['defaultDebugFallback']=True
   with self.assertRaises(AssertionError):m.verify(output(r))
+class OptimizedCli(unittest.TestCase):
+ def test_malformed_graph_rejected_with_optimization(self):
+  for mode in ('flag','environment'):
+   for mutation in ('forbidden_task','signed_test','wrong_variant','missing_dry_run_task'):
+    r=record();text=output(r)
+    if mutation=='forbidden_task':
+     r['tasks'].append({'path':':app:validateSigningEmulatorQa','type':'DefaultTask'});text=output(r)
+    elif mutation=='signed_test':
+     r['variants']['test']['signingConfig']='debug';text=output(r)
+    elif mutation=='wrong_variant':
+     r['variants']['app']['applicationId']='wrong.package';text=output(r)
+    else:
+     text=text.replace(':app:assembleEmulatorQaAndroidTest SKIPPED','')
+    with tempfile.TemporaryDirectory() as temp:
+     path=pathlib.Path(temp)/'task-graph.txt';path.write_text(text,encoding='utf-8')
+     command=[sys.executable]
+     environment=os.environ.copy();environment.pop('PYTHONOPTIMIZE',None)
+     if mode=='flag':command.append('-O')
+     else:environment['PYTHONOPTIMIZE']='1'
+     command.extend([str(p),str(path)])
+     result=subprocess.run(command,env=environment,capture_output=True,text=True)
+     with self.subTest(mode=mode,mutation=mutation):
+      self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+
 if __name__=='__main__':unittest.main()

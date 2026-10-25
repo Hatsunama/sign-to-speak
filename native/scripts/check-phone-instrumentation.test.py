@@ -1,4 +1,7 @@
 import importlib.util
+import os
+import subprocess
+import sys
 import pathlib
 import tempfile
 import unittest
@@ -174,6 +177,22 @@ class InstrumentationArtifact(unittest.TestCase):
         data[central - 16:central] = b'APK Sig Block 42'
         apk.write_bytes(data)
         with self.assertRaises(AssertionError): audit.verify(manifest, apk)
+
+
+    def test_optimized_cli_rejects_wrong_runner(self):
+        self.xml = self.xml.replace('androidx.test.runner.AndroidJUnitRunner', 'other.Runner')
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w') as archive:
+            for name, data in self.entries.items():
+                archive.writestr(name, data)
+        for args, environment in ((['-O'], os.environ.copy()), ([], dict(os.environ, PYTHONOPTIMIZE='1'))):
+            with self.subTest(mode=args or 'PYTHONOPTIMIZE'):
+                result = subprocess.run([sys.executable, *args, str(SCRIPT), str(manifest), str(apk)],
+                                        capture_output=True, text=True, env=environment)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('AssertionError: APK validation failed', result.stderr)
 
 
 if __name__ == '__main__':

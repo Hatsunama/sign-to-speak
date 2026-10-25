@@ -1,4 +1,4 @@
-import importlib.util,pathlib,tempfile,unittest,zipfile
+import importlib.util,os,pathlib,subprocess,sys,tempfile,unittest,zipfile
 p=pathlib.Path(__file__).with_name('check-emulator-unsigned.py');s=importlib.util.spec_from_file_location('audit',p);m=importlib.util.module_from_spec(s);s.loader.exec_module(m)
 class Unsigned(unittest.TestCase):
  def setUp(self):
@@ -64,6 +64,12 @@ class Unsigned(unittest.TestCase):
  def test_reject_wrong_test_sdk(self):
   self.test=self.test.replace('targetSdkVersion="36"','targetSdkVersion="35"')
   with self.assertRaises(AssertionError):self.verify()
+ def test_reject_duplicate_app_sdk(self):
+  self.app=self.app.replace('</manifest>','<uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/></manifest>')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_duplicate_test_sdk(self):
+  self.test=self.test.replace('</manifest>','<uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/></manifest>')
+  with self.assertRaises(AssertionError):self.verify()
  def test_reject_missing_playback_capture_policy(self):
   self.app=self.app.replace(' android:allowAudioPlaybackCapture="false"','')
   with self.assertRaises(AssertionError):self.verify()
@@ -76,4 +82,32 @@ class Unsigned(unittest.TestCase):
  def test_reject_duplicate_applications(self):
   self.app=self.app.replace('</manifest>','<application android:allowAudioPlaybackCapture="true"/></manifest>')
   with self.assertRaises(AssertionError):self.verify()
+ def test_reject_unplanned_instrumentation_components(self):
+  for tag in ('service','receiver','provider'):
+   with self.subTest(tag=tag):
+    original=self.test
+    self.test=self.test.replace('<application android:testOnly="true"/>',f'<application android:testOnly="true"><{tag} android:name="Other"/></application>')
+    try:
+     with self.assertRaises(AssertionError):self.verify()
+    finally:self.test=original
+ def test_reject_debuggable_instrumentation(self):
+  self.test=self.test.replace('android:testOnly="true"','android:testOnly="true" android:debuggable="true"')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_reject_duplicate_zip_names(self):
+  self.verify()
+  for role in ('app','test'):
+   with self.subTest(role=role):
+    apk=self.root/(role+'.apk')
+    with zipfile.ZipFile(apk,'a') as archive:archive.writestr('classes.dex',b'shadow')
+    with self.assertRaisesRegex(AssertionError,'Duplicate APK ZIP entry'):
+     m.verify(self.root/'app.xml',self.root/'app.apk',self.root/'test.xml',self.root/'test.apk')
+    self.verify()
+ def test_optimized_cli_rejects_wrong_identity(self):
+  self.verify()
+  app=self.root/'app.xml';app.write_text(self.app.replace(m.QA,m.QA.removesuffix('.qa')),encoding='utf-8')
+  for args,environment in ((['-O'],os.environ.copy()),([],dict(os.environ,PYTHONOPTIMIZE='1'))):
+   with self.subTest(mode=args or 'PYTHONOPTIMIZE'):
+    result=subprocess.run([sys.executable,*args,str(p),str(app),str(self.root/'app.apk'),str(self.root/'test.xml'),str(self.root/'test.apk')],capture_output=True,text=True,env=environment)
+    self.assertNotEqual(result.returncode,0,result.stdout+result.stderr)
+    self.assertIn('AssertionError: APK validation failed',result.stderr)
 if __name__=='__main__':unittest.main()

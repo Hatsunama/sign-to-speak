@@ -243,6 +243,7 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
 // Pass typed objects from this compiled script into the isolated applied-script classloader.
 ext.emulatorQaBuildInputs = [bundledVariants: reactDebuggableVariants,
     mergedManifest: SingleArtifact.MERGED_MANIFEST.INSTANCE]
+apply from: "unsigned-qa-task-guard.gradle"
 apply from: "emulator-qa.gradle"
 apply from: "phone-qa.gradle"
 

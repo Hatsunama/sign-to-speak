@@ -6,7 +6,28 @@ const require=createRequire(import.meta.url), yaml=require('yaml');
 const read=p=>readFileSync(new URL(p,import.meta.url),'utf8');
 const workflow=yaml.parse(read('../../.github/workflows/sign-emulator-build.yml'));
 const build=read('../android/app/emulator-qa.gradle');
-function policy(w,b) {
+const phone=read('../android/app/phone-qa.gradle');
+const guard=read('../android/app/unsigned-qa-task-guard.gradle');
+const main=read('../android/app/build.gradle');
+function verifySharedTaskGuard(m,g,b,p) {
+ const apply='apply from: \"unsigned-qa-task-guard.gradle\"';
+ assert.equal(m.split(apply).length,2);
+ for(const qa of ['emulator-qa.gradle','phone-qa.gradle']) {
+  const position=m.indexOf(`apply from: \"${qa}\"`);
+  assert.ok(position>m.indexOf(apply),`${qa} must follow the shared guard`);
+ }
+ assert.match(g,/def forbiddenUnsignedQaTask = \{ String path, String name, String type ->/);
+ assert.match(g,/type\.contains\(\"ValidateSigningTask\"\)/);
+ assert.match(g,/\[\":app:harmless\", \"com\.android\.build\.gradle\.internal\.tasks\.ValidateSigningTask\"\]/);
+ assert.match(g,/ext\.forbiddenUnsignedQaTask = forbiddenUnsignedQaTask/);
+ assert.match(g,/ext\.verifyUnsignedQaTaskFixtures = verifyUnsignedQaTaskFixtures/);
+ for(const script of [b,p]) {
+  assert.match(script,/gradle\.taskGraph\.whenReady \{ graph ->[\s\S]*?project\.ext\.verifyUnsignedQaTaskFixtures\(\)/);
+  assert.match(script,/def forbidden = graph\.allTasks\.findAll \{ task ->\s*project\.ext\.forbiddenUnsignedQaTask\(task\.path, task\.name, task\.class\.name\)\s*\}/);
+  assert.match(script,/if \(\!forbidden\.isEmpty\(\)\)\s*(?:\{|throw)/);
+ }
+}
+function policy(w,b,g=guard,m=main,p=phone) {
  assert.deepEqual(Object.keys(w.jobs),['unsigned']);
  const job=w.jobs.unsigned;
  assert.equal(job['runs-on'],'ubuntu-24.04');assert.equal(job['timeout-minutes'],30);
@@ -35,7 +56,7 @@ function policy(w,b) {
  assert.doesNotMatch(b,/System\.getenv|storeFile|storePassword|keyPassword|signingConfigs\.debug/);
  assert.match(b,/android\.testVariants\.all/);
  assert.equal([...b.matchAll(/variant\.isSigningReady\(\)/g)].length,2);
- assert.match(b,/task\.class\.name\.contains\("ValidateSigningTask"\)/);
+ verifySharedTaskGuard(m,g,b,p);
  assert.match(b,/android\.injected\.signing\./);
  assert.match(b,/projectProperties\[fallbackOption\] != "false"/);
 }
@@ -54,8 +75,22 @@ for(const [label,b] of [
  ['implicit opt-in',build.replace('if (emulatorQaEnabled)','if (true)')],
  ['secret input',build+'\nSystem.getenv("SECRET")'],
  ['resolved signer guard removed',build.replaceAll('variant.isSigningReady()', 'false')],
- ['signing task class guard removed',build.replace('task.class.name.contains("ValidateSigningTask")', 'false')],
 ]) test('rejects '+label,()=>assert.throws(()=>policy(workflow,b)));
+test('rejects shared signing task class guard removal',()=>{
+ assert.throws(()=>policy(workflow,build,guard.replace('type.contains("ValidateSigningTask")','false')));
+});
+for(const [label,emulator,phoneScript] of [
+ ['emulator task guard invocation removed',build.replace('project.ext.forbiddenUnsignedQaTask(task.path, task.name, task.class.name)','false'),phone],
+ ['phone task guard invocation removed',build,phone.replace('project.ext.forbiddenUnsignedQaTask(task.path, task.name, task.class.name)','false')],
+ ['emulator fixture verification removed',build.replace('project.ext.verifyUnsignedQaTaskFixtures()',''),phone],
+ ['phone fixture verification removed',build,phone.replace('project.ext.verifyUnsignedQaTaskFixtures()','')],
+]) test('rejects '+label,()=>assert.throws(()=>policy(workflow,emulator,guard,main,phoneScript)));
+test('rejects shared task guard applied after QA scripts',()=>{
+ const reordered=main.replace(/apply from: "unsigned-qa-task-guard\.gradle"\r?\n/,'').replace('apply from: "phone-qa.gradle"','apply from: "phone-qa.gradle"\napply from: "unsigned-qa-task-guard.gradle"');
+ assert.notEqual(reordered,main);
+ assert.equal(reordered.split('apply from: "unsigned-qa-task-guard.gradle"').length,2);
+ assert.throws(()=>policy(workflow,build,guard,reordered));
+});
 test('test harness proves runtime pages, loaded libraries and both orientations without media capture',()=>{
  const source=read('../android/app/src/androidTestEmulatorQa/java/com/xmilo_at_your_side/sign_to_speak/EmulatorPrivacyLifecycleTest.java');
  for(const token of ['Os.sysconf(OsConstants._SC_PAGESIZE)','Build.SUPPORTED_ABIS[0]','/proc/self/maps','libhermesvm.so','libreactnative.so','libappmodules.so','startingOrientation','cycle < 2','repeat < 3','permission_deny_button','STREAMING'])assert.ok(source.includes(token),token);

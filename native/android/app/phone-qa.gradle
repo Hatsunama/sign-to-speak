@@ -128,19 +128,9 @@ if (phoneQaEnabled) {
         if (!checked.dsl || !checked.app || !checked.test) {
             throw new GradleException("Both resolved unsigned phone variants must be checked")
         }
+        project.ext.verifyUnsignedQaTaskFixtures()
         def forbidden = graph.allTasks.findAll { task ->
-            def n = task.name.toLowerCase()
-            def localLintJar = task.path == ":react-native-safe-area-context:prepareLintJarForPublish" &&
-                    task.class.name in ["com.android.build.gradle.internal.tasks.PrepareLintJarForPublish",
-                        "com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated"]
-            n.contains("validatesigning") || n.contains("keystore") || n.contains("keytool") ||
-                    n ==~ /.*(create|generate).*key.*/ || n.startsWith("sign") ||
-                    n.startsWith("install") || n.startsWith("uninstall") || n.startsWith("connected") ||
-                    (n.contains("publish") && !localLintJar) || n.contains("upload") ||
-                    n in ["assemblerelease", "bundlerelease"] ||
-                    task.class.name.contains("ValidateSigningTask") ||
-                    task.class.name.contains("PublishToMaven") ||
-                    task.class.name.contains("PublishToIvyRepository")
+            project.ext.forbiddenUnsignedQaTask(task.path, task.name, task.class.name)
         }
         println("SIGN_PHONE_UNSIGNED_GRAPH=" + JsonOutput.toJson([
             agp: "8.12.0", variants: checked, defaultDebugFallback: false,
