@@ -266,16 +266,21 @@ public final class PhonePreviewIntegrationTest {
         String last = "label absent";
         String lastGesture = "none";
         while (SystemClock.elapsedRealtime() < end) {
-            UiObject2 text = device.findObject(By.pkg(QA_PACKAGE).text(label));
-            if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
-            UiObject2 button = text;
-            while (button != null && !button.isClickable()) button = button.getParent();
+            // Native geometry is authoritative while the target is offscreen. Accessibility
+            // text/description searches can consume the whole deadline on a clipped button.
+            ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
             Rect viewport = scroll == null ? null : scroll.getVisibleBounds();
             Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
-            ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-            Rect visible = button == null ? null : button.getVisibleBounds();
             boolean nativeVisible = nativeFullyVisible(nativeBounds, viewport, screen);
+            UiObject2 text = null;
+            if (nativeVisible) {
+                text = device.findObject(By.pkg(QA_PACKAGE).text(label));
+                if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+            }
+            UiObject2 button = text;
+            while (button != null && !button.isClickable()) button = button.getParent();
+            Rect visible = button == null ? null : button.getVisibleBounds();
             boolean ready = button != null && nativeVisible
                     && fullyVisible(button, visible, viewport, screen, nativeBounds);
             last = "nativeVisible=" + nativeVisible + ",UIAready=" + ready
@@ -335,15 +340,22 @@ public final class PhonePreviewIntegrationTest {
                 continue;
             }
             Direction direction;
+            int distance = 0;
             if (nativeBounds != null && nativeBounds.full.top < viewport.top) {
                 direction = Direction.UP;
+                distance = viewport.top - nativeBounds.full.top;
             } else if (nativeBounds != null && nativeBounds.full.bottom > viewport.bottom) {
                 direction = Direction.DOWN;
+                distance = nativeBounds.full.bottom - viewport.bottom;
             } else {
                 direction = downward ? Direction.DOWN : Direction.UP;
             }
-            boolean moved = scroll.scroll(direction, 0.20f, TARGET_SCROLL_SPEED_PX_PER_SEC);
-            lastGesture = direction + "(20%,moved=" + moved + ",target=" + nativeBounds + ")";
+            // Ask for enough travel to cover the clipped part and gesture overhead, while
+            // retaining the slow physical scroll that prevents landscape flings.
+            float fraction = Math.max(0.20f, Math.min(0.65f,
+                    (distance + Math.min(120, viewport.height() / 5)) / (float) viewport.height()));
+            boolean moved = scroll.scroll(direction, fraction, TARGET_SCROLL_SPEED_PX_PER_SEC);
+            lastGesture = direction + "(" + fraction + ",moved=" + moved + ",target=" + nativeBounds + ")";
             if (!moved) downward = direction == Direction.UP;
             else downward = direction == Direction.DOWN;
         }
