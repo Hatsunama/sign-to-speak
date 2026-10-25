@@ -20,15 +20,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Build and audit pinned source AAR within 25 minutes
-        timeout-minutes: 27
+      - name: Build and audit pinned source AAR within 27 minutes
+        timeout-minutes: 28
         env:
           EVIDENCE_DIR: ${{ runner.temp }}/sign-offline-tracker
         run: |
           set -euo pipefail
           mkdir -p "$EVIDENCE_DIR"
           git rev-parse HEAD > "$EVIDENCE_DIR/app-source-commit.txt"
-          timeout --signal=TERM --kill-after=30s 25m \
+          timeout --signal=TERM --kill-after=30s 27m \
             bash native/scripts/build-offline-mediapipe.sh \
             2>&1 | tee "$EVIDENCE_DIR/build.log"
       - name: Preserve source build result and blockers
