@@ -79,5 +79,11 @@
     ],
     "root_cause": "Lens change stopped a queued detached request and refused to requeue until attached. React props may arrive before attachment.",
     "fix": "Restore the requested activation through existing setActive(true), preserving queued intent and central guards instead of duplicating restart checks."
+  },
+  "emulator_followup": {
+    "issue": "Existing front-camera privacy lifecycle matrix directly started the newly rear-default app, then waited for front camera availability changes.",
+    "change": "Select front through the rendered UI before each applicable off-state Start, preserving camera-off, permission state, original front availability assertions and stage IDs.",
+    "verification": "New structural connection guard failed before correction and passed afterward; 25 emulator policy checks pass. This is not emulator runtime acceptance. Fresh emulator build required.",
+    "phone_artifact_impact": "Only androidTestEmulatorQa source and its host policy guard changed after 46e7805; application and androidTestQa build inputs are unchanged. Actual phone tests will use exact signed 46e7805 APKs."
   }
 }

@@ -96,6 +96,25 @@ test('test harness proves runtime pages, loaded libraries and both orientations 
  for(const token of ['Os.sysconf(OsConstants._SC_PAGESIZE)','Build.SUPPORTED_ABIS[0]','/proc/self/maps','libhermesvm.so','libreactnative.so','libappmodules.so','startingOrientation','cycle < 2','repeat < 3','permission_deny_button','STREAMING'])assert.ok(source.includes(token),token);
  assert.doesNotMatch(source,/takeScreenshot|screenrecord|screencap|Bitmap\.compress|ImageCapture|VideoCapture/);
 });
+test('front-camera emulator journey selects through the rendered UI before each off-state Start',()=>{
+ const source=read('../android/app/src/androidTestEmulatorQa/java/com/xmilo_at_your_side/sign_to_speak/EmulatorPrivacyLifecycleTest.java');
+ const journey=source.slice(source.indexOf('realUiPermissionCameraAndLifecycleJourney()'),source.indexOf('private void setOrientation('));
+ const startAgain=source.slice(source.indexOf('private CameraObservation startAgain()'),source.indexOf('private CameraObservation awaitStreamingCamera()'));
+ const selection=source.slice(source.indexOf('private void selectFrontCameraWhileOff()'),source.indexOf('private CameraObservation awaitStreamingCamera()'));
+ assert.match(journey,/stage\("01_launch_real_ui_camera_off"\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/);
+ assert.match(journey,/stage\("02_os_permission_denied"\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/);
+ assert.match(journey,/if \(device\.hasObject\(By\.pkg\(QA_PACKAGE\)\.text\(grantedButOff\)\)\) \{\s*assertNoCurrentCamera\(\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/);
+ assert.match(startAgain,/assertNoCurrentCamera\(\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/);
+ assert.match(journey,/launchRealActivity\(\);\s*assertNotSame\("Reopen must create a new Activity"[\s\S]*?CameraObservation afterReopen = startAgain\(\);/);
+ assert.match(selection,/assertNoCurrentCamera\(\)/);
+ assert.match(selection,/int permissionBefore = target\.checkSelfPermission\(Manifest\.permission\.CAMERA\)/);
+ assert.match(selection,/assertEquals\("Camera selection must preserve permission state", permissionBefore,\s*target\.checkSelfPermission\(Manifest\.permission\.CAMERA\)\)/);
+ assert.match(selection,/findViews\([^;]*TextView\.class\)/s);
+ assert.match(selection,/"Switch to front camera"/);
+ assert.match(selection,/"Switch to rear camera"/);
+ assert.match(selection,/clickUiLabel\("Switch to front camera"\)/);
+ assert.doesNotMatch(selection,/setLensFacing|setCameraFacing|setFacing/);
+});
 test('applied script receives typed provider and artifact from the compiled main build script',()=>{
  const main=read('../android/app/build.gradle');
  const verifyCapture=(m,b)=>{

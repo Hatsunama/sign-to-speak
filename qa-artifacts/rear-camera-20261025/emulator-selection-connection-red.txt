@@ -1,0 +1,209 @@
+✔ bounded public unsigned build requires audited dry-run and preserves key boundary (7.7387ms)
+✔ rejects private job (3.8309ms)
+✔ rejects paid runner (1.3408ms)
+✔ rejects write token (1.5764ms)
+✔ rejects unsigned graph bypass (1.2861ms)
+✔ rejects cloud signer (1.2871ms)
+✔ rejects unbounded artifacts (0.6175ms)
+✔ rejects permission change (0.8063ms)
+✔ rejects production package (1.345ms)
+✔ rejects debug target (0.9883ms)
+✔ rejects signing inherited (1.1077ms)
+✔ rejects implicit opt-in (0.7893ms)
+✔ rejects secret input (1.6661ms)
+✔ rejects resolved signer guard removed (0.4689ms)
+✔ rejects shared signing task class guard removal (0.6868ms)
+✔ rejects emulator task guard invocation removed (0.8739ms)
+✔ rejects phone task guard invocation removed (0.7857ms)
+✔ rejects emulator fixture verification removed (0.7503ms)
+✔ rejects phone fixture verification removed (0.6609ms)
+✔ rejects shared task guard applied after QA scripts (0.8913ms)
+✔ test harness proves runtime pages, loaded libraries and both orientations without media capture (1.2267ms)
+✖ front-camera emulator journey selects through the rendered UI before each off-state Start (1.307ms)
+✔ applied script receives typed provider and artifact from the compiled main build script (1.7516ms)
+✔ runner diagnostics only inspect access and ACL-tool availability (1.2611ms)
+✔ loaded-library evidence binds executable mappings to the current APK or native directory (0.6428ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 24
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 407.3857
+
+✖ failing tests:
+
+test at native\scripts\emulator-build-policy.test.mjs:99:1
+✖ front-camera emulator journey selects through the rendered UI before each off-state Start (1.307ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /stage\("01_launch_real_ui_camera_off"\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/. Input:
+  
+  'realUiPermissionCameraAndLifecycleJourney() throws Exception {\r\n' +
+    '        assertEquals("Never run against the shipping application", QA_PACKAGE, target.getPackageName());\r\n' +
+    '        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());\r\n' +
+    '        Bundle args = InstrumentationRegistry.getArguments();\r\n' +
+    '        int expectedApi = Integer.parseInt(args.getString("expectedApi", "0"));\r\n' +
+    '        long expectedPages = Long.parseLong(args.getString("expectedPages", "0"));\r\n' +
+    '        assertTrue("Only reviewed APIs", expectedApi == 26 || expectedApi == 35 || expectedApi == 36);\r\n' +
+    '        assertTrue("Only reviewed page sizes", expectedPages == 4096 || expectedPages == 16384);\r\n' +
+    '        assertEquals("Guest matches matrix API", expectedApi, Build.VERSION.SDK_INT);\r\n' +
+    '        assertEquals("Actual app-process page size, not an image label", expectedPages,\r\n' +
+    '                Os.sysconf(OsConstants._SC_PAGESIZE));\r\n' +
+    '        assertEquals("This matrix exercises x86_64, not ARM64", "x86_64", Build.SUPPORTED_ABIS[0]);\r\n' +
+    '        startingOrientation = Integer.parseInt(args.getString("orientation", "0"));\r\n' +
+    '        assertTrue("Orientation is required", startingOrientation == Configuration.ORIENTATION_PORTRAIT\r\n' +
+    '                || startingOrientation == Configuration.ORIENTATION_LANDSCAPE);\r\n' +
+    '        assertTrue("Require the disposable Android emulator, never a personal device",\r\n' +
+    '                Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("sdk_gphone"));\r\n' +
+    '        assertEquals("Require a fresh QA install; do not pregrant camera", PackageManager.PERMISSION_DENIED,\r\n' +
+    '                target.checkSelfPermission(Manifest.permission.CAMERA));\r\n' +
+    '        assertInstalledPrivacyContract();\r\n' +
+    '        setOrientation(startingOrientation);\r\n' +
+    '        launchRealActivity();\r\n' +
+    '        assertOrientation(startingOrientation);\r\n' +
+    '        findUiLabel("Your hands. Your words.");\r\n' +
+    '        findUiLabel("Translation is not available yet");\r\n' +
+    '        assertNoCurrentCamera();\r\n' +
+    '        assertFalse("Launch alone must not open a permission dialog", hasPermissionDialog());\r\n' +
+    '        assertRealReactHermesAndHatsu();\r\n' +
+    '        stage("01_launch_real_ui_camera_off");\r\n' +
+    '\r\n' +
+    '        clickUiLabel(START);\r\n' +
+    '        clickPermissionButton("permission_deny_button");\r\n' +
+    '        await("OS camera denial", () -> target.checkSelfPermission(Manifest.permission.CAMERA)\r\n' +
+    '                == PackageManager.PERMISSION_DENIED && !hasPermissionDialog());\r\n' +
+    '        findUiLabel("Camera permission was not granted. You can use the home screen without it.");\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertNoCurrentCamera();\r\n' +
+    '        stage("02_os_permission_denied");\r\n' +
+    '\r\n' +
+    '        clickUiLabel(START);\r\n' +
+    '        clickPermissionButton(Build.VERSION.SDK_INT >= 30\r\n' +
+    '                ? "permission_allow_foreground_only_button" : "permission_allow_button");\r\n' +
+    '        await("OS foreground camera grant", () -> target.checkSelfPermission(Manifest.permission.CAMERA)\r\n' +
+    '                == PackageManager.PERMISSION_GRANTED && !hasPermissionDialog());\r\n' +
+    '        availability = new FrontCameraAvailability(target);\r\n' +
+    '        // The real OS permission dialog may pause the Activity. That pause revokes\r\n' +
+    '        // start eligibility by design; explicitly start again only for that exact UI state.\r\n' +
+    '        String grantedButOff = "Camera is off. Permission was granted; tap Start local preview to begin.";\r\n' +
+    '        await("Grant resolves to streaming or the explicit-start privacy notice", () ->\r\n' +
+    '                device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff)) ||\r\n' +
+    '                device.hasObject(By.pkg(QA_PACKAGE).text("Live preview only. Recognition: unsupported.")));\r\n' +
+    '        if (device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff))) {\r\n' +
+    '            assertNoCurrentCamera();\r\n' +
+    '            clickUiLabel(START);\r\n' +
+    '        }\r\n' +
+    '        CameraObservation first = awaitStreamingCamera();\r\n' +
+    '        findUiLabel("Live preview only. Recognition: unsupported.");\r\n' +
+    '        stage("03_emulated_front_camera_streaming");\r\n' +
+    '\r\n' +
+    '        clickWhileStreaming(STOP, first);\r\n' +
+    '        assertReleased(first);\r\n' +
+    '        findUiLabel("Camera is off.");\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        stage("04_stop_releases_owned_preview");\r\n' +
+    '\r\n' +
+    '        CameraObservation backCamera = startAgain();\r\n' +
+    '        assertStillStreaming(backCamera);\r\n' +
+    '        assertTrue("OS Back injection must succeed", device.pressBack());\r\n' +
+    '        assertReleased(backCamera);\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        stage("05_os_back_releases_owned_preview");\r\n' +
+    '\r\n' +
+    '        CameraObservation homeCamera = startAgain();\r\n' +
+    '        HatsuBackgroundView hatsu = onMain(() -> onlyView(HatsuBackgroundView.class));\r\n' +
+    '        assertStillStreaming(homeCamera);\r\n' +
+    '        assertTrue("OS Home injection must succeed", device.pressHome());\r\n' +
+    '        await("Activity really leaves RESUMED", () -> onMain(() ->\r\n' +
+    '                !activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)));\r\n' +
+    '        assertReleased(homeCamera);\r\n' +
+    '        await("Hatsu pauses in background", () -> onMain(() -> !hatsu.isAnimating()));\r\n' +
+    '        stage("06_home_releases_camera_and_pauses_hatsu");\r\n' +
+    '        Intent reopen = target.getPackageManager().getLaunchIntentForPackage(QA_PACKAGE);\r\n' +
+    '        assertNotNull("QA package must expose its own launcher", reopen);\r\n' +
+    '        target.startActivity(reopen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));\r\n' +
+    '        await("Activity resumes through launcher", () -> onMain(() ->\r\n' +
+    '                activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)));\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        assertRealReactHermesAndHatsu();\r\n' +
+    '        stage("07_launcher_resume_requires_new_start");\r\n' +
+    '\r\n' +
+    '        CameraObservation rotated = startAgain();\r\n' +
+    '        MainActivity beforeRotation = activity;\r\n' +
+    '        for (int cycle = 0; cycle < 2; cycle++) {\r\n' +
+    '            int other = startingOrientation == Configuration.ORIENTATION_PORTRAIT\r\n' +
+    '                    ? Configuration.ORIENTATION_LANDSCAPE : Configuration.ORIENTATION_PORTRAIT;\r\n' +
+    '            for (int orientation : new int[]{other, startingOrientation}) {\r\n' +
+    '                setOrientation(orientation);\r\n' +
+    '                assertOrientation(orientation);\r\n' +
+    '                CameraObservation turned = awaitStreamingCamera();\r\n' +
+    '                assertSame("Manifest handles orientation without replacing Activity", beforeRotation, activity);\r\n' +
+    '                assertSame("Rotation preserves the existing owned Preview", rotated.preview, turned.preview);\r\n' +
+    '                assertEquals("Rotation cannot silently create a new lease", rotated.token, turned.token);\r\n' +
+    '                findUiLabel(STOP);\r\n' +
+    '            }\r\n' +
+    '        }\r\n' +
+    '        clickWhileStreaming(STOP, rotated);\r\n' +
+    '        assertReleased(rotated);\r\n' +
+    '        stage("08_orientation_preserves_preview_then_stop_releases");\r\n' +
+    '\r\n' +
+    '        CameraObservation thanksCamera = startAgain();\r\n' +
+    '        clickWhileStreaming("Hatsu Is Here For You", thanksCamera);\r\n' +
+    '        findUiLabel("Thank you");\r\n' +
+    '        findUiLabel("If you want to support Hatsu please subscribe to the Patreon @Hatsunama");\r\n' +
+    '        assertReleased(thanksCamera);\r\n' +
+    '        assertNoCurrentCamera();\r\n' +
+    '        clickUiLabel("Back to Home");\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        clickUiLabel("Hatsu Is Here For You");\r\n' +
+    '        findUiLabel("Thank you");\r\n' +
+    '        assertTrue(device.pressBack());\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        for (int repeat = 0; repeat < 3; repeat++) {\r\n' +
+    '            clickUiLabel("Hatsu Is Here For You");\r\n' +
+    '            findUiLabel("Thank you");\r\n' +
+    '            assertTrue(device.pressBack());\r\n' +
+    '            findUiLabel(START);\r\n' +
+    '            assertRemainsOff();\r\n' +
+    '        }\r\n' +
+    '        stage("09_thank_you_button_and_os_back_leave_camera_off");\r\n' +
+    '\r\n' +
+    '        CameraObservation closed = startAgain();\r\n' +
+    '        MainActivity oldActivity = activity;\r\n' +
+    '        assertStillStreaming(closed);\r\n' +
+    '        scenario.close();\r\n' +
+    '        scenario = null;\r\n' +
+    '        await("Actual Activity destruction", () -> onMain(oldActivity::isDestroyed));\r\n' +
+    '        assertReleased(closed);\r\n' +
+    '        launchRealActivity();\r\n' +
+    '        assertNotSame("Reopen must create a new Activity", oldActivity, activity);\r\n' +
+    '        findUiLabel(START);\r\n' +
+    '        assertRemainsOff();\r\n' +
+    '        assertRealReactHermesAndHatsu();\r\n' +
+    '        CameraObservation afterReopen = startAgain();\r\n' +
+    '        clickWhileStreaming(STOP, afterReopen);\r\n' +
+    '        assertReleased(afterReopen);\r\n' +
+    '        stage("10_activity_reopen_stays_off_until_explicit_start");\r\n' +
+    '        stage("COMPLETE_emulator_only_no_physical_camera_asl_or_speech_claim");\r\n' +
+    '    }\r\n' +
+    '\r\n' +
+    '    '
+  
+      at TestContext.<anonymous> (file:///C:/sign_to_speak/repository/native/scripts/emulator-build-policy.test.mjs:104:9)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'realUiPermissionCameraAndLifecycleJourney() throws Exception {\r\n        assertEquals("Never run against the shipping application", QA_PACKAGE, target.getPackageName());\r\n        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());\r\n        Bundle args = InstrumentationRegistry.getArguments();\r\n        int expectedApi = Integer.parseInt(args.getString("expectedApi", "0"));\r\n        long expectedPages = Long.parseLong(args.getString("expectedPages", "0"));\r\n        assertTrue("Only reviewed APIs", expectedApi == 26 || expectedApi == 35 || expectedApi == 36);\r\n        assertTrue("Only reviewed page sizes", expectedPages == 4096 || expectedPages == 16384);\r\n        assertEquals("Guest matches matrix API", expectedApi, Build.VERSION.SDK_INT);\r\n        assertEquals("Actual app-process page size, not an image label", expectedPages,\r\n                Os.sysconf(OsConstants._SC_PAGESIZE));\r\n        assertEquals("This matrix exercises x86_64, not ARM64", "x86_64", Build.SUPPORTED_ABIS[0]);\r\n        startingOrientation = Integer.parseInt(args.getString("orientation", "0"));\r\n        assertTrue("Orientation is required", startingOrientation == Configuration.ORIENTATION_PORTRAIT\r\n                || startingOrientation == Configuration.ORIENTATION_LANDSCAPE);\r\n        assertTrue("Require the disposable Android emulator, never a personal device",\r\n                Build.FINGERPRINT.contains("generic") || Build.MODEL.contains("sdk_gphone"));\r\n        assertEquals("Require a fresh QA install; do not pregrant camera", PackageManager.PERMISSION_DENIED,\r\n                target.checkSelfPermission(Manifest.permission.CAMERA));\r\n        assertInstalledPrivacyContract();\r\n        setOrientation(startingOrientation);\r\n        launchRealActivity();\r\n        assertOrientation(startingOrientation);\r\n        findUiLabel("Your hands. Your words.");\r\n        findUiLabel("Translation is not available yet");\r\n        assertNoCurrentCamera();\r\n        assertFalse("Launch alone must not open a permission dialog", hasPermissionDialog());\r\n        assertRealReactHermesAndHatsu();\r\n        stage("01_launch_real_ui_camera_off");\r\n\r\n        clickUiLabel(START);\r\n        clickPermissionButton("permission_deny_button");\r\n        await("OS camera denial", () -> target.checkSelfPermission(Manifest.permission.CAMERA)\r\n                == PackageManager.PERMISSION_DENIED && !hasPermissionDialog());\r\n        findUiLabel("Camera permission was not granted. You can use the home screen without it.");\r\n        findUiLabel(START);\r\n        assertNoCurrentCamera();\r\n        stage("02_os_permission_denied");\r\n\r\n        clickUiLabel(START);\r\n        clickPermissionButton(Build.VERSION.SDK_INT >= 30\r\n                ? "permission_allow_foreground_only_button" : "permission_allow_button");\r\n        await("OS foreground camera grant", () -> target.checkSelfPermission(Manifest.permission.CAMERA)\r\n                == PackageManager.PERMISSION_GRANTED && !hasPermissionDialog());\r\n        availability = new FrontCameraAvailability(target);\r\n        // The real OS permission dialog may pause the Activity. That pause revokes\r\n        // start eligibility by design; explicitly start again only for that exact UI state.\r\n        String grantedButOff = "Camera is off. Permission was granted; tap Start local preview to begin.";\r\n        await("Grant resolves to streaming or the explicit-start privacy notice", () ->\r\n                device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff)) ||\r\n                device.hasObject(By.pkg(QA_PACKAGE).text("Live preview only. Recognition: unsupported.")));\r\n        if (device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff))) {\r\n            assertNoCurrentCamera();\r\n            clickUiLabel(START);\r\n        }\r\n        CameraObservation first = awaitStreamingCamera();\r\n        findUiLabel("Live preview only. Recognition: unsupported.");\r\n        stage("03_emulated_front_camera_streaming");\r\n\r\n        clickWhileStreaming(STOP, first);\r\n        assertReleased(first);\r\n        findUiLabel("Camera is off.");\r\n        assertRemainsOff();\r\n        stage("04_stop_releases_owned_preview");\r\n\r\n        CameraObservation backCamera = startAgain();\r\n        assertStillStreaming(backCamera);\r\n        assertTrue("OS Back injection must succeed", device.pressBack());\r\n        assertReleased(backCamera);\r\n        findUiLabel(START);\r\n        assertRemainsOff();\r\n        stage("05_os_back_releases_owned_preview");\r\n\r\n        CameraObservation homeCamera = startAgain();\r\n        HatsuBackgroundView hatsu = onMain(() -> onlyView(HatsuBackgroundView.class));\r\n        assertStillStreaming(homeCamera);\r\n        assertTrue("OS Home injection must succeed", device.pressHome());\r\n        await("Activity really leaves RESUMED", () -> onMain(() ->\r\n                !activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)));\r\n        assertReleased(homeCamera);\r\n        await("Hatsu pauses in background", () -> onMain(() -> !hatsu.isAnimating()));\r\n        stage("06_home_releases_camera_and_pauses_hatsu");\r\n        Intent reopen = target.getPackageManager().getLaunchIntentForPackage(QA_PACKAGE);\r\n        assertNotNull("QA package must expose its own launcher", reopen);\r\n        target.startActivity(reopen.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT));\r\n        await("Activity resumes through launcher", () -> onMain(() ->\r\n                activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)));\r\n        findUiLabel(START);\r\n        assertRemainsOff();\r\n        assertRealReactHermesAndHatsu();\r\n        stage("07_launcher_resume_requires_new_start");\r\n\r\n        CameraObservation rotated = startAgain();\r\n        MainActivity beforeRotation = activity;\r\n        for (int cycle = 0; cycle < 2; cycle++) {\r\n            int other = startingOrientation == Configuration.ORIENTATION_PORTRAIT\r\n                    ? Configuration.ORIENTATION_LANDSCAPE : Configuration.ORIENTATION_PORTRAIT;\r\n            for (int orientation : new int[]{other, startingOrientation}) {\r\n                setOrientation(orientation);\r\n                assertOrientation(orientation);\r\n                CameraObservation turned = awaitStreamingCamera();\r\n                assertSame("Manifest handles orientation without replacing Activity", beforeRotation, activity);\r\n                assertSame("Rotation preserves the existing owned Preview", rotated.preview, turned.preview);\r\n                assertEquals("Rotation cannot silently create a new lease", rotated.token, turned.token);\r\n                findUiLabel(STOP);\r\n            }\r\n        }\r\n        clickWhileStreaming(STOP, rotated);\r\n        assertReleased(rotated);\r\n        stage("08_orientation_preserves_preview_then_stop_releases");\r\n\r\n        CameraObservation thanksCamera = startAgain();\r\n        clickWhileStreaming("Hatsu Is Here For You", thanksCamera);\r\n        findUiLabel("Thank you");\r\n        findUiLabel("If you want to support Hatsu please subscribe to the Patreon @Hatsunama");\r\n        assertReleased(thanksCamera);\r\n        assertNoCurrentCamera();\r\n        clickUiLabel("Back to Home");\r\n        findUiLabel(START);\r\n        assertRemainsOff();\r\n        clickUiLabel("Hatsu Is Here For You");\r\n        findUiLabel("Thank you");\r\n        assertTrue(device.pressBack());\r\n        findUiLabel(START);\r\n        assertRemainsOff();\r\n        for (int repeat = 0; repeat < 3; repeat++) {\r\n            clickUiLabel("Hatsu Is Here For You");\r\n            findUiLabel("Thank you");\r\n            assertTrue(device.pressBack());\r\n            findUiLabel(START);\r\n            assertRemainsOff();\r\n        }\r\n        stage("09_thank_you_button_and_os_back_leave_camera_off");\r\n\r\n        CameraObservation closed = startAgain();\r\n        MainActivity oldActivity = activity;\r\n        assertStillStreaming(closed);\r\n        scenario.close();\r\n        scenario = null;\r\n        await("Actual Activity destruction", () -> onMain(oldActivity::isDestroyed));\r\n        assertReleased(closed);\r\n        launchRealActivity();\r\n        assertNotSame("Reopen must create a new Activity", oldActivity, activity);\r\n        findUiLabel(START);\r\n        assertRemainsOff();\r\n        assertRealReactHermesAndHatsu();\r\n        CameraObservation afterReopen = startAgain();\r\n        clickWhileStreaming(STOP, afterReopen);\r\n        assertReleased(afterReopen);\r\n        stage("10_activity_reopen_stays_off_until_explicit_start");\r\n        stage("COMPLETE_emulator_only_no_physical_camera_asl_or_speech_claim");\r\n    }\r\n\r\n    ',
+    expected: /stage\("01_launch_real_ui_camera_off"\);\s*selectFrontCameraWhileOff\(\);\s*clickUiLabel\(START\);/,
+    operator: 'match',
+    diff: 'simple'
+  }
