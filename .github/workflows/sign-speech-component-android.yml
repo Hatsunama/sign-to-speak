@@ -1,0 +1,178 @@
+name: Pocket TTS Android native component
+
+# Hosted component compilation only; no app, device, signing, or release operation.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/sign-speech-component-android.yml
+      - native/scripts/speech-component-android-policy.test.mjs
+      - native/scripts/ci-sdk.sh
+      - native/vendor/pocket-tts-runtime/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-speech-component-android-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  component:
+    if: >-
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event.repository.private == false &&
+      ((github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/codex/native-recognition-flow-20261024') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == 'Hatsunama/sign-to-speak' &&
+        github.event.pull_request.head.ref == 'codex/native-recognition-flow-20261024'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      CI: 'true'
+      CARGO_BUILD_JOBS: '2'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate head
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source, committed lock, and hosted tools
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test -s native/vendor/pocket-tts-runtime/Cargo.lock || { echo '::error::Committed Cargo.lock required; bootstrap is not admitted.'; exit 1; }
+          for tool in rustc cargo rustup python3 node cmake sha256sum; do command -v "$tool"; done
+          mkdir -p "$RUNNER_TEMP/pocket-android-evidence"
+          printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$RUNNER_TEMP/pocket-android-evidence/tested-sha.txt"
+          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
+      - name: Select pinned Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+      - name: Run workflow policy tests
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          node --test scripts/speech-component-android-policy.test.mjs
+      - name: Verify pinned Android SDK and NDK without accepting licenses
+        timeout-minutes: 4
+        run: bash native/scripts/ci-sdk.sh
+      - name: Configure NDK and Rust Android target
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          ndk="$sdk/ndk/27.1.12297006"
+          toolchain="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -x "$toolchain/aarch64-linux-android29-clang"
+          test -x "$toolchain/aarch64-linux-android29-clang++"
+          test -x "$toolchain/llvm-ar"
+          test -x "$toolchain/llvm-readelf"
+          test -x "$toolchain/llvm-nm"
+          test -f "$ndk/build/cmake/android.toolchain.cmake"
+          test -x "$sdk/cmake/3.31.5/bin/cmake"
+          rustup target add aarch64-linux-android --toolchain "$(rustup show active-toolchain | awk '{print $1}')"
+          rustup target list --installed | grep -Fx aarch64-linux-android
+          # The cmake crate reads CMAKE_TOOLCHAIN_FILE from the environment.
+          # The wrapper fixes ABI/API/STL before loading the official NDK toolchain.
+          cat > "$RUNNER_TEMP/android.toolchain.cmake" <<EOF
+          set(ANDROID_ABI arm64-v8a CACHE STRING "" FORCE)
+          set(ANDROID_PLATFORM android-29 CACHE STRING "" FORCE)
+          set(ANDROID_STL c++_shared CACHE STRING "" FORCE)
+          include("$ndk/build/cmake/android.toolchain.cmake")
+          EOF
+          {
+            echo "ANDROID_NDK_HOME=$ndk"
+            echo "CMAKE_TOOLCHAIN_FILE=$RUNNER_TEMP/android.toolchain.cmake"
+            echo "CMAKE=$sdk/cmake/3.31.5/bin/cmake"
+            echo "CC_aarch64_linux_android=$toolchain/aarch64-linux-android29-clang"
+            echo "CXX_aarch64_linux_android=$toolchain/aarch64-linux-android29-clang++"
+            echo "AR_aarch64_linux_android=$toolchain/llvm-ar"
+            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$toolchain/aarch64-linux-android29-clang"
+            echo 'CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384'
+          } >> "$GITHUB_ENV"
+          "$toolchain/llvm-readelf" --version | head -1 > "$RUNNER_TEMP/pocket-android-evidence/ndk-readelf-version.txt"
+          rustc --version > "$RUNNER_TEMP/pocket-android-evidence/rust-version.txt"
+          cargo --version > "$RUNNER_TEMP/pocket-android-evidence/cargo-version.txt"
+          "$sdk/cmake/3.31.5/bin/cmake" --version | head -1 > "$RUNNER_TEMP/pocket-android-evidence/cmake-version.txt"
+          printf 'ndk=27.1.12297006\napi=29\nabi=arm64-v8a\nrunner-image=%s\nrun=%s\nattempt=%s\n' "${ImageVersion:-unknown}" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/pocket-android-evidence/build-environment.txt"
+          sha256sum "$ndk/source.properties" "$RUNNER_TEMP/android.toolchain.cmake" > "$RUNNER_TEMP/pocket-android-evidence/toolchain-sha256.txt"
+      - name: Fetch complete locked Cargo graph and verify offline metadata
+        timeout-minutes: 5
+        working-directory: native/vendor/pocket-tts-runtime
+        run: |
+          set -euo pipefail
+          test -s Cargo.lock
+          cargo fetch --locked
+          cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-cargo-metadata.json"
+          test -s "$RUNNER_TEMP/pocket-cargo-metadata.json"
+          sha256sum Cargo.lock > "$RUNNER_TEMP/pocket-android-evidence/cargo-lock-sha256.txt"
+      - name: Cross compile actual Android ARM64 C ABI library
+        timeout-minutes: 14
+        working-directory: native/vendor/pocket-tts-runtime
+        run: |
+          set -euo pipefail
+          test -z "${RUSTFLAGS:-}"
+          cargo build --release --locked --offline --jobs 2 --target aarch64-linux-android --lib
+          test -s target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so
+          sha256sum --check "$RUNNER_TEMP/pocket-android-evidence/cargo-lock-sha256.txt"
+          sha256sum target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so > "$RUNNER_TEMP/pocket-android-evidence/component-sha256.txt"
+      - name: Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports
+        timeout-minutes: 2
+        working-directory: native/vendor/pocket-tts-runtime
+        run: |
+          set -euo pipefail
+          so=target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so
+          bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          evidence="$RUNNER_TEMP/pocket-android-evidence"
+          "$bin/llvm-readelf" -hW "$so" > "$evidence/elf-header.txt"
+          "$bin/llvm-readelf" -lW "$so" > "$evidence/elf-program-headers.txt"
+          "$bin/llvm-readelf" -dW "$so" > "$evidence/elf-dynamic.txt"
+          "$bin/llvm-nm" -D --defined-only "$so" > "$evidence/elf-exports.txt"
+          python3 - "$evidence" <<'PY'
+          from pathlib import Path
+          import re, sys
+          root = Path(sys.argv[1])
+          header = (root / 'elf-header.txt').read_text()
+          segments = (root / 'elf-program-headers.txt').read_text()
+          dynamic = (root / 'elf-dynamic.txt').read_text()
+          exports = (root / 'elf-exports.txt').read_text()
+          if not re.search(r'Machine:\s*AArch64', header) or not re.search(r'Type:\s*DYN', header):
+              raise SystemExit('Expected ARM64 shared object')
+          loads = [line.split() for line in segments.splitlines() if line.lstrip().startswith('LOAD ')]
+          if not loads:
+              raise SystemExit('Missing ELF LOAD segments')
+          for parts in loads:
+              offset, vaddr, align = (int(parts[i], 16) for i in (1, 2, -1))
+              if align < 16384 or offset % 16384 != vaddr % 16384:
+                  raise SystemExit(f'Non-16-KiB-compatible LOAD: {parts}')
+          needed = set(re.findall(r'\(NEEDED\).*?\[([^]]+)\]', dynamic))
+          allowed = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libc++_shared.so'}
+          if not needed or not needed <= allowed:
+              raise SystemExit(f'Unexpected NEEDED libraries: {sorted(needed)}')
+          symbols = {line.split()[-1] for line in exports.splitlines() if line.split()}
+          expected = {'sts_pocket_create', 'sts_pocket_synthesize', 'sts_pocket_cancel', 'sts_pocket_close'}
+          if not expected <= symbols:
+              raise SystemExit(f'Missing C ABI exports: {sorted(expected - symbols)}')
+          (root / 'elf-audit.txt').write_text(f'abi=arm64-v8a\nload_segments={len(loads)}\nneeded={sorted(needed)}\nrequired_exports={sorted(expected)}\n16k_alignment=pass\n')
+          PY
+      - name: Retain source and ELF audit evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-android-component-evidence-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-android-evidence/*.txt

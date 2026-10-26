@@ -1,8 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync} from 'node:fs';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, unlinkSync, writeFileSync} from 'node:fs';
 import {tmpdir} from 'node:os';
-import {join} from 'node:path';
+import {dirname, join} from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {createHash} from 'node:crypto';
 
@@ -12,6 +12,16 @@ const samples = {
   'verify.sh': '#!/usr/bin/env bash\nprintf "verified\\n"\n',
   'fixture.patch': 'diff --git a/old b/new\n--- a/old\n+++ b/new\n',
 };
+const componentFiles = [
+  'src/weights.rs',
+  'english_18m_2026-10.upstream.yaml',
+  'Cargo.lock',
+  'KYUTAI-MIT-LICENSE',
+];
+for (const name of componentFiles) {
+  const path = `native/vendor/pocket-tts-runtime/${name}`;
+  samples[path] = readFileSync(new URL(`../../${path}`, import.meta.url));
+}
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 function checkoutWith(attributesContent) {
@@ -23,7 +33,10 @@ function checkoutWith(attributesContent) {
     };
     git('init', '-q');
     writeFileSync(join(directory, '.gitattributes'), attributesContent);
-    for (const [name, body] of Object.entries(samples)) writeFileSync(join(directory, name), body);
+    for (const [name, body] of Object.entries(samples)) {
+      mkdirSync(dirname(join(directory, name)), {recursive: true});
+      writeFileSync(join(directory, name), body);
+    }
     git('-c', 'core.autocrlf=false', 'add', '--all');
     for (const name of Object.keys(samples)) unlinkSync(join(directory, name));
     git('-c', 'core.autocrlf=true', 'checkout-index', '--force', '--all');
@@ -33,7 +46,7 @@ function checkoutWith(attributesContent) {
   }
 }
 
-test('LF attributes preserve raw Kotlin, shell, and patch bytes on autocrlf checkouts', () => {
+test('LF attributes preserve raw source and license bytes on autocrlf checkouts', () => {
   const broken = checkoutWith(Buffer.alloc(0));
   const actual = checkoutWith(process.env.SIGN_TEST_BROKEN_ATTRIBUTES === '1' ? Buffer.alloc(0) : attributes);
   for (const [name, body] of Object.entries(samples)) {

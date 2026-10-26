@@ -8,8 +8,6 @@ pub use ptts::flow_lm::FlowType;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
-
-
 #[derive(Debug, Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct FlowConfig {
@@ -77,8 +75,6 @@ pub struct FlowLMConfig {
     pub transformer: FlowLMTransformerConfig,
     pub lookup_table: LookupTable,
     #[serde(default)]
-    pub weights_path: Option<String>,
-    #[serde(default)]
     pub insert_bos_before_voice: bool,
     /// Width of the backbone output the sampler and EOS heads read: a bias-free projection from
     /// `d_model` when set.
@@ -140,8 +136,6 @@ pub struct MimiConfig {
     pub seanet: SEANetConfig,
     pub transformer: MimiTransformerConfig,
     pub quantizer: QuantizerConfig,
-    #[serde(default)]
-    pub weights_path: Option<String>,
     #[serde(default)]
     pub inner_dim: Option<usize>,
     #[serde(default)]

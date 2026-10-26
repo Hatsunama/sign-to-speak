@@ -27,8 +27,9 @@ const GEN_SECONDS_PADDING: f64 = 2.0;
 /// cross the threshold, and a short text then ends before the word is spoken.
 const MIN_FRAMES_BEFORE_EOS: usize = 6;
 
-fn generation_completion(stop: &AtomicBool, _completed_after_eos: bool) -> Result<()> {
+fn generation_completion(stop: &AtomicBool, completed_after_eos: bool) -> Result<()> {
     if stop.load(Ordering::Acquire) { bail!("cancelled") }
+    if !completed_after_eos { bail!("generation limit reached before EOS completion") }
     Ok(())
 }
 
@@ -66,8 +67,6 @@ impl<Q: CpuBackend> VoiceState<Q> {
             _ => 0,
         }
     }
-
-
 }
 
 pub struct TtsModel<Q: CpuBackend> {
@@ -275,7 +274,6 @@ impl<Q: CpuBackend> TtsModel<Q> {
         }
         generation_completion(stop, completed_after_eos)
     }
-
 }
 
 #[cfg(test)]

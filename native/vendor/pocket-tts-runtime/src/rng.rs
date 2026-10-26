@@ -5,8 +5,7 @@
 use rand::SeedableRng;
 use rand_distr::{Distribution, Normal};
 
-/// Like PyTorch's default generator, the seed is fixed, so a given command gives the same audio
-/// every time it is run. `POCKET_TTS_SEED` picks another one.
+/// The default seed is fixed for reproducible noise draws.
 const SEED: u64 = 42;
 
 pub struct NoiseRng {

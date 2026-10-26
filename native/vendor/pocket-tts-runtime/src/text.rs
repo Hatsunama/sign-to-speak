@@ -1,8 +1,4 @@
-//! Port of `pocket_tts/models/text_chunking.py`: turning a text prompt into the chunks the model
-//! generates one at a time.
-//!
-//! The model is trained on single sentences, so long inputs are split on sentence boundaries and
-//! regrouped into chunks that fit `max_tokens`.
+//! Prompt preparation rules adapted from `pocket_tts/models/text_chunking.py`.
 
 use anyhow::{Result, bail};
 use std::collections::BTreeMap;

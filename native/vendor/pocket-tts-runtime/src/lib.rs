@@ -125,10 +125,15 @@ impl PcmWriter {
         Self { id, sink, user, buffer: [0; PCM_CHUNK], used: 0, samples: 0, failed_sink: false }
     }
     fn push(&mut self, samples: &[f32], cancelled: &AtomicBool) -> Result<(), Status> {
+        if cancelled.load(Ordering::Acquire) { return Err(Status::Cancelled) }
+        if samples.len() > 30 * 24_000 - self.samples { return Err(Status::Model) }
         for &sample in samples {
             if cancelled.load(Ordering::Acquire) { return Err(Status::Cancelled) }
-            if !sample.is_finite() || self.samples >= 30 * 24_000 { return Err(Status::Model) }
-            self.buffer[self.used] = (sample.clamp(-1.0, 1.0) * 32767.0).round() as i16;
+            if !sample.is_finite() || !(-1.0..=1.0).contains(&sample) { return Err(Status::Model) }
+        }
+        for &sample in samples {
+            if cancelled.load(Ordering::Acquire) { return Err(Status::Cancelled) }
+            self.buffer[self.used] = (sample * 32767.0).round() as i16;
             self.used += 1;
             self.samples += 1;
             if self.used == PCM_CHUNK { self.flush(cancelled)? }
@@ -222,7 +227,7 @@ fn synthesize(req: &Request, id: u64, content: &str, sink: PcmSink, user: *mut s
 fn completion_status(cancelled: &AtomicBool, pcm: &PcmWriter, generated: bool, flushed: bool) -> Status {
     if cancelled.load(Ordering::Acquire) { Status::Cancelled }
     else if pcm.failed_sink { Status::Sink }
-    else if !generated || !flushed { Status::Model }
+    else if !generated || !flushed || pcm.samples == 0 { Status::Model }
     else { Status::Ok }
 }
 
@@ -289,6 +294,20 @@ mod tests {
     #[test]
     fn nonfinite_frame_is_rejected_atomically() {
         assert_invalid_frame_is_atomic(f32::NAN);
+    }
+    #[test]
+    fn over_budget_frame_is_rejected_atomically() {
+        let cancelled = AtomicBool::new(false);
+        let calls = AtomicUsize::new(0);
+        let mut pcm = PcmWriter::new(16, counting, (&calls as *const AtomicUsize).cast_mut().cast());
+        pcm.push(&[0.25], &cancelled).unwrap();
+        pcm.samples = 30 * 24_000 - 1;
+        let before = pcm.buffer;
+        assert_eq!(pcm.push(&vec![0.0; PCM_CHUNK], &cancelled), Err(Status::Model));
+        assert_eq!(calls.load(Ordering::SeqCst), 0);
+        assert_eq!(pcm.used, 1);
+        assert_eq!(pcm.samples, 30 * 24_000 - 1);
+        assert_eq!(pcm.buffer, before);
     }
     #[test]
     fn completed_generation_without_pcm_is_model_error() {
