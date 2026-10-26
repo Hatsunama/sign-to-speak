@@ -9,9 +9,12 @@ trap 'rm -rf "$OUT"' EXIT INT TERM
   android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java tests/java/SpeechSessionTest.java \
   tests/java/SpeechTextContractTest.java \
   android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketModelStore.java \
-  tests/java/PocketModelStoreTest.java
+  tests/java/PocketModelStoreTest.java \
+  android/app/src/androidTestQa/java/com/xmilo_at_your_side/sign_to_speak/RecognitionInputStage.java \
+  tests/java/RecognitionInputStageTest.java
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" PreviewLeaseTest
 
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" SpeechSessionTest
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" SpeechTextContractTest
 "$JAVA_HOME/bin/java" -Xmx128m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.PocketModelStoreTest "$OUT"
+"$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.RecognitionInputStageTest

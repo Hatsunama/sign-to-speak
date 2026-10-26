@@ -3,11 +3,8 @@ package com.xmilo_at_your_side.sign_to_speak
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Bundle
-import android.os.Process
+import android.os.ParcelFileDescriptor
 import android.os.SystemClock
-import android.system.ErrnoException
-import android.system.Os
-import android.system.StructStat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
@@ -44,78 +41,39 @@ class PhoneRecognitionProbeTest {
     private val modelBytes = 36_870_396L
 
     private data class ClipSpec(val id: String, val file: File, val sha: String, val expectedSource: String, val expected: String)
+    private data class ClipRequest(val id: String, val path: String, val sha: String, val expectedSource: String, val expected: String)
 
     @Test
     fun stagedInputHandoffIsReadable() {
         val args: Bundle = InstrumentationRegistry.getArguments()
         assumeTrue("Opt in with -e recognitionInputProbe true", args.getString("recognitionInputProbe") == "true")
-        val expected = checkedHash(requireNotNull(args.getString("recognitionInputSha256")) {
-            "recognitionInputSha256 is required for the synthetic manifest"
-        })
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Probe requires the isolated QA target" }
+        val (transferId, manifestPin) = transferArgs(args)
+        val stage = RecognitionInputStage.create(context.cacheDir, transferId)
         val driver = if (args.getString("recognitionInputLaunch") == "true") PhoneActivityDriver(instrumentation) else null
         try {
             driver?.launch()
-            val external = requireNotNull(context.getExternalFilesDir(null)) { "Test private external files unavailable" }
-            val root = File(external, "recognition-probe")
-            require(root.isDirectory && !root.isSymbolicLink()) { "Private recognition-probe directory missing" }
-            val manifestFile = owned(root, "manifest.json")
-            val manifestStat = statDiagnostic { Os.stat(manifestFile.absolutePath) }
-            var manifestFstat: JSONObject? = null
-            val openOutcome = try {
-                FileInputStream(manifestFile).use { stream ->
-                    manifestFstat = statDiagnostic { Os.fstat(stream.fd) }
-                }
-                "opened"
-            } catch (error: Exception) {
-                error.javaClass.simpleName
-            }
-            val diagnostic = JSONObject()
-                .put("diagnostic", "recognition_input_handoff")
-                .put("process_uid", Process.myUid())
-                .put("application_uid", context.applicationInfo.uid)
-                .put("process_user", Process.myUserHandle().toString())
-                .put("package", context.packageName)
-                .put("external_absolute", external.absolutePath)
-                .put("external_canonical", external.canonicalPath)
-                .put("external_exists", external.exists())
-                .put("external_is_file", external.isFile)
-                .put("external_length", external.length())
-                .put("external_can_read", external.canRead())
-                .put("manifest_absolute", manifestFile.absolutePath)
-                .put("manifest_canonical", manifestFile.canonicalPath)
-                .put("manifest_exists", manifestFile.exists())
-                .put("manifest_is_file", manifestFile.isFile)
-                .put("manifest_length", manifestFile.length())
-                .put("manifest_can_read", manifestFile.canRead())
-                .put("manifest_stat", manifestStat)
-                .put("manifest_fstat", manifestFstat ?: JSONObject.NULL)
-                .put("manifest_stream", openOutcome)
-            instrumentation.sendStatus(2, Bundle().apply {
-                putString("stream", diagnostic.toString() + "\n")
-            })
+            val manifestFile = transfer(stage, transferId, "manifest.json", manifestPin, 16L * 1024)
             readLimited(manifestFile, 16 * 1024)
-            verifyFile(manifestFile, expected, 16L * 1024)
+            instrumentation.sendStatus(2, Bundle().apply {
+                putString("stream", JSONObject().put("diagnostic", "recognition_input_handoff")
+                    .put("status", "verified").toString() + "\n")
+            })
         } finally {
-            driver?.close()
+            try { driver?.close() } finally { RecognitionInputStage.cleanup(stage) }
         }
     }
 
-    private fun statDiagnostic(stat: () -> StructStat): JSONObject = try {
-        val result = stat()
-        JSONObject()
-            .put("st_uid", result.st_uid)
-            .put("st_gid", result.st_gid)
-            .put("st_mode", result.st_mode)
-            .put("st_size", result.st_size)
-    } catch (error: ErrnoException) {
-        JSONObject()
-            .put("exception_class", error.javaClass.simpleName)
-            .put("errno", error.errno)
-    } catch (error: Exception) {
-        JSONObject().put("exception_class", error.javaClass.simpleName)
+    @Test
+    fun cleanupStagedInputAfterInterruptedProbe() {
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue("Opt in with -e recognitionCleanupProbe true", args.getString("recognitionCleanupProbe") == "true")
+        val context = InstrumentationRegistry.getInstrumentation().targetContext
+        require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Probe requires the isolated QA target" }
+        val transferId = requireNotNull(args.getString("recognitionTransferId")) { "recognitionTransferId required" }
+        RecognitionInputStage.cleanupExisting(context.cacheDir, transferId)
     }
 
     @Test
@@ -124,93 +82,118 @@ class PhoneRecognitionProbeTest {
         assumeTrue("Opt in with -e recognitionProbe true; ordinary QA skips research assets", args.getString("recognitionProbe") == "true")
         val context = InstrumentationRegistry.getInstrumentation().targetContext
         require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Probe requires the isolated QA target" }
+        val (transferId, manifestPin) = transferArgs(args)
         val external = requireNotNull(context.getExternalFilesDir(null)) { "Test private external files unavailable" }
-        val root = File(external, "recognition-probe")
-        require(root.isDirectory && !root.isSymbolicLink()) { "Private recognition-probe directory missing" }
+        val root = File(external, "recognition-results")
+        require((root.isDirectory || root.mkdir()) && !root.isSymbolicLink()) { "Private recognition result directory unavailable" }
         val resultFile = owned(root, "result.json")
         // A failed opt-in run must never leave an older result looking current.
         require(!resultFile.exists() || (resultFile.isFile && resultFile.delete())) { "Could not clear prior probe result" }
-        val manifestFile = owned(root, "manifest.json")
-        val manifestText = readLimited(manifestFile, 16 * 1024)
-        val manifestDigest = sha256(manifestText.toByteArray(Charsets.UTF_8))
-        val manifest = JSONObject(manifestText)
-        requireKeys(manifest, setOf("schema_version", "model_sha256", "holistic_sha256", "labels_sha256", "clips"))
-        require(manifest.getInt("schema_version") == 1) { "Unsupported probe manifest schema" }
-        require(manifest.getString("model_sha256") == modelHash) { "Model pin differs from reviewed model" }
-        val holisticHash = checkedHash(manifest.getString("holistic_sha256"))
-        val labelsHash = checkedHash(manifest.getString("labels_sha256"))
-        require(holisticHash == holisticPin && labelsHash == labelsPin) { "Tracker or label pin differs from reviewed assets" }
-        val modelFile = owned(root, "model.tflite")
-        val holisticFile = owned(root, "holistic.task")
-        val labelsFile = owned(root, "labels.json")
-        require(modelFile.length() == modelBytes) { "Reviewed model size differs" }
-        verifyFile(modelFile, modelHash, modelBytes)
-        verifyFile(holisticFile, holisticHash, 30L * 1024 * 1024)
-        verifyFile(labelsFile, labelsHash, 32L * 1024)
-        val labels = parseLabels(readLimited(labelsFile, 32 * 1024))
-        val clips = manifest.getJSONArray("clips")
-        require(clips.length() in 1..4) { "Probe needs 1 to 4 clips" }
-        val seen = mutableSetOf<String>()
-        val clipSpecs = ArrayList<ClipSpec>(clips.length())
-        for (index in 0 until clips.length()) {
-            val clip = clips.getJSONObject(index)
-            requireKeys(clip, setOf("clip_id", "path", "expected", "sha256"))
-            val id = clip.getString("clip_id")
-            require(clipPattern.matches(id) && seen.add(id)) { "Invalid or duplicate clip_id" }
-            val path = clip.getString("path")
-            require(path == "$id.mp4") { "Clip path must match its identity" }
-            val expectedSource = clip.getString("expected")
-            val expected = when (expectedSource) {
-                "HELLO2" -> "hello"
-                "PLEASE" -> "please"
-                "THANKYOU" -> "thankyou"
-                else -> expectedSource
-            }
-            require(labels.contains(expected)) { "Expected label absent from official label map" }
-            val clipFile = owned(root, path)
-            val clipHash = checkedHash(clip.getString("sha256"))
-            verifyFile(clipFile, clipHash, 2L * 1024 * 1024)
-            clipSpecs.add(ClipSpec(id, clipFile, clipHash, expectedSource, expected))
-        }
-        val output = JSONObject()
-            .put("schema_version", 1)
-            .put("run_id", UUID.randomUUID().toString())
-            .put("manifest_sha256", manifestDigest)
-            .put("scope", "Research-only isolated video classification; no live recognition, segmentation, translation, or validated accuracy")
-            .put("model_sha256", modelHash)
-            .put("holistic_sha256", holisticHash)
-            .put("labels_sha256", labelsHash)
-            .put("frames_requested_per_clip", frameCount)
-            .put("layout", "first 468 face, 21 left hand, 33 pose, 21 right hand; normalized xyz; missing=NaN; parity unverified")
-        val results = JSONArray()
-        val instrumentation = InstrumentationRegistry.getInstrumentation()
-        val driver = PhoneActivityDriver(instrumentation)
+        val stage = RecognitionInputStage.create(context.cacheDir, transferId)
         try {
-            driver.launch()
-            // All asset provenance and manifest fields were checked before opening runtimes.
-            val holisticBuffer = readDirect(holisticFile, 30 * 1024 * 1024)
-            val modelBuffer = readDirect(modelFile, modelBytes.toInt())
-            val baseOptions = BaseOptions.builder().setModelAssetBuffer(holisticBuffer).build()
-            val options = HolisticLandmarker.HolisticLandmarkerOptions.builder()
-                .setBaseOptions(baseOptions).setRunningMode(RunningMode.VIDEO).build()
-            Interpreter(modelBuffer, Interpreter.Options().setNumThreads(1)).use { interpreter ->
-                assertEquals(1, interpreter.inputTensorCount)
-                assertEquals(1, interpreter.outputTensorCount)
-                assertEquals(DataType.FLOAT32, interpreter.getInputTensor(0).dataType())
-                assertEquals(DataType.FLOAT32, interpreter.getOutputTensor(0).dataType())
-                clipSpecs.forEach { clip ->
-                    // VIDEO timestamps restart at zero for each clip; tracking state must restart too.
-                    HolisticLandmarker.createFromOptions(context, options).use { detector ->
-                        results.put(runClip(clip.id, clip.file, clip.sha, clip.expectedSource, clip.expected, detector, interpreter, labels))
+            val manifestFile = transfer(stage, transferId, "manifest.json", manifestPin, 16L * 1024)
+            val manifestText = readLimited(manifestFile, 16 * 1024)
+            val manifestDigest = sha256(manifestText.toByteArray(Charsets.UTF_8))
+            require(manifestDigest == manifestPin) { "Manifest pin differs" }
+            val manifest = JSONObject(manifestText)
+            requireKeys(manifest, setOf("schema_version", "model_sha256", "holistic_sha256", "labels_sha256", "clips"))
+            require(manifest.getInt("schema_version") == 1) { "Unsupported probe manifest schema" }
+            require(manifest.getString("model_sha256") == modelHash) { "Model pin differs from reviewed model" }
+            val holisticHash = checkedHash(manifest.getString("holistic_sha256"))
+            val labelsHash = checkedHash(manifest.getString("labels_sha256"))
+            require(holisticHash == holisticPin && labelsHash == labelsPin) { "Tracker or label pin differs from reviewed assets" }
+            val clips = manifest.getJSONArray("clips")
+            require(clips.length() in 1..4) { "Probe needs 1 to 4 clips" }
+            val seen = mutableSetOf<String>()
+            val clipRequests = ArrayList<ClipRequest>(clips.length())
+            for (index in 0 until clips.length()) {
+                val clip = clips.getJSONObject(index)
+                requireKeys(clip, setOf("clip_id", "path", "expected", "sha256"))
+                val id = clip.getString("clip_id")
+                require(clipPattern.matches(id) && seen.add(id)) { "Invalid or duplicate clip_id" }
+                val path = clip.getString("path")
+                require(path == "$id.mp4") { "Clip path must match its identity" }
+                val expectedSource = clip.getString("expected")
+                val expected = when (expectedSource) {
+                    "HELLO2" -> "hello"
+                    "PLEASE" -> "please"
+                    "THANKYOU" -> "thankyou"
+                    else -> expectedSource
+                }
+                val clipHash = checkedHash(clip.getString("sha256"))
+                clipRequests.add(ClipRequest(id, path, clipHash, expectedSource, expected))
+            }
+            val modelFile = transfer(stage, transferId, "model.tflite", modelHash, modelBytes)
+            require(modelFile.length() == modelBytes) { "Reviewed model size differs" }
+            val holisticFile = transfer(stage, transferId, "holistic.task", holisticHash, 30L * 1024 * 1024)
+            val labelsFile = transfer(stage, transferId, "labels.json", labelsHash, 32L * 1024)
+            val labels = parseLabels(readLimited(labelsFile, 32 * 1024))
+            val clipSpecs = ArrayList<ClipSpec>(clipRequests.size)
+            for (request in clipRequests) {
+                require(labels.contains(request.expected)) { "Expected label absent from official label map" }
+                val clipFile = transfer(stage, transferId, request.path, request.sha, 2L * 1024 * 1024)
+                clipSpecs.add(ClipSpec(request.id, clipFile, request.sha, request.expectedSource, request.expected))
+            }
+            val output = JSONObject()
+                .put("schema_version", 1)
+                .put("run_id", UUID.randomUUID().toString())
+                .put("manifest_sha256", manifestDigest)
+                .put("scope", "Research-only isolated video classification; no live recognition, segmentation, translation, or validated accuracy")
+                .put("model_sha256", modelHash)
+                .put("holistic_sha256", holisticHash)
+                .put("labels_sha256", labelsHash)
+                .put("frames_requested_per_clip", frameCount)
+                .put("layout", "first 468 face, 21 left hand, 33 pose, 21 right hand; normalized xyz; missing=NaN; parity unverified")
+            val results = JSONArray()
+            val instrumentation = InstrumentationRegistry.getInstrumentation()
+            val driver = PhoneActivityDriver(instrumentation)
+            try {
+                driver.launch()
+                // All asset provenance and manifest fields were checked before opening runtimes.
+                val holisticBuffer = readDirect(holisticFile, 30 * 1024 * 1024)
+                val modelBuffer = readDirect(modelFile, modelBytes.toInt())
+                val baseOptions = BaseOptions.builder().setModelAssetBuffer(holisticBuffer).build()
+                val options = HolisticLandmarker.HolisticLandmarkerOptions.builder()
+                    .setBaseOptions(baseOptions).setRunningMode(RunningMode.VIDEO).build()
+                Interpreter(modelBuffer, Interpreter.Options().setNumThreads(1)).use { interpreter ->
+                    assertEquals(1, interpreter.inputTensorCount)
+                    assertEquals(1, interpreter.outputTensorCount)
+                    assertEquals(DataType.FLOAT32, interpreter.getInputTensor(0).dataType())
+                    assertEquals(DataType.FLOAT32, interpreter.getOutputTensor(0).dataType())
+                    clipSpecs.forEach { clip ->
+                        // VIDEO timestamps restart at zero for each clip; tracking state must restart too.
+                        HolisticLandmarker.createFromOptions(context, options).use { detector ->
+                            results.put(runClip(clip.id, clip.file, clip.sha, clip.expectedSource, clip.expected, detector, interpreter, labels))
+                        }
                     }
                 }
+            } finally {
+                driver.close()
             }
+            output.put("clips", results)
+            assertTrue("Probe wrote no clip results", results.length() > 0)
+            atomicWrite(resultFile, output.toString())
         } finally {
-            driver.close()
+            RecognitionInputStage.cleanup(stage)
         }
-        output.put("clips", results)
-        assertTrue("Probe wrote no clip results", results.length() > 0)
-        atomicWrite(resultFile, output.toString())
+    }
+
+    private fun transferArgs(args: Bundle): Pair<String, String> {
+        val transferId = requireNotNull(args.getString("recognitionTransferId")) { "recognitionTransferId required" }
+        // shellPath validates the token before any shell command is constructed.
+        RecognitionInputStage.shellPath(transferId, "manifest.json")
+        val manifestPin = checkedHash(requireNotNull(args.getString("recognitionManifestSha256")) {
+            "recognitionManifestSha256 required"
+        })
+        return transferId to manifestPin
+    }
+
+    private fun transfer(stage: File, transferId: String, name: String, sha: String, maxBytes: Long): File {
+        val command = "cat " + RecognitionInputStage.shellPath(transferId, name)
+        val descriptor = InstrumentationRegistry.getInstrumentation().uiAutomation.executeShellCommand(command)
+        return ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { input ->
+            RecognitionInputStage.copy(stage, name, input, sha, maxBytes)
+        }
     }
 
     private fun runClip(
@@ -364,24 +347,7 @@ class PhoneRecognitionProbeTest {
         return file
     }
 
-    private fun ownedOutput(root: File, name: String): File = owned(root, name)
-
     private fun File.isSymbolicLink(): Boolean = java.nio.file.Files.isSymbolicLink(toPath())
-
-    private fun verifyFile(file: File, expected: String, maxBytes: Long) {
-        require(file.isFile && file.length() in 1..maxBytes) { "Probe asset missing or outside size limit" }
-        val digest = MessageDigest.getInstance("SHA-256")
-        FileInputStream(file).use { stream ->
-            val chunk = ByteArray(64 * 1024)
-            while (true) {
-                val count = stream.read(chunk)
-                if (count < 0) break
-                digest.update(chunk, 0, count)
-            }
-        }
-        val actual = digest.digest().joinToString("") { "%02x".format(Locale.ROOT, it.toInt() and 0xff) }
-        require(actual == expected) { "Probe asset SHA-256 mismatch" }
-    }
 
     private fun readLimited(file: File, maxBytes: Int): String {
         require(file.isFile && file.length() in 1..maxBytes.toLong()) { "Probe JSON size invalid" }
