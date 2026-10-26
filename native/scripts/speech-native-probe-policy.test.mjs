@@ -39,6 +39,11 @@ function event(event_name, {repository = repo, privateRepo = false, ref = `refs/
     pull_request: {head: {repo: {full_name: headRepo}, ref: headRef}}}};
 }
 
+// Inspect executable Cargo lines, not comments that merely describe a command.
+function cargoLines(run) {
+  return run.split('\n').map(line => line.trim()).filter(line => /^cargo\s+/.test(line));
+}
+
 const allowed = [event('workflow_dispatch'), event('pull_request', {ref: 'refs/pull/8/merge'})];
 const rejected = [
   event('workflow_dispatch', {ref: 'refs/heads/main'}),
@@ -111,6 +116,14 @@ function audit(w) {
   assert.match(source.run, /lock\.count\(expected\) != 1/);
   assert.match(source.run, /Original Rust source mismatch/);
   assert.match(build.run, /cd "\$RUST_SOURCE_DIR\/rust"/);
+  const cargo = cargoLines(build.run);
+  const fetch = cargo.findIndex(line => /^cargo fetch\b/.test(line));
+  const metadata = cargo.findIndex(line => /^cargo metadata\b/.test(line));
+  const firstBuild = cargo.findIndex(line => /^cargo build\b/.test(line));
+  assert.ok(fetch >= 0 && metadata > fetch && firstBuild > metadata,
+    'all-target fetch and offline metadata must precede compilation and inference');
+  assert.equal(cargo[fetch], 'cargo fetch --locked');
+  assert.equal(cargo[metadata], 'cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-tts-cargo-metadata.json"');
   assert.match(build.run, /cargo build --release --locked --jobs 2/);
   assert.match(build.run, /cargo test --release --locked --jobs 2/);
   assert.match(build.run, /cp .*sign_token_probe\.rs" src\/bin\/sign_token_probe\.rs/);
@@ -133,7 +146,8 @@ function audit(w) {
   assert.match(notices.run, /'cargo_lock_sha256'/);
   assert.match(notices.run, /'app_source_sha'/);
   assert.match(notices.run, /'tool_versions'/);
-  assert.match(notices.run, /cargo', 'metadata'[\s\S]*--locked', '--offline/);
+  assert.match(notices.run, /metadata = json\.loads\(\(pathlib\.Path\(os\.environ\['RUNNER_TEMP'\]\) \/ 'pocket-tts-cargo-metadata\.json'\)\.read_text\(\)\)/);
+  assert.doesNotMatch(notices.run, /cargo', 'metadata'/);
   assert.match(notices.run, /dependency-licenses\.json/);
   assert.match(notices.run, /MIT/);
   assert.match(notices.run, /CC BY 4\.0/);
@@ -174,6 +188,9 @@ for (const [name, mutate] of [
   ['missing tokenizer wheel hash', w => {w.jobs.probe.steps[3].run = w.jobs.probe.steps[3].run.replace('sha256sum --check --status', 'cat');}],
   ['missing lock check', w => {w.jobs.probe.steps[5].run = w.jobs.probe.steps[5].run.replace('sha256sum --check --status', 'cat');}],
   ['unlocked build', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replaceAll('--locked', '');}],
+  ['target-limited fetch', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replace('cargo fetch --locked', 'cargo fetch --locked --target x86_64-unknown-linux-gnu');}],
+  ['comment-only fetch', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replace('cargo fetch --locked', '# cargo fetch --locked');}],
+  ['metadata after build', w => {const run = w.jobs.probe.steps[6].run; w.jobs.probe.steps[6].run = run.replace('cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-tts-cargo-metadata.json"\n', '').replace('cargo build --release --locked --jobs 2\n', 'cargo build --release --locked --jobs 2\n          cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-tts-cargo-metadata.json"\n');}],
   ['wrong build cwd', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replace('cd "$RUST_SOURCE_DIR/rust"', 'cd "$GITHUB_WORKSPACE"');}],
   ['missing diagnostic build', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replace('--bin sign_token_probe', '--bin pocket-tts');}],
   ['more build jobs', w => {w.jobs.probe.steps[6].run = w.jobs.probe.steps[6].run.replaceAll('--jobs 2', '--jobs 8');}],

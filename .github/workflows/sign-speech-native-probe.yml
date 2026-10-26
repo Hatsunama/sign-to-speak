@@ -151,6 +151,10 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUST_SOURCE_DIR/rust"
+          cargo fetch --locked
+          cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-tts-cargo-metadata.json"
+          test -s "$RUNNER_TEMP/pocket-tts-cargo-metadata.json"
+          printf '%s  %s\n' "$POCKET_CARGO_LOCK_SHA256" "$RUST_SOURCE_DIR/rust/Cargo.lock" | sha256sum --check --status
           cargo build --release --locked --jobs 2
           cargo test --release --locked --jobs 2
           mkdir -p src/bin
@@ -223,9 +227,7 @@ jobs:
               'cargo_jobs': os.environ['CARGO_BUILD_JOBS'],
           }
           (output / 'provision-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
-          metadata = json.loads(subprocess.check_output([
-              'cargo', 'metadata', '--manifest-path', str(source / 'rust/Cargo.toml'),
-              '--locked', '--offline', '--format-version', '1'], text=True))
+          metadata = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-tts-cargo-metadata.json').read_text())
           dependencies = sorted(({
               'name': package['name'], 'version': package['version'],
               'license': package.get('license') or 'not declared in Cargo metadata',
