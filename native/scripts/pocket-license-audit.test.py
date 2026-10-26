@@ -35,7 +35,14 @@ class AuditTests(unittest.TestCase):
                                                        if p['name'] == item['name']))
                 self.assertEqual(item['normalized_expression'], item['license'].replace('/', ' OR '))
                 self.assertTrue(item['legacy_slash_alias'])
-                self.assertEqual(item['selected_route'], item['license'].split('/')[0])
+                self.assertEqual(item['selected_route'], 'MIT')
+
+    def test_mit_alternative_is_preferred_when_unlicense_text_is_not_present(self):
+        for declaration in ('Unlicense OR MIT', 'MIT OR Unlicense', 'Unlicense/MIT'):
+            with self.subTest(declaration=declaration):
+                report = audit_module.audit({'packages': [package('dual', declaration)]})
+                self.assertEqual(report['packages'][0]['selected_route'], 'MIT')
+                self.assertEqual(report['packages'][0]['license'], declaration)
 
     def test_reported_alternatives_select_approved_route(self):
         report = audit_module.audit({'packages': [

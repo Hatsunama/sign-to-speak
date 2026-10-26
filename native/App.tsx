@@ -129,8 +129,8 @@ function Home() {
       setSpeechStatus('Enter text before speaking.');
       return;
     }
-    if (draft.length > 256 || /[^\x20-\x7E]/.test(draft)) {
-      setSpeechStatus('Use 1 to 256 printable ASCII characters. Edit the text and try again.');
+    if (draft.length > 256) {
+      setSpeechStatus('Use 1 to 256 characters. Edit the text and try again.');
       return;
     }
     const text = draft;
@@ -153,7 +153,7 @@ function Home() {
         case 'CANCELLED': setSpeechStatus('Speech was cancelled.'); break;
         case 'BUSY': setSpeechStatus('Speech is busy. Try again.'); break;
         case 'UNAVAILABLE': setSpeechStatus('Local speech is unavailable. Try again when the app is active.'); break;
-        case 'INVALID_INPUT': setSpeechStatus('Text could not be spoken. Use 1 to 256 printable ASCII characters.'); break;
+        case 'INVALID_INPUT': setSpeechStatus('This text is unsupported by the local English voice. Edit it and try again.'); break;
         case 'CLEANUP_FAILED':
           speechFaultRef.current = true;
           setSpeechFault(true);
@@ -276,7 +276,7 @@ function Home() {
               onChangeText={editDraft} multiline autoCorrect={false} spellCheck={false}
               autoComplete="off" importantForAutofill="no"
               style={styles.input} placeholder="Type text here" placeholderTextColor="#A99BB8" />
-            <Text style={styles.small}>1-256 printable English ASCII characters. Text stays on this screen until you clear it or leave.</Text>
+            <Text style={styles.small}>Use 1 to 256 characters with the local English voice. Text stays on this screen until you clear it or leave.</Text>
             <Text testID="typed-speech-status" accessibilityLiveRegion="polite" style={styles.body}>{speechFault ? 'Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.' : speechStatus}</Text>
             <Button testID="typed-speech-speak" onPress={speakDraft} disabled={speechBusy || speechFault}>Speak typed text</Button>
             <Button testID="typed-speech-stop" onPress={() => stopSpeech(false, 'Speech stopped.')}>Stop speech</Button>

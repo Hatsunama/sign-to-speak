@@ -1,10 +1,20 @@
-// Keep the reviewed license files as the single source of truth for APK assets.
-// Android preserves their relative paths as assets/flite/*.txt.
+// Curate notices for code still in the APK. Historical Flite receipts remain
+// in source control for provenance, but are no longer bundled.
 def licenseRoot = file("../../licenses")
-["flite/THIRD_PARTY_NOTICES.txt", "flite/MODIFICATIONS.txt"].each { relative ->
+def licenseFiles = ["sign-to-speak/LICENSE", "sign-to-speak/NOTICE", "react-native-template-MIT.txt"]
+licenseFiles.each { relative ->
     def source = new File(licenseRoot, relative)
     if (!source.isFile() || source.length() == 0) {
-        throw new GradleException("Required nonempty Flite license asset missing: ${source}")
+        throw new GradleException("Required nonempty license asset missing: ${source}")
     }
 }
-android.sourceSets.main.assets.srcDir(file("../../licenses"))
+def reviewedLicenseAssets = layout.buildDirectory.dir("generated/reviewed-license-assets")
+def stageReviewedLicenses = tasks.register("stageReviewedLicenses", Copy) {
+    from(licenseRoot) { include(licenseFiles) }
+    into(reviewedLicenseAssets)
+    includeEmptyDirs = false
+}
+android.sourceSets.main.assets.srcDir(reviewedLicenseAssets)
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(stageReviewedLicenses)
+}

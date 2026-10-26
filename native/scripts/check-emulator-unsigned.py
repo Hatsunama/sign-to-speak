@@ -17,6 +17,11 @@ def unsigned(apk,expected_abi=None):
         if expected_abi:
             require(libs and {n.split('/')[1] for n in libs}=={expected_abi})
             require('assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript')
+            phone.verify_pocket_assets(archive,names)
+            require('lib/'+expected_abi+'/libsign_pocket_tts_runtime.so' in libs)
+            require('lib/'+expected_abi+'/libprivate_pocket_tts.so' in libs)
+            require('lib/'+expected_abi+'/libc++_shared.so' in libs)
+            require(not any(phone.is_retired_speech_artifact(name) for name in libs))
         else: require(not libs or {n.split('/')[1] for n in libs}=={'x86_64'})
 
 def verify(app_xml,app_apk,test_xml,test_apk):

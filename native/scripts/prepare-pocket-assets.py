@@ -16,10 +16,19 @@ import shutil
 import stat
 import sys
 import tempfile
+import tomllib
 
 NATIVE = Path(__file__).resolve().parents[1]
 MODEL_MANIFEST = NATIVE / 'vendor/pocket-tts-audition/manifest.json'
 LICENSE_RECEIPT = NATIVE / 'licenses/pocket-tts/cargo-license-files.json'
+SUPPLEMENT_ROOT = NATIVE / 'licenses/pocket-tts/supplemental'
+SUPPLEMENT_MANIFEST = NATIVE / 'licenses/pocket-tts/supplemental-manifest.json'
+CARGO_LOCK = NATIVE / 'vendor/pocket-tts-runtime/Cargo.lock'
+SUPPLEMENT_PACKAGES = frozenset({
+    ('dasp_frame', '0.11.0'), ('dasp_sample', '0.11.0'),
+    ('pulp-wasm-simd-flag', '0.1.1'),
+    ('sentencepiece', '0.14.0'), ('valuable', '0.1.1'), ('xn', '0.2.12'),
+})
 MIT_SOURCE = NATIVE / 'vendor/pocket-tts-runtime/KYUTAI-MIT-LICENSE'
 EXPECTED = {
     'model.safetensors': (111728528, '599329dcea2f2a8d17b575e1c6e11b78822453c9073040d55c26faadf4883188'),
@@ -138,6 +147,58 @@ def package_key(package):
     return f'{package["name"]}@{package["version"]}|{source}'
 
 
+def supplemental_notices(packages, ordinary):
+    """Add reviewed upstream notices for six exact Cargo crates."""
+    if not SUPPLEMENT_MANIFEST.exists():
+        return
+    if SUPPLEMENT_ROOT.is_symlink() or not SUPPLEMENT_ROOT.is_dir():
+        raise ValueError('Supplemental notice root missing or linked')
+    manifest = json.loads(regular(SUPPLEMENT_MANIFEST, SUPPLEMENT_ROOT.parent).read_text(encoding='utf-8'))
+    if manifest.get('schema') != 1 or not isinstance(manifest.get('packages'), dict):
+        raise ValueError('Invalid supplemental notice manifest')
+    locked = tomllib.loads(regular(CARGO_LOCK, CARGO_LOCK.parent).read_text(encoding='utf-8'))
+    lock_entries = {(p['name'], p['version'], p.get('source')): p
+                    for p in locked.get('package', [])}
+    by_key = {package_key(p): p for p in packages}
+    for key, entry in manifest['packages'].items():
+        if key not in by_key or not isinstance(entry, dict):
+            raise ValueError(f'Unrecognized supplemental package: {key}')
+        package = by_key[key]
+        name, version, source = package['name'], package['version'], package.get('source')
+        if ((name, version) not in SUPPLEMENT_PACKAGES or
+                (entry.get('name'), entry.get('version'), entry.get('source')) != (name, version, source)):
+            raise ValueError(f'Unexpected supplemental notice identity: {key}')
+        locked_package = lock_entries.get((name, version, source))
+        if not locked_package or entry.get('checksum') != locked_package.get('checksum'):
+            raise ValueError(f'Supplemental notice does not match Cargo.lock: {key}')
+        if source and source.startswith('registry+') and not re.fullmatch(r'[0-9a-f]{64}', entry.get('checksum', '')):
+            raise ValueError(f'Invalid locked registry checksum: {key}')
+        notices = entry.get('notices')
+        if not isinstance(notices, dict) or not notices:
+            raise ValueError(f'No supplemental notices: {key}')
+        for label, spec in notices.items():
+            if not isinstance(spec, dict) or set(spec) != {'path', 'sha256'}:
+                raise ValueError(f'Invalid supplemental notice: {key}')
+            path_string = spec['path']
+            if (not isinstance(label, str) or not label.startswith('upstream/') or
+                    not LICENSE_NAME.fullmatch(Path(label).name) or
+                    not isinstance(path_string, str) or '\\' in path_string):
+                raise ValueError(f'Unsafe supplemental notice label: {key}')
+            rel_label, rel_path = Path(label), Path(path_string)
+            if (rel_label.is_absolute() or len(rel_label.parts) != 2 or
+                    label != f'upstream/{rel_label.name}' or
+                    rel_path.is_absolute() or len(rel_path.parts) != 2 or
+                    path_string != f'{name}-{version}/{rel_path.name}' or
+                    not LICENSE_NAME.fullmatch(rel_path.name)):
+                raise ValueError(f'Unsafe supplemental notice path: {key}')
+            notice = regular(SUPPLEMENT_ROOT / rel_path, SUPPLEMENT_ROOT)
+            if not re.fullmatch(r'[0-9a-f]{64}', spec['sha256']) or digest(notice) != spec['sha256']:
+                raise ValueError(f'Supplemental notice SHA-256 changed: {key}/{label}')
+            if label in ordinary[key]:
+                raise ValueError(f'Colliding supplemental notice: {key}/{label}')
+            ordinary[key][label] = notice
+
+
 def inventory(metadata, cargo_home):
     packages = metadata.get('packages', [])
     if len(packages) != 133 or len({package_key(p) for p in packages}) != 133:
@@ -164,10 +225,19 @@ def inventory(metadata, cargo_home):
             # (for example SentencePiece/abseil). Prune only VCS/build trees.
             for directory, dirs, files in os.walk(root, followlinks=False):
                 dirs[:] = [name for name in dirs if name not in {'target', '.git'}]
+                in_license_directory = any(part.casefold() in {'licenses', 'licences'}
+                                           for part in Path(directory).relative_to(root).parts)
                 for name in files:
-                    if LICENSE_NAME.fullmatch(name):
+                    if LICENSE_NAME.fullmatch(name) or in_license_directory:
                         path = Path(directory) / name
                         found[path.relative_to(root).as_posix()] = path
+            # r-efi 5.3.0 publishes its full MIT grant in AUTHORS rather than
+            # a LICENSE-named file. Keep that actual crate source in inventory.
+            if (package['name'], package['version'], package.get('source')) == (
+                    'r-efi', '5.3.0', 'registry+https://github.com/rust-lang/crates.io-index'):
+                authors = root / 'AUTHORS'
+                if authors.is_file():
+                    found['AUTHORS'] = authors
         if package.get('license_file'):
             rel = Path(package['license_file'])
             if rel.is_absolute() or '..' in rel.parts:
@@ -178,6 +248,7 @@ def inventory(metadata, cargo_home):
         for path in found.values():
             regular_notice(path, root, checkout)
         result[package_key(package)] = found
+    supplemental_notices(packages, result)
     return result
 
 

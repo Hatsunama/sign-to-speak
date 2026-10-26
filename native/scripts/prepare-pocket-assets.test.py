@@ -60,6 +60,9 @@ class PocketAssetPreparation(unittest.TestCase):
         self.patch = patch.object(prepare, 'EXPECTED', self.expected)
         self.patch.start()
         self.addCleanup(self.patch.stop)
+        absent_supplement = patch.object(prepare, 'SUPPLEMENT_MANIFEST', self.root / 'absent-supplement.json')
+        absent_supplement.start()
+        self.addCleanup(absent_supplement.stop)
 
     def run_prepare(self):
         prepare.prepare(self.assets, self.metadata, self.output, manifest_path=self.manifest,
@@ -120,6 +123,127 @@ class PocketAssetPreparation(unittest.TestCase):
         self.assertEqual(len(candidate['packages']), 133)
         self.assertEqual(candidate['schema'], 1)
         self.assertEqual(len(list((candidate_dir / 'candidate-notices').rglob('LICENSE'))), 133)
+
+    def supplemental_fixture(self, name='dasp_frame', version='0.11.0'):
+        metadata = json.loads(self.metadata.read_text())
+        package = metadata['packages'][0]
+        old_key = prepare.package_key(package)
+        package.update(name=name, version=version,
+                       source='registry+https://github.com/rust-lang/crates.io-index')
+        new_key = prepare.package_key(package)
+        (self.cargo / 'fixture-0/LICENSE').unlink()
+        self.metadata.write_text(json.dumps(metadata))
+        receipt = json.loads(self.receipt.read_text())
+        receipt['packages'][new_key] = receipt['packages'].pop(old_key)
+        self.receipt.write_text(json.dumps(receipt))
+        supplement = self.root / 'supplemental'
+        folder = supplement / f'{name}-{version}'
+        folder.mkdir(parents=True)
+        license_file = folder / 'LICENSE-MIT'
+        license_file.write_text('Upstream MIT text for test\n')
+        lock = self.root / 'Cargo.lock'
+        checksum = 'a' * 64
+        lock.write_text(f'[[package]]\nname = "{name}"\nversion = "{version}"\n'
+                        'source = "registry+https://github.com/rust-lang/crates.io-index"\n'
+                        f'checksum = "{checksum}"\n')
+        manifest = self.root / 'supplemental-manifest.json'
+        manifest.write_text(json.dumps({'schema': 1, 'packages': {new_key: {
+            'name': name, 'version': version, 'source': package['source'],
+            'checksum': checksum, 'notices': {'upstream/LICENSE-MIT': {
+                'path': f'{name}-{version}/LICENSE-MIT', 'sha256': prepare.digest(license_file)}}}}}))
+        return manifest, supplement, lock, license_file, new_key
+
+    def test_verified_supplement_joins_collector_and_bundle_inventory(self):
+        manifest, supplement, lock, notice, key = self.supplemental_fixture()
+        with patch.object(prepare, 'SUPPLEMENT_MANIFEST', manifest), \
+             patch.object(prepare, 'SUPPLEMENT_ROOT', supplement), \
+             patch.object(prepare, 'CARGO_LOCK', lock):
+            candidate_dir = self.root / 'candidate'
+            prepare.collect_receipt(self.metadata, candidate_dir, self.cargo)
+            candidate = json.loads((candidate_dir / 'candidate-cargo-license-files.json').read_text())
+            self.assertEqual(candidate['packages'][key],
+                             {'upstream/LICENSE-MIT': prepare.digest(notice)})
+            self.receipt.write_text(json.dumps(candidate))
+            self.run_prepare()
+            self.assertEqual((self.output / 'pocket-licenses/cargo/dasp_frame-0.11.0/'
+                              'upstream/LICENSE-MIT').read_bytes(), notice.read_bytes())
+
+    def test_reuse_directory_notice_and_xn_supplement_share_receipt_and_bundle(self):
+        manifest, supplement, lock, mit, key = self.supplemental_fixture('xn', '0.2.12')
+        crate = self.cargo / 'fixture-0'
+        apache = crate / 'third_party/kleidiai/LICENSES/Apache-2.0.txt'
+        apache.parent.mkdir(parents=True)
+        apache.write_text('KleidiAI Apache fixture\n')
+        licence = crate / 'third_party/example/LICENCES/BSD-3-Clause.txt'
+        licence.parent.mkdir(parents=True)
+        licence.write_text('Third-party BSD fixture\n')
+        unrelated = crate / 'third_party/kleidiai/doc/overview.txt'
+        unrelated.parent.mkdir(parents=True)
+        unrelated.write_text('Not a notice\n')
+        with patch.object(prepare, 'SUPPLEMENT_MANIFEST', manifest), \
+             patch.object(prepare, 'SUPPLEMENT_ROOT', supplement), \
+             patch.object(prepare, 'CARGO_LOCK', lock):
+            candidate_dir = self.root / 'candidate'
+            prepare.collect_receipt(self.metadata, candidate_dir, self.cargo)
+            candidate = json.loads((candidate_dir / 'candidate-cargo-license-files.json').read_text())
+            self.assertEqual(candidate['packages'][key], {
+                'third_party/kleidiai/LICENSES/Apache-2.0.txt': prepare.digest(apache),
+                'third_party/example/LICENCES/BSD-3-Clause.txt': prepare.digest(licence),
+                'upstream/LICENSE-MIT': prepare.digest(mit),
+            })
+            self.receipt.write_text(json.dumps(candidate))
+            self.run_prepare()
+            destination = self.output / 'pocket-licenses/cargo/xn-0.2.12'
+            self.assertEqual((destination / 'third_party/kleidiai/LICENSES/Apache-2.0.txt').read_bytes(),
+                             apache.read_bytes())
+            self.assertEqual((destination / 'third_party/example/LICENCES/BSD-3-Clause.txt').read_bytes(),
+                             licence.read_bytes())
+            self.assertEqual((destination / 'upstream/LICENSE-MIT').read_bytes(), mit.read_bytes())
+            self.assertFalse((destination / 'third_party/kleidiai/doc/overview.txt').exists())
+
+    def test_r_efi_published_authors_is_inventory_notice(self):
+        metadata = json.loads(self.metadata.read_text())
+        package = metadata['packages'][0]
+        package.update(name='r-efi', version='5.3.0',
+                       source='registry+https://github.com/rust-lang/crates.io-index')
+        (self.cargo / 'fixture-0/LICENSE').unlink()
+        authors = self.cargo / 'fixture-0/AUTHORS'
+        authors.write_text('Published full MIT grant and attribution fixture\n')
+        found = prepare.inventory(metadata, self.cargo)
+        self.assertEqual(found[prepare.package_key(package)], {'AUTHORS': authors})
+
+    def test_supplement_refuses_changed_hash_identity_escape_and_link(self):
+        manifest, supplement, lock, notice, key = self.supplemental_fixture()
+        original = json.loads(manifest.read_text())
+        with patch.object(prepare, 'SUPPLEMENT_MANIFEST', manifest), \
+             patch.object(prepare, 'SUPPLEMENT_ROOT', supplement), \
+             patch.object(prepare, 'CARGO_LOCK', lock):
+            for mutation in ('hash', 'checksum', 'version', 'escape', 'link'):
+                with self.subTest(mutation=mutation):
+                    data = json.loads(json.dumps(original))
+                    entry = data['packages'][key]
+                    if mutation == 'hash':
+                        entry['notices']['upstream/LICENSE-MIT']['sha256'] = '0' * 64
+                    elif mutation == 'checksum':
+                        entry['checksum'] = '0' * 64
+                    elif mutation == 'version':
+                        entry['version'] = '0.12.0'
+                    elif mutation == 'escape':
+                        entry['notices']['upstream/LICENSE-MIT']['path'] = '../private.txt'
+                    else:
+                        outside = self.root / 'private.txt'
+                        outside.write_text('private')
+                        notice.unlink()
+                        try:
+                            notice.symlink_to(outside)
+                        except OSError:
+                            self.skipTest('symlinks unavailable')
+                    manifest.write_text(json.dumps(data))
+                    with self.assertRaises(ValueError):
+                        prepare.inventory(json.loads(self.metadata.read_text()), self.cargo)
+                    if mutation == 'link':
+                        notice.unlink()
+                        notice.write_text('Upstream MIT text for test\n')
 
     def pinned_git_fixture(self):
         checkout = (self.cargo / 'git/checkouts/xn-ptts-1fae285e4acf79e2' /

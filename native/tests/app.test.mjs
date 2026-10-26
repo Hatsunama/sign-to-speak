@@ -430,6 +430,7 @@ test('typed speech speaks exact reviewed text without camera permission and reta
 test('typed speech rejects empty and overlength drafts before native speech without changing text', async t => {
   const calls = [];
   const h = await renderHome(t, {ready: true}, {begin: async () => {calls.push('begin'); return 't';}, speak: async () => calls.push('speak')});
+  assert.equal(h.input().props.maxLength, undefined, 'input must not truncate a draft before review');
   for (const value of ['', '   ', 'A'.repeat(257)]) {
     await h.edit(value);
     await h.press('Speak typed text');

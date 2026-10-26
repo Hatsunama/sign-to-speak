@@ -311,3 +311,4 @@ androidComponents {
 }
 
 apply from: "license-assets.gradle"
+apply from: "pocket-model-assets.gradle"

@@ -25,21 +25,26 @@ export function validateWorkflow(config) {
     'git rev-parse HEAD', 'android.builder.sdkDownload=false']) {
     check(runs.includes(gate), `Missing gate: ${gate}`);
   }
-  const flite = steps.find(s => s.id === 'flite_host');
-  check(flite?.['timeout-minutes'] === 8 &&
-    flite.if?.includes("steps.host.outcome == 'success'") &&
-    flite.if?.includes("steps.sdk.outcome == 'success'") &&
-    ['cmake -S android/app/src/main/cpp/flite', 'cmake --build', 'ctest --test-dir',
-      'tests/java/FliteRequestHostTest.java', '-Djava.library.path='].every(token => flite.run?.includes(token)),
-    'Bounded source-built Flite C/CTest and host JNI checks required');
-  check(flite?.run?.includes('prepare_sources.py --check'), 'Read-only generated-source verification required');
+  const pocket = steps.find(s => s.id === 'pocket_runtime');
+  check(pocket?.['timeout-minutes'] === 30 &&
+    pocket.if?.includes("steps.host.outcome == 'success'") &&
+    pocket.if?.includes("steps.sdk.outcome == 'success'") &&
+    ['build-pocket-runtime.sh x86_64', 'build-pocket-runtime.sh arm64-v8a'].every(token => pocket.run?.includes(token)),
+    'Both ABI runtimes must be source-built from locked Rust before Gradle');
+  const assets = steps.find(s => s.id === 'pocket_assets');
+  check(assets?.['timeout-minutes'] === 8 && assets.if?.includes("steps.pocket_runtime.outcome == 'success'") &&
+    ['pocket-tts-audition.py download', 'pocket-tts-audition.py verify', 'prepare-pocket-assets.py',
+      '--metadata', 'generated/pocket-assets'].every(token => assets.run?.includes(token)),
+    'Pinned model and license assets required before Gradle');
   check(steps.filter(s => /:app:(testDebugUnitTest|verifyDebugMergedPermissions|assembleDebug|assembleQa)/.test(s.run ?? ''))
-    .every(s => s.if?.includes("steps.flite_host.outcome == 'success'") || s.id === 'phone_qa'),
-    'Android candidate gates require Flite host checks');
+    .every(s => s.if?.includes("steps.pocket_runtime.outcome == 'success'") &&
+                 s.if?.includes("steps.pocket_assets.outcome == 'success'")),
+    'Android candidate gates require Pocket source and model checks');
   check(steps.some(s => s.id === 'baseline' && s.run?.includes('ci-isolation-baseline.sh') && s['timeout-minutes'] === 12), 'Bounded counterfactual baseline required');
   check(steps.filter(s => /:app:(testDebugUnitTest|verifyDebugMergedPermissions|assembleDebug)/.test(s.run ?? '')).every(s => s.if?.includes("steps.baseline.outputs.restored == 'true'") && !s.if?.includes('steps.baseline.outcome')), 'Candidate gates require verified restoration, independently of baseline result');
   const phone = steps.find(s => s.id === 'phone_qa');
-  check(phone?.['timeout-minutes'] === 10 && phone?.run?.includes('-PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true') && phone?.run?.includes(':app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa') && phone?.run?.includes('ci-phone-qa-audit.sh'), 'Bounded unsigned arm64 QA build and binary audit required');
+  check(phone?.['timeout-minutes'] === 15 && phone?.run?.includes('-PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true') && phone?.run?.includes(':app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa') && phone?.run?.includes('ci-phone-qa-audit.sh'), 'Bounded unsigned arm64 QA build and binary audit required');
+  check(phone?.run?.includes('check-pocket-apk-elf.py') && runs.includes('x86_64') && runs.includes('arm64-v8a'), 'Final APK ELF audits required');
   check(phone?.run?.includes(':app:assembleQaAndroidTest') &&
     phone.run.includes('-Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false'),
     'Phone instrumentation build must explicitly disable default signing');
@@ -50,7 +55,7 @@ export function validateWorkflow(config) {
   check(!/keytool|keystore|storePassword|SIGN_QA_/.test(runs), 'No cloud signer or credential generation');
   check(runs.includes('JAVA_HOME_21_X64'), 'Robolectric SDK36 requires JDK21');
   check(steps.some(s => s.run?.includes(':app:verifyDebugMergedPermissions') && s.run.includes(':app:verifyReleaseMergedPermissions') && s.run.includes('--continue')), 'Run both manifest checks even when one fails');
-  check(!/bundleRelease|assembleRelease|--licenses|continue-on-error|\|\| true/.test(runs), 'No release bundle or weakened gates');
+  check(!/bundleRelease|assembleRelease|--licenses|continue-on-error|\|\| true|FliteRequest|prepare_sources\.py/.test(runs), 'No release bundle or weakened gates');
   check(steps.some(s => s.uses?.startsWith('actions/checkout@') && s.with?.['persist-credentials'] === false), 'Do not persist credentials');
   check(!steps.some(s => /cache@/.test(s.uses ?? '') || s.with?.cache), 'No persistent caches');
   return errors;

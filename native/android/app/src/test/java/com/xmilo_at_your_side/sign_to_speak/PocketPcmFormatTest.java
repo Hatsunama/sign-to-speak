@@ -88,4 +88,11 @@ public final class PocketPcmFormatTest {
         assertEquals(0, creations.get());
         verifyNoInteractions(audio, track);
     }
+
+    @Test public void pcmLongerThanThirtySecondsIsRejectedBeforeAudioFocus() {
+        assertThrows(IllegalArgumentException.class,
+            () -> player().play(new short[24000 * 30 + 1], () -> false));
+        assertEquals(0, creations.get());
+        verifyNoInteractions(audio, track);
+    }
 }

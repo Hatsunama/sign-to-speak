@@ -1,35 +1,55 @@
-import importlib.util,os,pathlib,struct,subprocess,sys,tempfile,unittest,zipfile
+import hashlib,importlib.util,json,os,pathlib,struct,subprocess,sys,tempfile,unittest,zipfile
+from unittest.mock import patch
 spec=importlib.util.spec_from_file_location('qa',pathlib.Path(__file__).with_name('check-phone-qa.py'))
 qa=importlib.util.module_from_spec(spec);spec.loader.exec_module(qa)
 class PhoneQaApkTest(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
   self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
-  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libprivate_tts.so':b'fixture','assets/index.android.bundle':b'fixture',**{'assets/flite/'+name:(qa.LICENSE_ROOT/'flite'/name).read_bytes() for name in qa.REQUIRED_FLITE_ASSETS},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')}}
+  self.models={name:(name+'-fixture').encode() for name in qa.POCKET_MODEL}
+  self.notice_root=self.root/'pocket-assets'/'pocket-licenses';self.notice_root.mkdir(parents=True)
+  (self.notice_root/'cargo-declaration-routes.json').write_text(json.dumps({'status':'declarations-selected-for-component-probe','packages':[{}]*133,'blocked_packages':[]}))
+  (self.notice_root/'NOTICE.txt').write_bytes(b'fixture notice')
+  self.patch_model=patch.object(qa,'POCKET_MODEL',{name:(len(data),hashlib.sha256(data).hexdigest()) for name,data in self.models.items()});self.patch_model.start();self.addCleanup(self.patch_model.stop)
+  self.patch_root=patch.object(qa,'POCKET_ROOT',self.root/'pocket-assets');self.patch_root.start();self.addCleanup(self.patch_root.stop)
+  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libsign_pocket_tts_runtime.so':b'fixture','lib/arm64-v8a/libprivate_pocket_tts.so':b'fixture','lib/arm64-v8a/libc++_shared.so':b'fixture','assets/index.android.bundle':b'fixture','assets/react-native-template-MIT.txt':(qa.LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes(),**{'assets/pocket-alba/'+name:data for name,data in self.models.items()},**{'assets/pocket-licenses/'+p.name:p.read_bytes() for p in self.notice_root.iterdir()},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')}}
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
   with zipfile.ZipFile(a,'w') as z:
    for name,data in self.entries.items():z.writestr(name,data)
   qa.verify(m,a)
  def test_valid_unsigned_arm64_qa(self):self.verify()
+ def test_tensorflow_lite_library_is_not_retired_flite(self):
+  self.entries['lib/arm64-v8a/libtensorflowlite_jni.so']=b'fixture'
+  self.entries['assets/models/hand_landmarks.tflite']=b'TFL3'
+  self.verify()
+ def test_retired_flite_library_rejected(self):
+  self.entries['lib/arm64-v8a/libflite_usenglish.so']=b'old'
+  with self.assertRaisesRegex(AssertionError,'Retired speech runtime'):self.verify()
  def test_missing_synthesis_library_rejected(self):
-  del self.entries['lib/arm64-v8a/libprivate_tts.so']
-  with self.assertRaisesRegex(AssertionError,'synthesis library'):self.verify()
+  del self.entries['lib/arm64-v8a/libprivate_pocket_tts.so']
+  with self.assertRaisesRegex(AssertionError,'Pocket JNI bridge'):self.verify()
  def test_missing_javascript_bundle_rejected(self):
   del self.entries['assets/index.android.bundle']
   with self.assertRaisesRegex(AssertionError,'bundled JavaScript'):self.verify()
  def test_empty_javascript_bundle_rejected(self):
   self.entries['assets/index.android.bundle']=b''
   with self.assertRaisesRegex(AssertionError,'bundled JavaScript'):self.verify()
- def test_missing_flite_notice_rejected(self):
-  del self.entries['assets/flite/THIRD_PARTY_NOTICES.txt']
-  with self.assertRaisesRegex(AssertionError,'Flite license asset'):self.verify()
- def test_altered_flite_notice_rejected(self):
-  self.entries['assets/flite/THIRD_PARTY_NOTICES.txt']=b'altered'
-  with self.assertRaisesRegex(AssertionError,'Flite license asset'):self.verify()
- def test_empty_modifications_rejected(self):
-  self.entries['assets/flite/MODIFICATIONS.txt']=b''
-  with self.assertRaisesRegex(AssertionError,'Flite license asset'):self.verify()
+ def test_missing_pocket_model_rejected(self):
+  del self.entries['assets/pocket-alba/model.safetensors']
+  with self.assertRaisesRegex(AssertionError,'pinned Alba set'):self.verify()
+ def test_extra_pocket_model_rejected(self):
+  self.entries['assets/pocket-alba/extra.bin']=b'extra'
+  with self.assertRaisesRegex(AssertionError,'pinned Alba set'):self.verify()
+ def test_corrupt_pocket_model_rejected(self):
+  self.entries['assets/pocket-alba/model.safetensors']=b'x'*len(self.models['model.safetensors'])
+  with self.assertRaisesRegex(AssertionError,'SHA-256 mismatch'):self.verify()
+ def test_changed_pocket_notice_rejected(self):
+  self.entries['assets/pocket-licenses/NOTICE.txt']=b'changed'
+  with self.assertRaisesRegex(AssertionError,'Pocket notice changed'):self.verify()
+ def test_retired_flite_asset_rejected(self):
+  self.entries['assets/flite/THIRD_PARTY_NOTICES.txt']=b'old'
+  with self.assertRaisesRegex(AssertionError,'Retired Flite'):self.verify()
  def test_missing_application_license_rejected(self):
   del self.entries['assets/sign-to-speak/LICENSE']
   with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()

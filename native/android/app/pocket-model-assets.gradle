@@ -1,0 +1,122 @@
+import java.security.MessageDigest
+
+// The preparer runs on the approved hosted runner. Android never downloads a model.
+def pocketAssets = file("../../generated/pocket-assets")
+def pocketLibraries = file("../../generated/pocket-jniLibs")
+android.sourceSets.main.assets.srcDir(pocketAssets)
+// CMake imports this exact generated .so and AGP packages that imported target.
+// Do not also add it as jniLibs: duplicate packaging would require pickFirst.
+
+def pocketExpected = [
+    "model.safetensors": [111728528L, "599329dcea2f2a8d17b575e1c6e11b78822453c9073040d55c26faadf4883188"],
+    "tokenizer.model": [59339L, "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6"],
+    "alba.safetensors": [4163992L, "11554cbe9f3d3a3e10722932df9952bb44928e534f7af3200524659166b5627a"],
+]
+
+def verifyPocketAssets = tasks.register("verifyPocketAssets") {
+    group = "verification"
+    description = "Check pinned Alba bytes and complete Pocket notices before Android packaging."
+    doLast {
+        def root = new File(pocketAssets, "pocket-alba")
+        if (!root.isDirectory() || java.nio.file.Files.isSymbolicLink(root.toPath())) {
+            throw new GradleException("Prepared Pocket Alba asset directory missing or linked")
+        }
+        def actual = root.listFiles()?.findAll { it.isFile() }?.collect { it.name }?.toSet()
+        if (actual != pocketExpected.keySet() || root.listFiles()?.size() != 3) {
+            throw new GradleException("Pocket Alba asset set differs from the three pinned files")
+        }
+        pocketExpected.each { name, receipt ->
+            def source = new File(root, name)
+            if (java.nio.file.Files.isSymbolicLink(source.toPath()) || source.length() != receipt[0]) {
+                throw new GradleException("Pocket asset missing, linked, or wrong size: ${name}")
+            }
+            def hash = MessageDigest.getInstance("SHA-256")
+            source.withInputStream { input ->
+                byte[] block = new byte[1024 * 1024]
+                int count
+                while ((count = input.read(block)) != -1) hash.update(block, 0, count)
+            }
+            if (hash.digest().encodeHex().toString() != receipt[1]) {
+                throw new GradleException("Pocket asset SHA-256 mismatch: ${name}")
+            }
+        }
+        def noticeRoot = new File(pocketAssets, "pocket-licenses")
+        ["KYUTAI-MIT-LICENSE", "ATTRIBUTION.txt", "MODEL-RECEIPT.json", "cargo-declaration-routes.json"].each { name ->
+            def source = new File(noticeRoot, name)
+            if (!source.isFile() || source.length() == 0 || java.nio.file.Files.isSymbolicLink(source.toPath())) {
+                throw new GradleException("Prepared Pocket notice missing or linked: ${name}")
+            }
+        }
+        def modelReceipt = new groovy.json.JsonSlurper().parse(new File(noticeRoot, "MODEL-RECEIPT.json"))
+        if (modelReceipt.repository != "kyutai/pocket-tts-without-voice-cloning" ||
+                modelReceipt.revision != "a7056f505a4a8ca72d8b5fb1440071d6f1a35739" ||
+                modelReceipt.language != "english_18m_2026-10" || modelReceipt.voice != "alba" ||
+                modelReceipt.assets?.size() != 3) {
+            throw new GradleException("Pocket model revision or configuration changed")
+        }
+        if (modelReceipt.assets.collect { new File(it.path as String).name }.toSet() != pocketExpected.keySet()) {
+            throw new GradleException("Pocket model receipt omits a pinned asset")
+        }
+        modelReceipt.assets.each { item ->
+            def expected = pocketExpected[new File(item.path as String).name]
+            if (!expected || !item.path.toString().startsWith("languages/english_18m_2026-10/") ||
+                    item.size != expected[0] || item.sha256 != expected[1]) {
+                throw new GradleException("Pocket model receipt differs from pinned asset set")
+            }
+        }
+        def routes = new groovy.json.JsonSlurper().parse(new File(noticeRoot, "cargo-declaration-routes.json"))
+        if (routes.status != "declarations-selected-for-component-probe" || routes.packages?.size() != 133 ||
+                routes.blocked_packages) {
+            throw new GradleException("Pocket Cargo declaration report incomplete")
+        }
+        def cargoFiles = new File(noticeRoot, "cargo").listFiles()?.findAll { it.isDirectory() }
+        if (cargoFiles == null || cargoFiles.size() != 133) {
+            throw new GradleException("Pocket Cargo notice bundle incomplete")
+        }
+    }
+}
+
+def verifyPocketLibraries = tasks.register("verifyPocketLibraries") {
+    group = "verification"
+    description = "Require only the generated native Pocket runtime for requested ABIs."
+    doLast {
+        def requested = providers.gradleProperty("reactNativeArchitectures").orElse("").get()
+            .split(",").collect { it.trim() }.findAll { it }.toSet()
+        if (!requested || !requested.every { it in ["arm64-v8a", "x86_64"] }) {
+            throw new GradleException("Specify reviewed -PreactNativeArchitectures=arm64-v8a[,x86_64]")
+        }
+        if (!pocketLibraries.isDirectory() || java.nio.file.Files.isSymbolicLink(pocketLibraries.toPath())) {
+            throw new GradleException("Generated Pocket JNI libraries missing or linked")
+        }
+        def actual = pocketLibraries.listFiles()?.findAll { it.isDirectory() }?.collect { it.name }?.toSet()
+        if (actual == null || !actual.containsAll(requested) ||
+                !actual.every { it in ["arm64-v8a", "x86_64"] } ||
+                pocketLibraries.listFiles()?.size() != actual.size()) {
+            throw new GradleException("Generated Pocket JNI ABI set is missing a requested architecture or has an unexpected entry")
+        }
+        requested.each { abi ->
+            def directory = new File(pocketLibraries, abi)
+            def library = new File(directory, "libsign_pocket_tts_runtime.so")
+            if (directory.listFiles()?.size() != 1 || !library.isFile() || library.length() < 4096 ||
+                    java.nio.file.Files.isSymbolicLink(directory.toPath()) ||
+                    java.nio.file.Files.isSymbolicLink(library.toPath())) {
+                throw new GradleException("Generated Pocket runtime missing or unexpected for ${abi}")
+            }
+            library.withInputStream { stream ->
+                if (stream.read() != 0x7f || stream.read() != 0x45 || stream.read() != 0x4c || stream.read() != 0x46) {
+                    throw new GradleException("Generated Pocket runtime is not ELF: ${abi}")
+                }
+            }
+        }
+    }
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(verifyPocketAssets)
+}
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("JniLibFolders") }.configureEach {
+    dependsOn(verifyPocketLibraries)
+}
+tasks.matching { it.name.startsWith("package") && !it.name.endsWith("Resources") }.configureEach {
+    dependsOn(verifyPocketAssets, verifyPocketLibraries)
+}

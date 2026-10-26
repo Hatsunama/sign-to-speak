@@ -209,12 +209,14 @@ public final class PhoneTypedSpeechIntegrationTest {
 
     private Playback awaitPlaying() throws Exception {
         final Playback[] observed = new Playback[1];
-        await("button reached real Flite PCM and advancing protected AudioTrack", WAIT_MS, () -> {
+        await("button reached real Pocket PCM and advancing protected AudioTrack", WAIT_MS, () -> {
             Object job = currentJob();
             if (job == null) return false;
             short[] pcm = (short[]) value(job, "pcm");
             Object player = value(job, "player");
             if (pcm == null || player == null) return false;
+            assertTrue("24 kHz PCM must be bounded to 30 seconds", pcm.length > 0
+                    && pcm.length <= 720_000);
             boolean nonzero = false;
             for (short sample : pcm) if (sample != 0) { nonzero = true; break; }
             if (!nonzero) return false;
@@ -222,6 +224,7 @@ public final class PhoneTypedSpeechIntegrationTest {
                 AudioTrack track = (AudioTrack) value(player, "activeTrack");
                 if (track == null || track.getPlayState() != AudioTrack.PLAYSTATE_PLAYING
                         || (track.getPlaybackHeadPosition() & 0xffffffffL) == 0) return false;
+                assertEquals("Pocket playback sample rate", 24_000, track.getSampleRate());
                 observed[0] = new Playback(pcm, player);
                 return true;
             }

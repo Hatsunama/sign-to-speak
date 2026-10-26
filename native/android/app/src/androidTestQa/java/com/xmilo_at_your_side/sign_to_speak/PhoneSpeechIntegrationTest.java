@@ -27,7 +27,7 @@ import org.junit.runner.RunWith;
 
 /**
  * Physical ARM64 integration journey. Uses the installed QA Activity, its real ReactContext,
- * production LocalSpeechModule, Flite JNI, and protected AudioTrack. Synthetic ASCII only.
+ * production LocalSpeechModule, Pocket JNI, and protected AudioTrack. Synthetic ASCII only.
  * Reflection reads state under production locks; no factory replacement or product hook.
  */
 @RunWith(AndroidJUnit4.class)
@@ -67,7 +67,7 @@ public final class PhoneSpeechIntegrationTest {
         if (driver != null) driver.close();
     }
 
-    @Test public void realFlitePcmProtectedPlaybackAndInputBoundaries() throws Exception {
+    @Test public void realPocketPcmProtectedPlaybackAndInputBoundaries() throws Exception {
         String token = begin();
         assertNotNull("Explicit begin must work on resumed real Activity", token);
         for (String invalid : new String[]{"", " ", "line\nfeed", "caf\u00e9", repeat('x', 257)}) {
@@ -77,13 +77,14 @@ public final class PhoneSpeechIntegrationTest {
 
         CompletableFuture<Object> result = speak(token, LONG_TEXT);
         AudioEvidence evidence = observeRealPlayback(result);
-        assertTrue("Flite returned nonzero PCM", evidence.nonzeroPcm);
+        assertTrue("Pocket returned nonzero PCM", evidence.nonzeroPcm);
         assertTrue("Protected AudioTrack entered PLAYING", evidence.playing);
         assertTrue("AudioTrack playback head advanced", evidence.maxHead > 0);
         assertEquals("COMPLETED", result.get(WAIT_MS, TimeUnit.MILLISECONDS));
-        assertTrue("PCM frame count must be positive", evidence.pcmFrames > 0);
+        assertTrue("24 kHz PCM must be bounded to 30 seconds", evidence.pcmFrames > 0
+                && evidence.pcmFrames <= 720_000);
         assertTrue("Observe playback timing before completion", evidence.firstHeadAt > 0);
-        long remainingMs = Math.max(0, evidence.pcmFrames - evidence.firstHead) / 16;
+        long remainingMs = Math.max(0, evidence.pcmFrames - evidence.firstHead) / 24;
         assertTrue("Completion must wait for real AudioTrack drain",
                 evidence.completionAt - evidence.firstHeadAt + 200 >= remainingMs);
         assertCleaned(evidence.pcm, evidence.player);
@@ -108,6 +109,7 @@ public final class PhoneSpeechIntegrationTest {
                 AudioTrack candidate = (AudioTrack) value(candidatePlayer, "activeTrack");
                 if (candidate == null || candidate.getPlayState() != AudioTrack.PLAYSTATE_PLAYING
                         || (candidate.getPlaybackHeadPosition() & 0xffffffffL) == 0) return false;
+                assertEquals("Pocket playback sample rate", 24_000, candidate.getSampleRate());
                 ownedTrack[0] = candidate;
                 pcm[0] = candidatePcm;
                 player[0] = candidatePlayer;
@@ -303,6 +305,7 @@ public final class PhoneSpeechIntegrationTest {
         synchronized (lock) {
             AudioTrack track = (AudioTrack) value(player, "activeTrack");
             if (track == null) return new TrackSnapshot(false, 0);
+            assertEquals("Pocket playback sample rate", 24_000, track.getSampleRate());
             return new TrackSnapshot(track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING,
                     track.getPlaybackHeadPosition() & 0xffffffffL);
         }

@@ -45,7 +45,7 @@ function policy(w,b,g=guard,m=main,p=phone) {
  }
  assert.ok(job.steps.some(s=>s.uses?.startsWith('actions/checkout')&&s.with['persist-credentials']===false));
  const runs=job.steps.map(s=>s.run??'').join('\n');
- for(const gate of ['ci-emulator-diagnostics.sh','npm test','npm run typecheck','--dry-run','check-emulator-task-graph.py','ci-emulator-unsigned-audit.sh','-PunsignedEmulatorQa=true','android.builder.sdkDownload=false','-Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false']) assert.ok(runs.includes(gate),gate);
+ for(const gate of ['ci-emulator-diagnostics.sh','npm test','npm run typecheck','--dry-run','check-emulator-task-graph.py','ci-emulator-unsigned-audit.sh','build-pocket-runtime.sh x86_64','prepare-pocket-assets.py','check-pocket-apk-elf.py','-PunsignedEmulatorQa=true','android.builder.sdkDownload=false','-Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false']) assert.ok(runs.includes(gate),gate);
  assert.doesNotMatch(runs,/keytool|keystore|storePassword|--licenses|adb |emulator -avd|chmod|usermod|udev|assembleRelease|bundleRelease/);
  assert.ok(runs.indexOf('--dry-run')<runs.indexOf('ci-emulator-unsigned-audit.sh'));
  assert.match(b,/gradleProperty\("unsignedEmulatorQa"\)\.orElse\("false"\)/);

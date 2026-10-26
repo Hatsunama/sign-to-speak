@@ -109,8 +109,13 @@ def route(tree):
         parts = [route(child) for child in tree[1]]
         return ' AND '.join(f'({part})' if ' OR ' in part else part for part in parts) if all(parts) else None
     if kind == 'or':
-        for child in tree[1]:
-            selected = route(child)
+        selected_routes = [route(child) for child in tree[1]]
+        # Several published crates declare Unlicense OR MIT while their
+        # distributed notice contains the complete MIT text only. Prefer that
+        # explicit alternative without changing other route ordering.
+        if 'Unlicense' in selected_routes and 'MIT' in selected_routes:
+            return 'MIT'
+        for selected in selected_routes:
             if selected:
                 return selected
         return None

@@ -22,6 +22,15 @@ for (const name of componentFiles) {
   const path = `native/vendor/pocket-tts-runtime/${name}`;
   samples[path] = readFileSync(new URL(`../../${path}`, import.meta.url));
 }
+const supplementalNoticeFiles = [
+  'sentencepiece-0.14.0/LICENSE-MIT',
+  'sentencepiece-0.14.0/COPYRIGHT.md',
+  'dasp_frame-0.11.0/LICENSE-MIT',
+];
+for (const name of supplementalNoticeFiles) {
+  const path = `native/licenses/pocket-tts/supplemental/${name}`;
+  samples[path] = readFileSync(new URL(`../../${path}`, import.meta.url));
+}
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
 function checkoutWith(attributesContent) {

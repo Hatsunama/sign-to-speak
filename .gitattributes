@@ -7,6 +7,7 @@ native/android/app/src/main/cpp/** text eol=lf
 native/android/app/src/main/cpp/flite/upstream/** text eol=lf
 native/licenses/flite/** text eol=lf
 native/vendor/pocket-tts-runtime/** text eol=lf
+native/licenses/pocket-tts/** -text
 
 # Preserve upstream license/source formatting; raw hashes are checked separately.
 native/android/app/src/main/cpp/flite/upstream/** -whitespace
