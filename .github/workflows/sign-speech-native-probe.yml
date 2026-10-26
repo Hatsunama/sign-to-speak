@@ -1,0 +1,256 @@
+name: Pocket TTS Rust CPU native probe
+
+# Owner-reviewed feasibility experiment. This does not build an Android app.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/sign-speech-native-probe.yml
+      - native/scripts/pocket-tts-native-probe.py
+      - native/scripts/pocket-tts-native-probe.test.py
+      - native/scripts/speech-native-probe-policy.test.mjs
+      - native/vendor/pocket-tts-native-probe/sign_token_probe.rs
+      - native/vendor/pocket-tts-audition/manifest.json
+      - native/scripts/pocket-tts-audition.py
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-speech-native-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: >-
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event.repository.private == false &&
+      ((github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/codex/native-recognition-flow-20261024') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == 'Hatsunama/sign-to-speak' &&
+        github.event.pull_request.head.ref == 'codex/native-recognition-flow-20261024'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      POCKET_TTS_SEED: '42'
+      EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      POCKET_SOURCE_COMMIT: a922b912dfa366975294afb568d815b305acde5d
+      POCKET_SOURCE_ARCHIVE_SHA256: 08dd2e7405609e788a9811f2786cdfc3f8f21f5e083a321108923fcae8f44b06
+      POCKET_CARGO_LOCK_SHA256: 3f2c5396eaaad4c64258ae724e012fdaa0c7b3e71165bcf0ef2c6b0641d18d27
+      POCKET_PTTS_FORK_COMMIT: 7efa26973f81bba42cf2ace8da2c1eb9b605d54d
+    steps:
+      - name: Checkout exact probe source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source and preinstalled CPU toolchain
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          python3 - <<'PY'
+          from pathlib import Path
+          flags = Path('/proc/cpuinfo').read_text()
+          if 'avx2' not in flags.split():
+              raise SystemExit('AVX2 is required by this CPU native probe')
+          PY
+          command -v rustc
+          command -v cargo
+          command -v cmake
+          command -v c++
+          rustc --version
+          cargo --version
+          cmake --version
+          c++ --version
+          python3 --version
+          mkdir -p "$RUNNER_TEMP/pocket-tts-native-probe"
+      - name: Select pinned Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+      - name: Install locked Node parser and exact Python tokenizer wheel
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          cd "$GITHUB_WORKSPACE"
+          test "$(python3 -c 'import sys; print(sys.version_info[:2] == (3, 12))')" = True
+          wheel="$RUNNER_TEMP/sentencepiece-0.2.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl"
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            'https://files.pythonhosted.org/packages/04/88/14f2f4a2b922d8b39be45bf63d79e6cd3a9b2f248b2fcb98a69b12af12f5/sentencepiece-0.2.1-cp312-cp312-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl' -o "$wheel"
+          printf '%s  %s\n' 0cdfecef430d985f1c2bcbfff3defd1d95dae876fbd0173376012d2d7d24044b "$wheel" | sha256sum --check --status
+          python3 -m pip install --no-deps --no-index --target "$RUNNER_TEMP/pocket-tokenizer-python" "$wheel"
+          echo "PYTHONPATH=$RUNNER_TEMP/pocket-tokenizer-python" >> "$GITHUB_ENV"
+      - name: Run local policy and harness unit tests before model download
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          node --test native/scripts/speech-native-probe-policy.test.mjs
+          python3 native/scripts/pocket-tts-native-probe.test.py
+      - name: Fetch and verify pinned upstream Rust source
+        timeout-minutes: 2
+        env:
+          RUST_SOURCE_DIR: ${{ runner.temp }}/pocket-tts-rust-source
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            "https://codeload.github.com/kyutai-labs/pocket-tts/tar.gz/$POCKET_SOURCE_COMMIT" \
+            -o "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz"
+          test "$(stat -c %s "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz")" -eq 908066
+          printf '%s  %s\n' "$POCKET_SOURCE_ARCHIVE_SHA256" "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" | sha256sum --check --status
+          mkdir -p "$RUST_SOURCE_DIR"
+          tar -xzf "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" -C "$RUST_SOURCE_DIR" --strip-components=1
+          test -f "$RUST_SOURCE_DIR/rust/Cargo.lock"
+          printf '%s  %s\n' "$POCKET_CARGO_LOCK_SHA256" "$RUST_SOURCE_DIR/rust/Cargo.lock" | sha256sum --check --status
+          python3 - "$RUST_SOURCE_DIR/rust/Cargo.lock" <<'PY'
+          from pathlib import Path
+          import os, sys
+          lock = Path(sys.argv[1]).read_text()
+          expected = ('git+https://github.com/gabrieldemarmiesse/xn-ptts?rev='
+                      + os.environ['POCKET_PTTS_FORK_COMMIT'] + '#'
+                      + os.environ['POCKET_PTTS_FORK_COMMIT'])
+          if lock.count(expected) != 1:
+              raise SystemExit('Expected pinned ptts fork is absent or duplicated in Cargo.lock')
+          PY
+          python3 - "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" "$RUST_SOURCE_DIR" <<'PY'
+          import hashlib, pathlib, sys, tarfile
+          archive, root = pathlib.Path(sys.argv[1]), pathlib.Path(sys.argv[2])
+          prefix = 'pocket-tts-a922b912dfa366975294afb568d815b305acde5d/'
+          with tarfile.open(archive, 'r:gz') as source:
+              expected = set()
+              for member in source:
+                  relative = member.name.removeprefix(prefix)
+                  if not member.name.startswith(prefix) or not member.isfile() or not relative.startswith('rust/'):
+                      continue
+                  if not (relative.endswith('.rs') or relative in ('rust/Cargo.toml', 'rust/Cargo.lock', 'rust/.cargo/config.toml')):
+                      continue
+                  target = root / relative
+                  if target.is_symlink() or not target.is_file() or hashlib.sha256(target.read_bytes()).digest() != hashlib.sha256(source.extractfile(member).read()).digest():
+                      raise SystemExit(f'Original Rust source mismatch: {relative}')
+                  expected.add(relative)
+              actual = {p.relative_to(root).as_posix() for p in (root / 'rust').rglob('*.rs')}
+              if not actual.issubset(expected):
+                  raise SystemExit('Unexpected Rust source before build')
+          PY
+      - name: Build and unit test original Rust CLI with locked dependencies
+        timeout-minutes: 14
+        env:
+          RUST_SOURCE_DIR: ${{ runner.temp }}/pocket-tts-rust-source
+        run: |
+          set -euo pipefail
+          cd "$RUST_SOURCE_DIR/rust"
+          cargo build --release --locked --jobs 2
+          cargo test --release --locked --jobs 2
+          mkdir -p src/bin
+          cp "$GITHUB_WORKSPACE/native/vendor/pocket-tts-native-probe/sign_token_probe.rs" src/bin/sign_token_probe.rs
+          cmp src/bin/sign_token_probe.rs "$GITHUB_WORKSPACE/native/vendor/pocket-tts-native-probe/sign_token_probe.rs"
+          cargo build --release --locked --jobs 2 --bin sign_token_probe
+          printf '%s  %s\n' "$POCKET_CARGO_LOCK_SHA256" "$RUST_SOURCE_DIR/rust/Cargo.lock" | sha256sum --check --status
+          test -x "$RUST_SOURCE_DIR/rust/target/release/pocket-tts"
+          test -x "$RUST_SOURCE_DIR/rust/target/release/sign_token_probe"
+          sha256sum "$RUST_SOURCE_DIR/rust/target/release/pocket-tts"
+      - name: Download exact English 18M and Alba assets
+        timeout-minutes: 3
+        env:
+          ASSET_DIR: ${{ runner.temp }}/pocket-tts-native-assets
+        run: |
+          set -euo pipefail
+          python3 native/scripts/pocket-tts-audition.py download --asset-dir "$ASSET_DIR"
+      - name: Synthesize five fixed utterances in a network namespace
+        timeout-minutes: 7
+        env:
+          ASSET_DIR: ${{ runner.temp }}/pocket-tts-native-assets
+          OUTPUT_DIR: ${{ runner.temp }}/pocket-tts-native-probe
+          RUST_SOURCE_DIR: ${{ runner.temp }}/pocket-tts-rust-source
+        run: |
+          set -euo pipefail
+          # The full upstream CLI includes online features; this execution has no network.
+          timeout --signal=TERM --kill-after=10s 7m \
+            sudo unshare --net -- runuser -u "$(id -un)" -- \
+            env RAYON_NUM_THREADS=2 POCKET_TTS_SEED=42 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONDONTWRITEBYTECODE=1 PYTHONPATH="$PYTHONPATH" \
+            python3 native/scripts/pocket-tts-native-probe.py audition \
+              --asset-dir "$ASSET_DIR" \
+              --binary "$RUST_SOURCE_DIR/rust/target/release/pocket-tts" \
+              --diagnostic "$RUST_SOURCE_DIR/rust/target/release/sign_token_probe" \
+              --rust-source-dir "$RUST_SOURCE_DIR" \
+              --source-archive "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" \
+              --output-dir "$OUTPUT_DIR"
+          test -s "$OUTPUT_DIR/result.json"
+          test "$(find "$OUTPUT_DIR" -maxdepth 1 -name '*.wav' -type f | wc -l)" -eq 5
+          test "$(find "$OUTPUT_DIR" -mindepth 1 -maxdepth 1 -type f ! -name '*.wav' ! -name '*.json' ! -name '*.txt' | wc -l)" -eq 0
+      - name: Record sanitized provenance and required attribution
+        env:
+          RUST_SOURCE_DIR: ${{ runner.temp }}/pocket-tts-rust-source
+          OUTPUT_DIR: ${{ runner.temp }}/pocket-tts-native-probe
+        run: |
+          set -euo pipefail
+          python3 - "$RUST_SOURCE_DIR" "$OUTPUT_DIR" <<'PY'
+          import hashlib, json, os, pathlib, subprocess, sys
+          source, output = map(pathlib.Path, sys.argv[1:])
+          binary = source / 'rust/target/release/pocket-tts'
+          diagnostic = source / 'rust/target/release/sign_token_probe'
+          diagnostic_source = pathlib.Path('native/vendor/pocket-tts-native-probe/sign_token_probe.rs')
+          lock = source / 'rust/Cargo.lock'
+          receipt = {
+              'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+              'upstream_source_commit': os.environ['POCKET_SOURCE_COMMIT'],
+              'upstream_archive_sha256': os.environ['POCKET_SOURCE_ARCHIVE_SHA256'],
+              'cargo_lock_sha256': hashlib.sha256(lock.read_bytes()).hexdigest(),
+              'ptts_fork_commit': os.environ['POCKET_PTTS_FORK_COMMIT'],
+              'binary_sha256': hashlib.sha256(binary.read_bytes()).hexdigest(),
+              'token_diagnostic_binary_sha256': hashlib.sha256(diagnostic.read_bytes()).hexdigest(),
+              'token_diagnostic_source_sha256': hashlib.sha256(diagnostic_source.read_bytes()).hexdigest(),
+              'model_manifest_sha256': hashlib.sha256(pathlib.Path('native/vendor/pocket-tts-audition/manifest.json').read_bytes()).hexdigest(),
+              'tool_versions': {name: subprocess.check_output([name, '--version'], text=True).splitlines()[0]
+                                for name in ('rustc', 'cargo', 'cmake', 'c++', 'python3')},
+              'runner_image': os.environ.get('ImageVersion', 'unknown'),
+              'run_id': os.environ['GITHUB_RUN_ID'],
+              'run_attempt': os.environ['GITHUB_RUN_ATTEMPT'],
+              'rayon_threads': os.environ['RAYON_NUM_THREADS'],
+              'seed': os.environ['POCKET_TTS_SEED'],
+              'cargo_jobs': os.environ['CARGO_BUILD_JOBS'],
+          }
+          (output / 'provision-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          metadata = json.loads(subprocess.check_output([
+              'cargo', 'metadata', '--manifest-path', str(source / 'rust/Cargo.toml'),
+              '--locked', '--offline', '--format-version', '1'], text=True))
+          dependencies = sorted(({
+              'name': package['name'], 'version': package['version'],
+              'license': package.get('license') or 'not declared in Cargo metadata',
+          } for package in metadata['packages']), key=lambda item: (item['name'], item['version']))
+          (output / 'dependency-licenses.json').write_text(json.dumps(dependencies, indent=2) + '\n')
+          PY
+          cat > "$OUTPUT_DIR/NOTICES.txt" <<'NOTICE'
+          Experimental original Rust CLI synthesis from Kyutai Pocket TTS source
+          commit a922b912dfa366975294afb568d815b305acde5d (MIT).
+          The pinned ptts Rust fork is commit 7efa26973f81bba42cf2ace8da2c1eb9b605d54d
+          (MIT OR Apache-2.0). Other Rust dependency declarations are in dependency-licenses.json.
+          English 18M model and tokenizer: kyutai/pocket-tts-without-voice-cloning
+          revision a7056f505a4a8ca72d8b5fb1440071d6f1a35739 (CC BY 4.0).
+          Alba voice embedding derives from Alba MacKenna voice material (CC BY 4.0).
+          This artifact is for owner listening and pronunciation review only.
+          It does not establish Android viability, privacy acceptance, or release readiness.
+          NOTICE
+      - name: Upload successful WAVs and sanitized records only
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-native-probe-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-tts-native-probe/*.wav
+            ${{ runner.temp }}/pocket-tts-native-probe/*.json
+            ${{ runner.temp }}/pocket-tts-native-probe/*.txt
