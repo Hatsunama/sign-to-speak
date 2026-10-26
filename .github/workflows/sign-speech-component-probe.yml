@@ -1,6 +1,6 @@
 name: Pocket TTS CPU component probe
 
-# Hosted feasibility evidence only. The Android app and signing keys are absent.
+# Hosted feasibility evidence only. No APK is built or signed.
 on:
   workflow_dispatch:
   pull_request:
@@ -13,6 +13,18 @@ on:
       - native/scripts/pocket-tts-component-probe.py
       - native/scripts/pocket-tts-component-probe.test.py
       - native/scripts/pocket-tts-audition.py
+      - native/scripts/pocket-tts-audition.test.py
+      - native/scripts/speech-component-android-policy.test.mjs
+      - native/scripts/speech-native-probe-policy.test.mjs
+      - native/android/app/src/main/cpp/pocket/**
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketTtsRequest.java
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketModelStore.java
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java
+      - native/tests/java/PocketTtsRequestHostTest.java
+      - native/tests/java/PocketModelStoreTest.java
+      - native/tests/java/SpeechTextContractTest.java
+      - native/tests/java/SpeechSessionTest.java
+      - native/tests/run-java-tests.sh
       - native/vendor/pocket-tts-runtime/**
       - native/vendor/pocket-tts-audition/manifest.json
 
@@ -67,23 +79,29 @@ jobs:
                   raise SystemExit(f'x86-64-v3 CPU feature unavailable: {feature}')
           PY
           for tool in rustc cargo cmake c++ python3; do command -v "$tool"; "$tool" --version | head -1; done
+          : "${JAVA_HOME_17_X64:?Preinstalled JDK 17 is required}"
+          test -x "$JAVA_HOME_17_X64/bin/javac"
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          "$JAVA_HOME_17_X64/bin/javac" -version
+          "$JAVA_HOME_17_X64/bin/java" -version
           mkdir -p "$RUNNER_TEMP/pocket-component-evidence" "$RUNNER_TEMP/pocket-component-bootstrap"
       - name: Select pinned Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
         with:
           node-version: '24.19.0'
           check-latest: false
-      - name: Install locked Node parser and run policy tests
-        timeout-minutes: 2
+      - name: Run complete bounded host checks
+        timeout-minutes: 5
         run: |
           set -euo pipefail
           cd native
           npm ci --ignore-scripts --no-audit --no-fund
-          cd "$GITHUB_WORKSPACE"
-          node --test native/scripts/speech-component-policy.test.mjs
-          python3 native/scripts/pocket-license-audit.test.py
-          python3 -m unittest discover -s native/vendor/pocket-tts-runtime/tests -p 'test_*.py'
-          python3 native/scripts/pocket-tts-component-probe.test.py
+          npm test
+          npm run typecheck
+          node --test scripts/*.test.mjs
+          JAVA_HOME="$JAVA_HOME_17_X64" JAVA_TEST_OUT_PARENT="$RUNNER_TEMP" ./tests/run-java-tests.sh
+          for test_file in scripts/*.test.py; do python3 "$test_file"; done
+          python3 -m unittest discover -s vendor/pocket-tts-runtime/tests -p 'test_*.py'
       - name: Verify upstream lock seed for first-run bootstrap
         if: ${{ hashFiles('native/vendor/pocket-tts-runtime/Cargo.lock') == '' }}
         timeout-minutes: 2
@@ -139,11 +157,38 @@ jobs:
           cargo build --release --locked --offline --jobs 2 --lib
           test -s target/release/libsign_pocket_tts_runtime.so
           sha256sum target/release/libsign_pocket_tts_runtime.so Cargo.lock
+      - name: Build actual host JNI bridge against compiled runtime
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          runtime="$GITHUB_WORKSPACE/native/vendor/pocket-tts-runtime/target/release/libsign_pocket_tts_runtime.so"
+          build="$RUNNER_TEMP/pocket-component-host-jni"
+          cmake -S native/android/app/src/main/cpp/pocket -B "$build" -DCMAKE_BUILD_TYPE=Release \
+            -DPOCKET_RUNTIME_LIBRARY="$runtime" > "$RUNNER_TEMP/pocket-component-evidence/jni-configure.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-configure.txt"; exit 1;
+            }
+          cmake --build "$build" --config Release --parallel 2 \
+            > "$RUNNER_TEMP/pocket-component-evidence/jni-build.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-build.txt"; exit 1;
+            }
+          test -s "$build/libprivate_pocket_tts.so"
       - name: Download pinned English 18M and Alba assets
         timeout-minutes: 3
         run: |
           set -euo pipefail
           python3 native/scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-component-assets"
+      - name: Diagnose tokenizer against verified pinned asset
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          cd native/vendor/pocket-tts-runtime
+          TOKENIZER_MODEL="$RUNNER_TEMP/pocket-component-assets/languages/english_18m_2026-10/tokenizer.model" \
+            cargo test --release --locked --offline --jobs 2 diagnostic_tokenizer_contract -- --ignored --nocapture \
+            > "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt"; exit 1;
+            }
+          cat "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt"
       - name: Record component provenance and dependency declarations
         timeout-minutes: 1
         run: |
@@ -164,9 +209,14 @@ jobs:
                      'source_files_sha256': source,
                      'cargo_lock_sha256': digest(root / 'Cargo.lock'),
                      'component_cdylib_sha256': digest(library),
+                     'host_jni_sha256': digest(pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-component-host-jni/libprivate_pocket_tts.so'),
                      'model_manifest_sha256': digest(pathlib.Path('native/vendor/pocket-tts-audition/manifest.json')),
                      'tool_versions': {name: subprocess.check_output([name, '--version'], text=True).splitlines()[0]
                                        for name in ('rustc', 'cargo', 'cmake', 'c++', 'python3')},
+                     'java_version': subprocess.check_output([os.environ['JAVA_HOME_17_X64'] + '/bin/java', '-version'],
+                                                             stderr=subprocess.STDOUT, text=True).splitlines()[0],
+                     'javac_version': subprocess.check_output([os.environ['JAVA_HOME_17_X64'] + '/bin/javac', '-version'],
+                                                              stderr=subprocess.STDOUT, text=True).splitlines()[0],
                      'rustflags': os.environ['RUSTFLAGS'], 'cargo_jobs': os.environ['CARGO_BUILD_JOBS'],
                      'runner_image': os.environ.get('ImageVersion', 'unknown'),
                      'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']}
@@ -201,6 +251,28 @@ jobs:
           cp "$RUNNER_TEMP/pocket-component-execution/result.json" "$RUNNER_TEMP/pocket-component-evidence/"
           cp "$RUNNER_TEMP/pocket-component-execution/"*.wav "$RUNNER_TEMP/pocket-component-evidence/"
           test "$(find "$RUNNER_TEMP/pocket-component-evidence" -mindepth 1 -maxdepth 1 -type f ! -name '*.wav' ! -name '*.json' ! -name '*.txt' | wc -l)" -eq 0
+      - name: Execute actual JNI request host test offline
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          classes="$RUNNER_TEMP/pocket-component-jni-classes"
+          mkdir -p "$classes"
+          "$JAVA_HOME/bin/javac" -J-Xmx128m -d "$classes" \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketTtsRequest.java \
+            native/tests/java/PocketTtsRequestHostTest.java
+          timeout --signal=TERM --kill-after=10s 4m \
+            sudo unshare --net -- runuser -u "$(id -un)" -- \
+            env LD_LIBRARY_PATH="$RUNNER_TEMP/pocket-component-host-jni:$GITHUB_WORKSPACE/native/vendor/pocket-tts-runtime/target/release" \
+            HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 RAYON_NUM_THREADS=2 \
+            "$JAVA_HOME/bin/java" -Xmx128m -Djava.library.path="$RUNNER_TEMP/pocket-component-host-jni" \
+            -cp "$classes" PocketTtsRequestHostTest \
+            "$RUNNER_TEMP/pocket-component-execution/component-assets" \
+            > "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt"; exit 1;
+            }
+          cat "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt"
       - name: Upload successful WAVs and sanitized records only
         if: success()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
@@ -212,14 +284,19 @@ jobs:
             ${{ runner.temp }}/pocket-component-evidence/*.wav
             ${{ runner.temp }}/pocket-component-evidence/*.json
             ${{ runner.temp }}/pocket-component-evidence/*.txt
-      - name: Upload declaration diagnostics on failure
+      - name: Upload component diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
         with:
-          name: pocket-tts-declaration-diagnostics-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          name: pocket-tts-component-diagnostics-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
           retention-days: 3
           if-no-files-found: ignore
-          path: ${{ runner.temp }}/pocket-component-evidence/dependency-license-report.json
+          path: |
+            ${{ runner.temp }}/pocket-component-evidence/tokenizer-diagnostic.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-configure.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-build.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-host-test.txt
+            ${{ runner.temp }}/pocket-component-evidence/dependency-license-report.json
       - name: Upload bootstrap lock and resolution receipt separately
         if: ${{ always() && steps.resolve.outputs.bootstrap == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4

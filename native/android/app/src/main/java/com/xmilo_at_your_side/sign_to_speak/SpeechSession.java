@@ -1,5 +1,10 @@
 package com.xmilo_at_your_side.sign_to_speak;
 
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.CoderResult;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
@@ -9,7 +14,8 @@ import java.util.function.BooleanSupplier;
 /** Owns one local synthesis and playback job at a time. It retains no speech history. */
 public final class SpeechSession implements AutoCloseable {
   public interface Request {
-    short[] synthesize(byte[] ascii);
+    /** Rejects text at the engine boundary with {@link InvalidInput}. */
+    short[] synthesize(byte[] utf8);
     void cancel();
     void close();
   }
@@ -25,6 +31,9 @@ public final class SpeechSession implements AutoCloseable {
   }
   public interface Completion { void complete(Result result); }
   public enum Result { COMPLETED, CANCELLED, BUSY, UNAVAILABLE, INVALID_INPUT, FAILED, CLEANUP_FAILED }
+  public static final class InvalidInput extends IllegalArgumentException {
+    public InvalidInput(String message) { super(message); }
+  }
 
   private static final class Job {
     final long generation;
@@ -35,8 +44,8 @@ public final class SpeechSession implements AutoCloseable {
     Request request;
     Player player;
     short[] pcm;
-    Job(long generation, byte[] ascii, Completion done) {
-      this.generation = generation; this.ascii = ascii; this.done = done;
+    Job(long generation, byte[] utf8, Completion done) {
+      this.generation = generation; this.ascii = utf8; this.done = done;
     }
   }
 
@@ -73,7 +82,7 @@ public final class SpeechSession implements AutoCloseable {
     synchronized (gate) { return faulted; }
   }
 
-  public void speak(long token, byte[] ascii, Completion done) {
+  public void speak(long token, byte[] utf8, Completion done) {
     Objects.requireNonNull(done);
     Result immediate = null;
     Job job = null;
@@ -82,10 +91,10 @@ public final class SpeechSession implements AutoCloseable {
         immediate = Result.UNAVAILABLE;
       } else if (current != null) {
         immediate = Result.BUSY;
-      } else if (!valid(ascii)) {
+      } else if (!valid(utf8)) {
         immediate = Result.INVALID_INPUT;
       } else {
-        job = new Job(token, ascii.clone(), done);
+        job = new Job(token, utf8.clone(), done);
         current = job;
       }
     }
@@ -117,15 +126,55 @@ public final class SpeechSession implements AutoCloseable {
     }
   }
 
-  private static boolean valid(byte[] ascii) {
-    if (ascii == null || ascii.length == 0 || ascii.length > 256) return false;
-    boolean nonblank = false;
-    for (byte value : ascii) {
-      int c = value & 0xff;
-      if (c < 32 || c > 126) return false;
-      if (c != 32) nonblank = true;
+  private static boolean valid(byte[] utf8) {
+    if (utf8 == null || utf8.length == 0 || utf8.length > 512) return false;
+    CharBuffer decoded = CharBuffer.allocate(256);
+    try {
+      var decoder = StandardCharsets.UTF_8.newDecoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT);
+      CoderResult status = decoder.decode(ByteBuffer.wrap(utf8), decoded, true);
+      if (status.isError() || status.isOverflow()) return false;
+      status = decoder.flush(decoded);
+      if (status.isError() || status.isOverflow()) return false;
+      int length = decoded.position();
+      if (length == 0) return false;
+      char[] chars = decoded.array();
+      boolean nonblank = false;
+      for (int i = 0; i < length;) {
+        int codePoint = Character.codePointAt(chars, i, length);
+        if (Character.getType(codePoint) == Character.CONTROL) return false;
+        if (!Character.isWhitespace(codePoint) && !Character.isSpaceChar(codePoint)) nonblank = true;
+        i += Character.charCount(codePoint);
+      }
+      return nonblank;
+    } finally {
+      Arrays.fill(decoded.array(), '\0');
     }
-    return nonblank;
+  }
+
+  /** Strictly encodes reviewed text for the shared native boundary. The returned bytes belong to the caller. */
+  public static byte[] encodeText(String text) {
+    if (text == null || text.isEmpty() || text.length() > 256) return null;
+    ByteBuffer encoded = ByteBuffer.allocate(512);
+    byte[] result = null;
+    boolean accepted = false;
+    try {
+      var encoder = StandardCharsets.UTF_8.newEncoder()
+          .onMalformedInput(CodingErrorAction.REPORT)
+          .onUnmappableCharacter(CodingErrorAction.REPORT);
+      CoderResult status = encoder.encode(CharBuffer.wrap(text), encoded, true);
+      if (status.isError() || status.isOverflow()) return null;
+      status = encoder.flush(encoded);
+      if (status.isError() || status.isOverflow()) return null;
+      result = Arrays.copyOf(encoded.array(), encoded.position());
+      accepted = valid(result);
+      if (accepted) return result;
+      return null;
+    } finally {
+      if (result != null && !accepted) Arrays.fill(result, (byte) 0);
+      Arrays.fill(encoded.array(), (byte) 0);
+    }
   }
 
   private boolean cancelled(Job job) {
@@ -168,6 +217,8 @@ public final class SpeechSession implements AutoCloseable {
       if (cancelled(job)) { result = Result.CANCELLED; return; }
       job.player.play(job.pcm, () -> cancelled(job));
       result = cancelled(job) ? Result.CANCELLED : Result.COMPLETED;
+    } catch (InvalidInput invalid) {
+      result = cancelled(job) ? Result.CANCELLED : Result.INVALID_INPUT;
     } catch (RuntimeException | LinkageError failure) {
       result = cancelled(job) ? Result.CANCELLED : Result.FAILED;
     } finally {

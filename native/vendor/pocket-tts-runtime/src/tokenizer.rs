@@ -12,7 +12,10 @@ impl Tokenizer {
     }
     pub fn encode(&self, text: &str) -> Result<Vec<u32>> {
         let pieces = self.0.encode(text)?;
-        if pieces.iter().any(|piece| piece.id == 0) { bail!("unknown SentencePiece token") }
+        let unknown_id = self.0.unk_id();
+        if pieces.iter().any(|piece| piece.id == unknown_id) {
+            bail!("unknown SentencePiece token")
+        }
         Ok(pieces.into_iter().map(|piece| piece.id).collect())
     }
     pub fn decode(&self, ids: &[u32]) -> Result<String> {
@@ -26,5 +29,41 @@ impl ptts::Tokenizer for SharedTokenizer {
     }
     fn decode(&self, tokens: &[u32]) -> xn::Result<String> {
         self.0.decode(tokens).map_err(|e| xn::Error::msg(format!("{e:#}")))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Tokenizer;
+
+    // Run only after hosted CI has downloaded and verified the pinned tokenizer.model:
+    // TOKENIZER_MODEL=... cargo test --release --locked --offline diagnostic_tokenizer_contract -- --ignored --nocapture
+    #[test]
+    #[ignore = "requires the verified, hosted English 18M tokenizer.model"]
+    fn diagnostic_tokenizer_contract() {
+        let path = std::env::var("TOKENIZER_MODEL").expect("TOKENIZER_MODEL is required");
+        let tokenizer = Tokenizer::load(4000, &path, "sentencepiece").unwrap();
+        let sp = &tokenizer.0;
+        eprintln!("unknown_id={}", sp.unk_id());
+        for (label, text) in [
+            ("noncharacter", "Hello \u{10ffff}."),
+            ("accent", "Café."),
+            ("CJK", "你好。"),
+            ("emoji", "Hello 👋."),
+            ("zero-width", "Hello\u{200b}world."),
+        ] {
+            let pieces = sp.encode(text).unwrap();
+            let ids: Vec<_> = pieces.iter().map(|piece| piece.id).collect();
+            eprintln!(
+                "{label}: text={text:?} normalized={:?}",
+                sp.normalize(text).unwrap()
+            );
+            eprintln!("{label}: pieces={pieces:?}");
+            eprintln!(
+                "{label}: decoded={:?} tokenized={:?}",
+                sp.decode_piece_ids(&ids).unwrap(),
+                tokenizer.encode(text)
+            );
+        }
     }
 }

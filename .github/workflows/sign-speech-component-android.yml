@@ -10,6 +10,7 @@ on:
       - native/scripts/speech-component-android-policy.test.mjs
       - native/scripts/ci-sdk.sh
       - native/vendor/pocket-tts-runtime/**
+      - native/android/app/src/main/cpp/pocket/**
 
 permissions:
   contents: read
@@ -52,7 +53,7 @@ jobs:
           for tool in rustc cargo rustup python3 node cmake sha256sum; do command -v "$tool"; done
           mkdir -p "$RUNNER_TEMP/pocket-android-evidence"
           printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$RUNNER_TEMP/pocket-android-evidence/tested-sha.txt"
-          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
+          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/android/app/src/main/cpp/pocket/CMakeLists.txt native/android/app/src/main/cpp/pocket/pocket_jni.cpp native/android/app/src/main/cpp/pocket/exports.map native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
       - name: Select pinned Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
         with:
@@ -166,6 +167,67 @@ jobs:
           if not expected <= symbols:
               raise SystemExit(f'Missing C ABI exports: {sorted(expected - symbols)}')
           (root / 'elf-audit.txt').write_text(f'abi=arm64-v8a\nload_segments={len(loads)}\nneeded={sorted(needed)}\nrequired_exports={sorted(expected)}\n16k_alignment=pass\n')
+          PY
+      - name: Cross compile and audit actual Android JNI bridge linkage
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          source_dir="$GITHUB_WORKSPACE/native/android/app/src/main/cpp/pocket"
+          runtime="$GITHUB_WORKSPACE/native/vendor/pocket-tts-runtime/target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so"
+          build="$RUNNER_TEMP/pocket-android-jni-build"
+          evidence="$RUNNER_TEMP/pocket-android-evidence"
+          bin="$ANDROID_NDK_HOME/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -s "$runtime"
+          "$CMAKE" -S "$source_dir" -B "$build" \
+            -DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE" \
+            -DPOCKET_RUNTIME_LIBRARY="$runtime" \
+            -DCMAKE_BUILD_TYPE=Release 2>&1 | tee "$evidence/jni-cmake-configure.txt"
+          "$CMAKE" --build "$build" --target private_pocket_tts --parallel 2 2>&1 | tee "$evidence/jni-cmake-build.txt"
+          so="$build/libprivate_pocket_tts.so"
+          test -s "$so"
+          sha256sum "$so" > "$evidence/jni-component-sha256.txt"
+          "$bin/llvm-readelf" -hW "$so" > "$evidence/jni-elf-header.txt"
+          "$bin/llvm-readelf" -lW "$so" > "$evidence/jni-elf-program-headers.txt"
+          "$bin/llvm-readelf" -dW "$so" > "$evidence/jni-elf-dynamic.txt"
+          "$bin/llvm-nm" -D --defined-only "$so" > "$evidence/jni-elf-exports.txt"
+          python3 - "$evidence" <<'PY'
+          from pathlib import Path
+          import re, sys
+          root = Path(sys.argv[1])
+          header = (root / 'jni-elf-header.txt').read_text()
+          segments = (root / 'jni-elf-program-headers.txt').read_text()
+          dynamic = (root / 'jni-elf-dynamic.txt').read_text()
+          exports = (root / 'jni-elf-exports.txt').read_text()
+          failures = []
+          if not re.search(r'Machine:\s*AArch64', header) or not re.search(r'Type:\s*DYN', header):
+              failures.append('Expected ARM64 shared object')
+          loads = [line.split() for line in segments.splitlines() if line.lstrip().startswith('LOAD ')]
+          if not loads:
+              failures.append('Missing ELF LOAD segments')
+          for parts in loads:
+              offset, vaddr, align = (int(parts[i], 16) for i in (1, 2, -1))
+              if align < 16384 or offset % 16384 != vaddr % 16384:
+                  failures.append(f'Non-16-KiB-compatible LOAD: {parts}')
+          needed = re.findall(r'\(NEEDED\).*?\[([^]]+)\]', dynamic)
+          runtime = 'libsign_pocket_tts_runtime.so'
+          allowed = {runtime, 'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libc++_shared.so'}
+          if runtime not in needed:
+              failures.append(f'Missing exact Rust runtime DT_NEEDED: {runtime}')
+          if any('/' in name or '\\' in name or name not in allowed for name in needed):
+              failures.append(f'Unexpected or path-bearing DT_NEEDED: {needed}')
+          if re.search(r'\((?:RPATH|RUNPATH)\)', dynamic):
+              failures.append('RPATH/RUNPATH forbidden in Android JNI bridge')
+          symbols = {line.split()[-1] for line in exports.splitlines() if line.split()}
+          expected = {'Java_com_xmilo_1at_1your_1side_sign_1to_1speak_PocketTtsRequest_native' + suffix
+                      for suffix in ('Create', 'Synthesize', 'Cancel', 'Close')}
+          if symbols != expected:
+              failures.append(f'JNI exports differ: missing={sorted(expected - symbols)}, extra={sorted(symbols - expected)}')
+          summary = (f'abi=arm64-v8a\nload_segments={len(loads)}\nneeded={needed}\n'
+                     f'exports={sorted(symbols)}\n16k_alignment={"fail" if any("16-KiB" in x for x in failures) else "pass"}\n'
+                     f'result={"fail" if failures else "pass"}\n' + '\n'.join(failures) + '\n')
+          (root / 'jni-elf-audit.txt').write_text(summary)
+          if failures:
+              raise SystemExit('; '.join(failures))
           PY
       - name: Retain source and ELF audit evidence
         if: always()

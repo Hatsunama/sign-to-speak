@@ -1,0 +1,8 @@
+{
+    global:
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_PocketTtsRequest_nativeCreate;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_PocketTtsRequest_nativeSynthesize;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_PocketTtsRequest_nativeCancel;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_PocketTtsRequest_nativeClose;
+    local: *;
+};
