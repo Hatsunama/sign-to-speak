@@ -93,7 +93,7 @@ jobs:
             :app:generateQaLintVitalReportModel \
             | tee "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
           grep -Eq '^(> Task )?:app:generateQaLintVitalReportModel SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
-          grep -Eq '^(> Task )?:app:stageReviewedLicenses SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
+          grep -Eq '^(> Task )?:app:stageQaReviewedLicenses SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
       - name: Build locked Pocket runtime for debug and phone QA ABIs
         id: pocket_runtime
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.license_assets_graph.outcome == 'success' }}

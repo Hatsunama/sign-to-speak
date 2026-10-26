@@ -1,5 +1,35 @@
 // Curate notices for code still in the APK. Historical Flite receipts remain
 // in source control for provenance, but are no longer bundled.
+abstract class StageReviewedLicenses extends DefaultTask {
+    @Internal
+    abstract org.gradle.api.file.DirectoryProperty getSourceRoot()
+
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract org.gradle.api.file.ConfigurableFileCollection getSelectedFiles()
+
+    @Input
+    abstract org.gradle.api.provider.ListProperty<String> getIncludedPaths()
+
+    @OutputDirectory
+    abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+
+    @javax.inject.Inject
+    abstract org.gradle.api.file.FileSystemOperations getFileSystemOperations()
+
+    @TaskAction
+    void stage() {
+        def root = sourceRoot.get().asFile
+        def included = includedPaths.get()
+        def destination = outputDirectory.get().asFile
+        fileSystemOperations.sync {
+            from(root) { include(included) }
+            into(destination)
+            includeEmptyDirs = false
+        }
+    }
+}
+
 def licenseRoot = file("../../licenses")
 def licenseFiles = ["sign-to-speak/LICENSE", "sign-to-speak/NOTICE", "react-native-template-MIT.txt"]
 licenseFiles.each { relative ->
@@ -8,13 +38,14 @@ licenseFiles.each { relative ->
         throw new GradleException("Required nonempty license asset missing: ${source}")
     }
 }
-def reviewedLicenseAssets = layout.buildDirectory.dir("generated/reviewed-license-assets")
-def stageReviewedLicenses = tasks.register("stageReviewedLicenses", Copy) {
-    from(licenseRoot) { include(licenseFiles) }
-    into(reviewedLicenseAssets)
-    includeEmptyDirs = false
-}
-android.sourceSets.main.assets.srcDir(reviewedLicenseAssets)
-tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
-    dependsOn(stageReviewedLicenses)
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def stageReviewedLicenses = tasks.register("stage${variant.name.capitalize()}ReviewedLicenses", StageReviewedLicenses) {
+            sourceRoot.fileValue(licenseRoot)
+            selectedFiles.from(project.fileTree(licenseRoot) { include(licenseFiles) })
+            includedPaths.set(licenseFiles)
+            outputDirectory.set(layout.buildDirectory.dir("generated/reviewed-license-assets/${variant.name}"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(stageReviewedLicenses) { it.outputDirectory }
+    }
 }

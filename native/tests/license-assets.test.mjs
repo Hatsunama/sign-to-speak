@@ -14,7 +14,9 @@ test('Android bundles retained application notices and omits retired Flite notic
   assert.match(mapping, /sign-to-speak\/LICENSE/);
   assert.match(mapping, /sign-to-speak\/NOTICE/);
   assert.match(mapping, /react-native-template-MIT\.txt/);
-  assert.match(mapping, /include\(licenseFiles\)/);
+  assert.match(mapping, /selectedFiles\.from\(project\.fileTree\(licenseRoot\) \{ include\(licenseFiles\) \}\)/);
+  assert.match(mapping, /includedPaths\.set\(licenseFiles\)/);
+  assert.match(mapping, /variant\.sources\.assets\.addGeneratedSourceDirectory\(stageReviewedLicenses\)/);
   assert.doesNotMatch(mapping, /include\([^\n]*flite/);
 });
 
