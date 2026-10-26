@@ -42,15 +42,19 @@ class PocketApkRetirementTest(unittest.TestCase):
         self.addCleanup(self.patch_root.stop)
 
     def verify(self):
-        apk = self.root / 'fixture.apk'
-        with zipfile.ZipFile(apk, 'w') as archive:
-            for name, data in self.entries.items():
-                archive.writestr(name, data)
+        apk = self.stored_apk({name: 0 for name in self.entries if name.endswith('.so')})
         # Asset pinning and the ZIP retirement check run against real archive entries.
         # ELF contract verification has separate file-driven parser tests.
         with patch.object(audit, 'check'), patch.object(audit.subprocess, 'check_output') as readelf:
-            readelf.return_value = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+            readelf.side_effect = lambda command, **kwargs: self.mock_readelf(command,
+                '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n')
             audit.main(apk, 'arm64-v8a', self.root / 'readelf', self.root)
+
+    @staticmethod
+    def mock_readelf(command, segments):
+        if command[1] == '-hW':
+            return 'Type: DYN (Shared object file)\nMachine: AArch64\n'
+        return segments
 
     def stored_apk(self, native_residues):
         """Write real stored entries whose local payload offsets have chosen residues."""
@@ -82,7 +86,9 @@ class PocketApkRetirementTest(unittest.TestCase):
 
     def audit_with_readelf(self, apk, readelf_output):
         with patch.object(audit, 'check'), patch.object(audit.subprocess, 'check_output',
-                                                     side_effect=readelf_output) as readelf:
+                                                     side_effect=lambda command, **kwargs:
+                                                     self.mock_readelf(command,
+                                                     readelf_output(command, **kwargs))) as readelf:
             audit.main(apk, 'arm64-v8a', self.root / 'readelf', self.root)
         return readelf
 
@@ -139,6 +145,53 @@ class PocketApkRetirementTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, '16 KiB'):
             self.audit_with_readelf(apk, readelf_output)
         self.assertIn(extra, seen)
+
+    def test_additional_native_library_bad_machine_is_rejected(self):
+        self.entries['lib/arm64-v8a/libtensorflowlite_jni.so'] = b'fixture'
+        apk = self.stored_apk({name: 0 for name in self.entries if name.endswith('.so')})
+        aligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+
+        def readelf_output(command, **kwargs):
+            if command[1] == '-hW' and Path(command[-1]).name == 'libtensorflowlite_jni.so':
+                return 'Type: DYN (Shared object file)\nMachine: Advanced Micro Devices X86-64\n'
+            return self.mock_readelf(command, aligned)
+
+        with patch.object(audit, 'check'), patch.object(audit.subprocess, 'check_output',
+                                                     side_effect=readelf_output):
+            with self.assertRaisesRegex(ValueError, 'Expected arm64-v8a shared object'):
+                audit.main(apk, 'arm64-v8a', self.root / 'readelf', self.root)
+
+    def test_unexpected_abi_library_is_rejected(self):
+        self.entries['lib/x86_64/libextra.so'] = b'fixture'
+        with self.assertRaisesRegex(ValueError, 'Unexpected APK native ABI'):
+            self.verify()
+
+    def test_nested_native_library_path_is_rejected(self):
+        self.entries['lib/arm64-v8a/nested/libextra.so'] = b'fixture'
+        with self.assertRaisesRegex(ValueError, 'Unexpected native library path'):
+            self.verify()
+
+    def test_drive_qualified_native_library_path_is_rejected_before_extraction(self):
+        unsafe_name = 'Z:libextra.so'
+        self.entries['lib/arm64-v8a/' + unsafe_name] = b'fixture'
+        apk = self.stored_apk({name: 0 for name in self.entries if name.endswith('.so')})
+        original_write_bytes = Path.write_bytes
+        original_mkdir = Path.mkdir
+
+        def guarded_mkdir(path, *args, **kwargs):
+            if str(path) == 'Z:':
+                return None
+            return original_mkdir(path, *args, **kwargs)
+
+        def guarded_write_bytes(path, data):
+            if unsafe_name in str(path):
+                raise AssertionError('Unsafe native library extraction was attempted')
+            return original_write_bytes(path, data)
+
+        with patch.object(Path, 'mkdir', guarded_mkdir), patch.object(Path, 'write_bytes', guarded_write_bytes):
+            with self.assertRaisesRegex(ValueError, 'Unexpected native library path'):
+                self.audit_with_readelf(apk, lambda *args, **kwargs:
+                                        '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n')
 
     def test_old_flite_library_is_rejected(self):
         self.entries['lib/arm64-v8a/libflite_usenglish.so'] = b'old engine'

@@ -6,6 +6,7 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import androidx.lifecycle.Lifecycle
 import java.io.IOException
+import java.util.function.BooleanSupplier
 import java.util.concurrent.atomic.AtomicLong
 
 /** Activity-scoped speech authority. Native lifecycle revokes it without waiting for JS. */
@@ -37,12 +38,12 @@ internal class SpeechOwner(private val activity: MainActivity) {
     if (session == null) {
       val appContext = activity.applicationContext
       session = SpeechSession(object : SpeechSession.Factory {
-        override fun newRequest(): SpeechSession.Request {
+        override fun newRequest(cancelled: BooleanSupplier): SpeechSession.Request {
           try {
             val parent = appContext.noBackupFilesDir.canonicalFile
-            val root = PocketModelStore().prepare(parent) { name ->
-              appContext.assets.open("pocket-alba/$name")
-            }
+            val root = PocketModelStore().prepare(parent,
+                { name -> appContext.assets.open("pocket-alba/$name") }, cancelled)
+            if (cancelled.asBoolean) throw IOException("Speech request cancelled")
             return PocketTtsRequest(root.absolutePath)
           } catch (_: IOException) {
             throw IllegalStateException("Local speech unavailable")

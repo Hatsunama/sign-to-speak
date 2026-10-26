@@ -5,11 +5,7 @@ import re
 import sys
 
 
-def check(abi: str, prefix: Path, role: str) -> None:
-    header = Path(str(prefix) + "-header.txt").read_text()
-    segments = Path(str(prefix) + "-segments.txt").read_text()
-    dynamic = Path(str(prefix) + "-dynamic.txt").read_text()
-    symbols = Path(str(prefix) + "-symbols.txt").read_text()
+def check_elf_header_loads(abi: str, header: str, segments: str) -> int:
     machine = {"arm64-v8a": "AArch64", "x86_64": "Advanced Micro Devices X86-64"}[abi]
     if not re.search(r"Machine:\s*" + re.escape(machine), header) or not re.search(r"Type:\s*DYN", header):
         raise ValueError(f"Expected {abi} shared object")
@@ -20,6 +16,15 @@ def check(abi: str, prefix: Path, role: str) -> None:
         offset, address, alignment = (int(fields[i], 16) for i in (1, 2, -1))
         if alignment < 16384 or offset % 16384 != address % 16384:
             raise ValueError(f"LOAD segment is not 16 KiB compatible: {fields}")
+    return len(loads)
+
+
+def check(abi: str, prefix: Path, role: str) -> None:
+    header = Path(str(prefix) + "-header.txt").read_text()
+    segments = Path(str(prefix) + "-segments.txt").read_text()
+    dynamic = Path(str(prefix) + "-dynamic.txt").read_text()
+    symbols = Path(str(prefix) + "-symbols.txt").read_text()
+    load_count = check_elf_header_loads(abi, header, segments)
     needed = re.findall(r"\(NEEDED\).*?\[([^]]+)\]", dynamic)
     rust_name = "libsign_pocket_tts_runtime.so"
     jni_name = "libprivate_pocket_tts.so"
@@ -57,7 +62,7 @@ def check(abi: str, prefix: Path, role: str) -> None:
                     for name in ("Create", "Synthesize", "Cancel", "Close")}
         if required != exported:
             raise ValueError(f"JNI exports differ: missing={sorted(required - exported)}, extra={sorted(exported - required)}")
-    print(f"{abi} {role}: {len(loads)} 16 KiB LOAD segments, SONAME and dependencies verified")
+    print(f"{abi} {role}: {load_count} 16 KiB LOAD segments, SONAME and dependencies verified")
 
 
 if __name__ == "__main__":

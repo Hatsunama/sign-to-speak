@@ -26,7 +26,8 @@ public final class SpeechSession implements AutoCloseable {
     void close();
   }
   public interface Factory {
-    Request newRequest();
+    /** Preparation must poll cancelled during work it can safely abandon. */
+    Request newRequest(BooleanSupplier cancelled);
     Player newPlayer();
   }
   public interface Completion { void complete(Result result); }
@@ -206,7 +207,7 @@ public final class SpeechSession implements AutoCloseable {
     Player loosePlayer = null;
     try {
       if (cancelled(job)) { result = Result.CANCELLED; return; }
-      looseRequest = Objects.requireNonNull(factory.newRequest());
+      looseRequest = Objects.requireNonNull(factory.newRequest(() -> cancelled(job)));
       if (!installRequest(job, looseRequest)) { result = Result.CANCELLED; return; }
       looseRequest = null;
       job.pcm = Objects.requireNonNull(job.request.synthesize(job.ascii));

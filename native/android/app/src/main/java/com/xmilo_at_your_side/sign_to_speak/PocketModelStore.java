@@ -16,6 +16,7 @@ import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.BooleanSupplier;
 
 /** Installs only the pinned, bundled Pocket Alba assets into an app-private directory. */
 public final class PocketModelStore {
@@ -62,25 +63,34 @@ public final class PocketModelStore {
 
   /** Returns an absolute root only after all three files have passed size and SHA-256 checks. */
   public File prepare(File privateParent, AssetSource source) throws IOException {
-    if (privateParent == null || source == null) throw new IllegalArgumentException("Parent and asset source required");
+    return prepare(privateParent, source, () -> false);
+  }
+
+  /** Cancellation is checked between bounded reads and before exposing a model root. */
+  public File prepare(File privateParent, AssetSource source, BooleanSupplier cancelled) throws IOException {
+    if (privateParent == null || source == null || cancelled == null)
+      throw new IllegalArgumentException("Parent, asset source and cancellation required");
     synchronized (INSTALL_LOCK) {
+      checkCancelled(cancelled);
       Path parent = privateParent.toPath().toAbsolutePath().normalize();
       if (!Files.isDirectory(parent, LinkOption.NOFOLLOW_LINKS) || Files.isSymbolicLink(parent)
           || !parent.toRealPath().equals(parent)) throw new IOException("Private model parent is unsafe");
       removeOrphanedDirectories(parent);
+      checkCancelled(cancelled);
       Path root = parent.resolve(version);
       if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
         if (Files.isSymbolicLink(root) || !Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS))
           throw new IOException("Model root is unsafe");
-        if (verified(root)) return root.toFile();
+        if (verified(root, cancelled)) { checkCancelled(cancelled); return root.toFile(); }
         requireOwnedContents(root);
       }
       Path stage = parent.resolve(".pocket-stage-" + UUID.randomUUID());
       Files.createDirectory(stage);
       boolean published = false;
       try {
-        for (ModelFile item : manifest) copyChecked(source, item, stage.resolve(item.name));
-        if (!verified(stage)) throw new IOException("Staged model failed verification");
+        for (ModelFile item : manifest) copyChecked(source, item, stage.resolve(item.name), cancelled);
+        if (!verified(stage, cancelled)) throw new IOException("Staged model failed verification");
+        checkCancelled(cancelled);
         Path displaced = null;
         if (Files.exists(root, LinkOption.NOFOLLOW_LINKS)) {
           requireOwnedContents(root);
@@ -88,6 +98,7 @@ public final class PocketModelStore {
           Files.move(root, displaced, StandardCopyOption.ATOMIC_MOVE);
         }
         try {
+          checkCancelled(cancelled);
           Files.move(stage, root, StandardCopyOption.ATOMIC_MOVE);
           published = true;
         } catch (IOException failure) {
@@ -98,6 +109,7 @@ public final class PocketModelStore {
           throw failure;
         }
         if (displaced != null) removeOwnedDirectory(displaced);
+        checkCancelled(cancelled);
         return root.toFile();
       } finally {
         if (!published) removeOwnedDirectory(stage);
@@ -105,16 +117,20 @@ public final class PocketModelStore {
     }
   }
 
-  private void copyChecked(AssetSource source, ModelFile item, Path destination) throws IOException {
+  private void copyChecked(AssetSource source, ModelFile item, Path destination,
+      BooleanSupplier cancelled) throws IOException {
     MessageDigest digest = sha();
     long total = 0;
+    checkCancelled(cancelled);
     try (InputStream input = source.open(item.name)) {
       if (input == null) throw new IOException("Bundled model asset missing");
       try (FileOutputStream output = new FileOutputStream(destination.toFile())) {
         byte[] buffer = new byte[BUFFER_SIZE];
         int count;
         int emptyReads = 0;
-        while ((count = input.read(buffer)) != -1) {
+        while (true) {
+          count = readCancellable(input, buffer, cancelled);
+          if (count == -1) break;
           if (count == 0) {
             if (++emptyReads > 8) throw new IOException("Bundled model asset stalled");
             continue;
@@ -125,17 +141,20 @@ public final class PocketModelStore {
           output.write(buffer, 0, count);
           digest.update(buffer, 0, count);
         }
+        checkCancelled(cancelled);
         if (total != item.size || !item.sha256.equals(hex(digest.digest())))
           throw new IOException("Bundled model asset differs from pinned manifest");
         output.getFD().sync();
       }
     }
+    checkCancelled(cancelled);
     if (!destination.toFile().setReadOnly()) throw new IOException("Cannot protect bundled model asset");
   }
 
-  private boolean verified(Path root) throws IOException {
+  private boolean verified(Path root, BooleanSupplier cancelled) throws IOException {
     requireOwnedContents(root);
     for (ModelFile item : manifest) {
+      checkCancelled(cancelled);
       Path file = root.resolve(item.name);
       if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) != item.size
           || !file.toRealPath().getParent().equals(root.toRealPath())) return false;
@@ -143,11 +162,28 @@ public final class PocketModelStore {
       try (FileInputStream input = new FileInputStream(file.toFile())) {
         byte[] buffer = new byte[BUFFER_SIZE];
         int count;
-        while ((count = input.read(buffer)) != -1) if (count > 0) digest.update(buffer, 0, count);
+        while (true) {
+          count = readCancellable(input, buffer, cancelled);
+          if (count == -1) break;
+          if (count > 0) digest.update(buffer, 0, count);
+        }
       }
+      checkCancelled(cancelled);
       if (!item.sha256.equals(hex(digest.digest()))) return false;
     }
+    checkCancelled(cancelled);
     return true;
+  }
+
+  private static void checkCancelled(BooleanSupplier cancelled) throws IOException {
+    if (cancelled.getAsBoolean()) throw new IOException("Model preparation cancelled");
+  }
+
+  static int readCancellable(InputStream input, byte[] buffer, BooleanSupplier cancelled) throws IOException {
+    checkCancelled(cancelled);
+    int count = input.read(buffer);
+    checkCancelled(cancelled);
+    return count;
   }
 
   private void requireOwnedContents(Path directory) throws IOException {

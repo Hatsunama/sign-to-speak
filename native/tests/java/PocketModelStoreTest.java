@@ -49,20 +49,9 @@ public final class PocketModelStoreTest {
   }
   private static File prepareCancellable(PocketModelStore store, File parent,
       PocketModelStore.AssetSource assets, BooleanSupplier cancelled) throws Exception {
-    try {
-      // Keep the behavioral RED runnable against the current two-argument API.
-      java.lang.reflect.Method method = PocketModelStore.class.getMethod("prepare",
-          File.class, PocketModelStore.AssetSource.class, BooleanSupplier.class);
-      try { return (File) method.invoke(store, parent, assets, cancelled); }
-      catch (java.lang.reflect.InvocationTargetException failure) {
-        Throwable cause = failure.getCause();
-        if (cause instanceof Exception) throw (Exception) cause;
-        if (cause instanceof Error) throw (Error) cause;
-        throw new AssertionError(cause);
-      }
-    } catch (NoSuchMethodException oldApi) { return store.prepare(parent, assets); }
+    return store.prepare(parent, assets, cancelled);
   }
-  private static void cancellationDuringCopyAndCacheHash(Path base) throws Exception {
+  private static void cancellationDuringCopyAndCachedReuse(Path base) throws Exception {
     byte[] large = new byte[128 * 1024];
     Arrays.fill(large, (byte) 7);
     PocketModelStore.ModelFile[] files = new PocketModelStore.ModelFile[3];
@@ -96,9 +85,8 @@ public final class PocketModelStoreTest {
     AtomicInteger polls = new AtomicInteger();
     failed(() -> prepareCancellable(store, privateParent,
         name -> { throw new AssertionError("cached verification must not open assets"); },
-        () -> polls.incrementAndGet() >= 2),
-        "cancellation during cached verification rejects reuse");
-    check(polls.get() >= 2, "cached hash polls cancellation after entry");
+        () -> polls.incrementAndGet() >= 5),
+        "cancellation during cached verification rejects reuse without opening assets");
     check(Arrays.equals(Files.readAllBytes(new File(root, NAMES[0]).toPath()), large),
         "cancelled verification retains previously valid private bytes");
     check(root.equals(prepareCancellable(store, privateParent, complete, () -> false)),
@@ -160,7 +148,7 @@ public final class PocketModelStoreTest {
     } catch (UnsupportedOperationException | SecurityException e) { System.out.println("Symlink case skipped: unsupported"); }
     catch (FileSystemException e) { System.out.println("Symlink case skipped: host privilege unavailable"); }
     checkRoot(store.prepare(base, source()));
-    cancellationDuringCopyAndCacheHash(base.toPath());
+    cancellationDuringCopyAndCachedReuse(base.toPath());
     System.out.println("PocketModelStore: " + checks + " checks passed");
   }
 }

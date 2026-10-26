@@ -61,7 +61,7 @@ public final class SpeechTextContractTest {
     BooleanSupplier cancellationGuard;
     CountDownLatch synthesisEntered, releaseSynthesis;
 
-    @Override public SpeechSession.Request newRequest() {
+    @Override public SpeechSession.Request newRequest(BooleanSupplier cancelled) {
       requests++;
       return new SpeechSession.Request() {
         @Override public short[] synthesize(byte[] utf8) {
@@ -209,7 +209,7 @@ public final class SpeechTextContractTest {
 
   private static void nativeInputMarkerIsSpecific() {
     RecordingFactory factory = new RecordingFactory() {
-      @Override public SpeechSession.Request newRequest() {
+      @Override public SpeechSession.Request newRequest(BooleanSupplier cancelled) {
         return new SpeechSession.Request() {
           @Override public short[] synthesize(byte[] utf8) {
             throw new SpeechSession.InvalidInput("native token limit");
@@ -230,7 +230,7 @@ public final class SpeechTextContractTest {
     }
 
     SpeechSession.Factory badPlayer = new SpeechSession.Factory() {
-      @Override public SpeechSession.Request newRequest() {
+      @Override public SpeechSession.Request newRequest(BooleanSupplier cancelled) {
         return new SpeechSession.Request() {
           @Override public short[] synthesize(byte[] utf8) { return new short[] {1}; }
           @Override public void cancel() { }
