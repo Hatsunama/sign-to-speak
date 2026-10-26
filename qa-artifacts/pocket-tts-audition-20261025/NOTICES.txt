@@ -1,0 +1,7 @@
+Experimental reference Python synthesis from Kyutai Pocket TTS v4.0.1
+source commit a922b912dfa366975294afb568d815b305acde5d (MIT).
+Model english_18m_2026-10 from kyutai/pocket-tts-without-voice-cloning
+revision a7056f505a4a8ca72d8b5fb1440071d6f1a35739 (CC BY 4.0).
+Alba voice embedding derives from Alba MacKenna voice material (CC BY 4.0).
+This artifact is for owner listening and pronunciation review only.
+It does not establish speech quality, Android viability, or release acceptance.

@@ -1,0 +1,90 @@
+{
+  "status": "synthesized_for_listening_review_only",
+  "source_commit": "a922b912dfa366975294afb568d815b305acde5d",
+  "source_version": "4.0.1",
+  "source_archive_sha256": "08dd2e7405609e788a9811f2786cdfc3f8f21f5e083a321108923fcae8f44b06",
+  "offline_local_resolver_guard": true,
+  "no_voice_cloning_selection": "Pinned local resolver raises FileNotFoundError for an absent cloning sentinel, invoking the official loader fallback to the verified local ungated weights; model.has_voice_cloning is asserted false.",
+  "model_revision": "a7056f505a4a8ca72d8b5fb1440071d6f1a35739",
+  "language": "english_18m_2026-10",
+  "voice": "alba",
+  "asset_sha256": {
+    "languages/english_18m_2026-10/model.safetensors": "599329dcea2f2a8d17b575e1c6e11b78822453c9073040d55c26faadf4883188",
+    "languages/english_18m_2026-10/tokenizer.model": "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6",
+    "languages/english_18m_2026-10/embeddings/alba.safetensors": "11554cbe9f3d3a3e10722932df9952bb44928e534f7af3200524659166b5627a"
+  },
+  "local_config_sha256": "0a0386e48a876cd3f332de688b7271bbb00ef585ba418e19cddc961607c03296",
+  "sample_rate": 24000,
+  "channels": 1,
+  "pcm_format": "signed_16_bit_little_endian",
+  "max_tokens_per_utterance": 160,
+  "load_seconds": 0.181,
+  "peak_process_rss_kib": 605364,
+  "torch_version": "2.14.0+cpu",
+  "numpy_version": "2.3.2",
+  "python_version": "3.12.3",
+  "offline_environment": {
+    "HF_HUB_OFFLINE": "1",
+    "TRANSFORMERS_OFFLINE": "1",
+    "CUDA_VISIBLE_DEVICES": ""
+  },
+  "resource_scope": "standard hosted CPU, two torch threads, no user media, five fixed utterances",
+  "outputs": [
+    {
+      "text": "Hello, I can speak for you.",
+      "file": "01-introduction.wav",
+      "sha256": "0ba537a3503b0797268af898a048a8e466b7dc336c0bbd894f309e56e3c756f7",
+      "synthesis_seconds": 0.371,
+      "samples": 40320,
+      "duration_seconds": 1.68,
+      "peak": 0.816185,
+      "rms": 0.117997
+    },
+    {
+      "text": "Please call my family.",
+      "file": "02-request.wav",
+      "sha256": "f9d617b62f3741408ecd5b17ff0cc4c20d1079e3d88044a6b8aaae3b80e4529b",
+      "synthesis_seconds": 0.349,
+      "samples": 40320,
+      "duration_seconds": 1.68,
+      "peak": 0.631524,
+      "rms": 0.106324
+    },
+    {
+      "text": "I need water, please.",
+      "file": "03-need.wav",
+      "sha256": "6e387eae550ada50d31f8d6110965eccfdb9572286a9ffde945cf242c0eeebae",
+      "synthesis_seconds": 0.362,
+      "samples": 42240,
+      "duration_seconds": 1.76,
+      "peak": 0.675148,
+      "rms": 0.10584
+    },
+    {
+      "text": "The appointment is at 3:45 p.m.",
+      "file": "04-number.wav",
+      "sha256": "2cc140f6a85f0f6390cc332ffa734bee4dc2140266f52654b0f95d5b8b3e314e",
+      "synthesis_seconds": 0.789,
+      "samples": 74880,
+      "duration_seconds": 3.12,
+      "peak": 0.634992,
+      "rms": 0.110847
+    },
+    {
+      "text": "Dr. Smith said it’s okay — thank you.",
+      "file": "05-punctuation.wav",
+      "sha256": "d1138ad4318eded0c255efe3837162a9c212169ed2125325bb51d9b80c3b0074",
+      "synthesis_seconds": 0.458,
+      "samples": 51840,
+      "duration_seconds": 2.16,
+      "peak": 0.669037,
+      "rms": 0.10049
+    }
+  ],
+  "attribution": [
+    "Pocket TTS 4.0.1 source code by Kyutai, MIT License: https://github.com/kyutai-labs/pocket-tts/blob/a922b912dfa366975294afb568d815b305acde5d/LICENSE",
+    "Pocket TTS English 18M October 2026 model and tokenizer by Kyutai, CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. Source: https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/tree/a7056f505a4a8ca72d8b5fb1440071d6f1a35739/languages/english_18m_2026-10",
+    "Alba voice embedding is derived from Alba MacKenna's voice recording, CC BY 4.0: https://huggingface.co/kyutai/tts-voices/blob/main/README.md#alba-mackenna",
+    "Changes for this audition: the pinned upstream config is copied locally and its weight and tokenizer URLs are replaced with verified local paths. A local-only path resolver adapter rejects remote and unapproved inputs and deliberately raises FileNotFoundError for an absent cloning sentinel, selecting the official loader's ungated fallback. Model math and synthesis code are not modified. No model weights, tokenizer, or voice embedding are modified. Generated WAVs are evaluation outputs, not source recordings."
+  ]
+}
