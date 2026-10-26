@@ -3,7 +3,11 @@ package com.xmilo_at_your_side.sign_to_speak
 import android.graphics.Bitmap
 import android.media.MediaMetadataRetriever
 import android.os.Bundle
+import android.os.Process
 import android.os.SystemClock
+import android.system.ErrnoException
+import android.system.Os
+import android.system.StructStat
 import androidx.test.platform.app.InstrumentationRegistry
 import com.google.mediapipe.framework.image.BitmapImageBuilder
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
@@ -40,6 +44,79 @@ class PhoneRecognitionProbeTest {
     private val modelBytes = 36_870_396L
 
     private data class ClipSpec(val id: String, val file: File, val sha: String, val expectedSource: String, val expected: String)
+
+    @Test
+    fun stagedInputHandoffIsReadable() {
+        val args: Bundle = InstrumentationRegistry.getArguments()
+        assumeTrue("Opt in with -e recognitionInputProbe true", args.getString("recognitionInputProbe") == "true")
+        val expected = checkedHash(requireNotNull(args.getString("recognitionInputSha256")) {
+            "recognitionInputSha256 is required for the synthetic manifest"
+        })
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        val context = instrumentation.targetContext
+        require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Probe requires the isolated QA target" }
+        val driver = if (args.getString("recognitionInputLaunch") == "true") PhoneActivityDriver(instrumentation) else null
+        try {
+            driver?.launch()
+            val external = requireNotNull(context.getExternalFilesDir(null)) { "Test private external files unavailable" }
+            val root = File(external, "recognition-probe")
+            require(root.isDirectory && !root.isSymbolicLink()) { "Private recognition-probe directory missing" }
+            val manifestFile = owned(root, "manifest.json")
+            val manifestStat = statDiagnostic { Os.stat(manifestFile.absolutePath) }
+            var manifestFstat: JSONObject? = null
+            val openOutcome = try {
+                FileInputStream(manifestFile).use { stream ->
+                    manifestFstat = statDiagnostic { Os.fstat(stream.fd) }
+                }
+                "opened"
+            } catch (error: Exception) {
+                error.javaClass.simpleName
+            }
+            val diagnostic = JSONObject()
+                .put("diagnostic", "recognition_input_handoff")
+                .put("process_uid", Process.myUid())
+                .put("application_uid", context.applicationInfo.uid)
+                .put("process_user", Process.myUserHandle().toString())
+                .put("package", context.packageName)
+                .put("external_absolute", external.absolutePath)
+                .put("external_canonical", external.canonicalPath)
+                .put("external_exists", external.exists())
+                .put("external_is_file", external.isFile)
+                .put("external_length", external.length())
+                .put("external_can_read", external.canRead())
+                .put("manifest_absolute", manifestFile.absolutePath)
+                .put("manifest_canonical", manifestFile.canonicalPath)
+                .put("manifest_exists", manifestFile.exists())
+                .put("manifest_is_file", manifestFile.isFile)
+                .put("manifest_length", manifestFile.length())
+                .put("manifest_can_read", manifestFile.canRead())
+                .put("manifest_stat", manifestStat)
+                .put("manifest_fstat", manifestFstat ?: JSONObject.NULL)
+                .put("manifest_stream", openOutcome)
+            instrumentation.sendStatus(2, Bundle().apply {
+                putString("stream", diagnostic.toString() + "\n")
+            })
+            readLimited(manifestFile, 16 * 1024)
+            verifyFile(manifestFile, expected, 16L * 1024)
+        } finally {
+            driver?.close()
+        }
+    }
+
+    private fun statDiagnostic(stat: () -> StructStat): JSONObject = try {
+        val result = stat()
+        JSONObject()
+            .put("st_uid", result.st_uid)
+            .put("st_gid", result.st_gid)
+            .put("st_mode", result.st_mode)
+            .put("st_size", result.st_size)
+    } catch (error: ErrnoException) {
+        JSONObject()
+            .put("exception_class", error.javaClass.simpleName)
+            .put("errno", error.errno)
+    } catch (error: Exception) {
+        JSONObject().put("exception_class", error.javaClass.simpleName)
+    }
 
     @Test
     fun recordedVideoToHolisticToLocalModel() {
