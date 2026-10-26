@@ -121,6 +121,78 @@ class PocketAssetPreparation(unittest.TestCase):
         self.assertEqual(candidate['schema'], 1)
         self.assertEqual(len(list((candidate_dir / 'candidate-notices').rglob('LICENSE'))), 133)
 
+    def pinned_git_fixture(self):
+        checkout = (self.cargo / 'git/checkouts/xn-ptts-1fae285e4acf79e2' /
+                    prepare.PTTS_GIT_REV[:7])
+        crate = checkout / 'ptts'
+        crate.mkdir(parents=True)
+        (crate / 'Cargo.toml').write_text('[package]\n')
+        metadata = json.loads(self.metadata.read_text())
+        metadata['packages'][0] = {
+            'name': 'ptts', 'version': '1.0.0', 'source': prepare.PTTS_GIT_SOURCE,
+            'manifest_path': str(crate / 'Cargo.toml')}
+        return metadata, checkout, crate
+
+    def test_pinned_git_parent_license_symlink_keeps_logical_label_and_resolved_hash(self):
+        metadata, checkout, crate = self.pinned_git_fixture()
+        official = checkout / 'LICENSE-MIT'
+        official.write_text('official pinned source\n')
+        link = crate / 'LICENSE-MIT'
+        try:
+            link.symlink_to('../LICENSE-MIT')
+        except OSError:
+            self.skipTest('symlinks unavailable')
+        found = prepare.inventory(metadata, self.cargo)
+        key = f'ptts@1.0.0|{prepare.PTTS_GIT_SOURCE}'
+        self.assertEqual(set(found[key]), {'LICENSE-MIT'})
+        self.assertEqual(prepare.digest(found[key]['LICENSE-MIT']), prepare.digest(official))
+        output = self.root / 'candidate'
+        prepare.collect_receipt(self.metadata_from(metadata), output, self.cargo)
+        candidate = json.loads((output / 'candidate-cargo-license-files.json').read_text())
+        self.assertEqual(candidate['packages'][key]['LICENSE-MIT'], prepare.digest(official))
+        folder = hashlib.sha256(key.encode()).hexdigest()[:16]
+        self.assertEqual((output / 'candidate-notices' / folder / 'LICENSE-MIT').read_text(),
+                         official.read_text())
+
+    def metadata_from(self, metadata):
+        path = self.root / 'git-metadata.json'
+        path.write_text(json.dumps(metadata))
+        return path
+
+    def test_pinned_git_license_symlink_escape_and_broken_rejected(self):
+        metadata, checkout, crate = self.pinned_git_fixture()
+        link = crate / 'LICENSE-MIT'
+        other = self.cargo / 'git/checkouts/xn-ptts-0000000000000000' / checkout.name
+        other.mkdir(parents=True)
+        (other / 'LICENSE-MIT').write_text('other checkout\n')
+        (self.cargo / 'LICENSE-MIT').write_text('CARGO_HOME root\n')
+        (checkout / '.git').mkdir()
+        (checkout / '.git/LICENSE-MIT').write_text('VCS internals\n')
+        cases = [other / 'LICENSE-MIT', self.cargo / 'LICENSE-MIT',
+                 checkout / '.git/LICENSE-MIT', checkout / 'absent/LICENSE-MIT']
+        for target in cases:
+            with self.subTest(target=target):
+                try:
+                    link.symlink_to(target)
+                except OSError:
+                    self.skipTest('symlinks unavailable')
+                with self.assertRaises(ValueError):
+                    prepare.inventory(metadata, self.cargo)
+                link.unlink()
+
+    def test_registry_license_symlink_stays_within_its_own_package(self):
+        package = self.cargo / 'fixture-0'
+        source = package / 'LICENSE'
+        source.unlink()
+        official = self.cargo / 'LICENSE'
+        official.write_text('unrelated registry notice\n')
+        try:
+            source.symlink_to(official)
+        except OSError:
+            self.skipTest('symlinks unavailable')
+        with self.assertRaises(ValueError):
+            prepare.inventory(json.loads(self.metadata.read_text()), self.cargo)
+
     def test_workspace_inventory_ignores_generated_notices_and_keeps_nested_dependency_sources(self):
         own = self.root / 'own-runtime'
         own.mkdir()

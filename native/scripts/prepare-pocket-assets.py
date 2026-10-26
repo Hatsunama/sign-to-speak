@@ -13,6 +13,7 @@ import os
 from pathlib import Path
 import re
 import shutil
+import stat
 import sys
 import tempfile
 
@@ -26,6 +27,9 @@ EXPECTED = {
     'alba.safetensors': (4163992, '11554cbe9f3d3a3e10722932df9952bb44928e534f7af3200524659166b5627a'),
 }
 LICENSE_NAME = re.compile(r'^(?:LICENSE|LICENCE|COPYING|NOTICE|COPYRIGHT)(?:[._-].*)?$', re.I)
+PTTS_GIT_REV = '7efa26973f81bba42cf2ace8da2c1eb9b605d54d'
+PTTS_GIT_SOURCE = ('git+https://github.com/gabrieldemarmiesse/xn-ptts'
+                   f'?rev={PTTS_GIT_REV}#{PTTS_GIT_REV}')
 
 
 def digest(path):
@@ -44,6 +48,58 @@ def regular(path, root):
         if current.is_symlink():
             raise ValueError(f'Linked source: {path}')
         current = current.parent
+    return path
+
+
+def pinned_ptts_checkout(package, root, cargo_home):
+    """Return the one pinned Git checkout shared by its workspace crates."""
+    if package.get('source') != PTTS_GIT_SOURCE:
+        return None
+    revision = root.parent
+    checkout = revision.parent
+    if (root.name != package['name'] or
+            not re.fullmatch(r'xn-ptts-[0-9a-f]{16}', checkout.name) or
+            not re.fullmatch(r'[0-9a-f]{7,40}', revision.name) or
+            not PTTS_GIT_REV.startswith(revision.name) or
+            checkout.parent.resolve() != (cargo_home / 'git/checkouts').resolve()):
+        raise ValueError(f'Unexpected pinned Git checkout: {package["name"]}')
+    current = root
+    while current != cargo_home:
+        if current.is_symlink():
+            raise ValueError(f'Linked pinned Git checkout: {package["name"]}')
+        if current == current.parent:
+            raise ValueError(f'Pinned Git checkout outside CARGO_HOME: {package["name"]}')
+        current = current.parent
+    return revision
+
+
+def regular_notice(path, root, checkout):
+    if not path.is_symlink():
+        return regular(path, root)
+    if checkout is None or not LICENSE_NAME.fullmatch(path.name):
+        raise ValueError(f'Linked notice outside pinned Git checkout: {path}')
+    # Only a notice file itself may be linked. Its resolved official source
+    # must be a regular notice in the same immutable checkout, not .git,
+    # another Cargo checkout, or a file elsewhere in CARGO_HOME.
+    try:
+        target = path.resolve(strict=True)
+        if (not target.is_relative_to(checkout) or
+                not LICENSE_NAME.fullmatch(target.name) or
+                {'.git', 'target', 'generated', 'build'} & set(target.relative_to(checkout).parts) or
+                not stat.S_ISREG(target.lstat().st_mode)):
+            raise ValueError(f'Escaped or non-notice linked source: {path}')
+        current = path.parent
+        while current != root:
+            if current.is_symlink():
+                raise ValueError(f'Linked notice parent: {path}')
+            current = current.parent
+        current = target.parent
+        while current != checkout:
+            if current.is_symlink() or current == current.parent:
+                raise ValueError(f'Linked notice target parent: {path}')
+            current = current.parent
+    except (OSError, RuntimeError) as error:
+        raise ValueError(f'Broken linked notice source: {path}') from error
     return path
 
 
@@ -93,6 +149,7 @@ def inventory(metadata, cargo_home):
         root = Path(package['manifest_path']).parent
         if root.is_symlink() or not (root.resolve().is_relative_to(cargo_home) or root.resolve() == own_crate):
             raise ValueError(f'Cargo source outside hosted CARGO_HOME: {package["name"]}')
+        checkout = pinned_ptts_checkout(package, root, cargo_home)
         found = {}
         if root.resolve() == own_crate:
             # The workspace crate can acquire target/, generated/, and build/
@@ -119,7 +176,7 @@ def inventory(metadata, cargo_home):
                 raise ValueError(f'Generated Cargo license_file: {package["name"]}')
             found[rel.as_posix()] = root / rel
         for path in found.values():
-            regular(path, root)
+            regular_notice(path, root, checkout)
         result[package_key(package)] = found
     return result
 
