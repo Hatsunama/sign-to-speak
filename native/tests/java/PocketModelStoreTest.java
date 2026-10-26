@@ -5,6 +5,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.security.MessageDigest;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 
 public final class PocketModelStoreTest {
   private static int checks;
@@ -43,6 +46,63 @@ public final class PocketModelStoreTest {
     for (int i = 0; i < (complete ? NAMES.length : 1); i++)
       Files.write(directory.resolve(NAMES[i]), BYTES[i]);
     return directory;
+  }
+  private static File prepareCancellable(PocketModelStore store, File parent,
+      PocketModelStore.AssetSource assets, BooleanSupplier cancelled) throws Exception {
+    try {
+      // Keep the behavioral RED runnable against the current two-argument API.
+      java.lang.reflect.Method method = PocketModelStore.class.getMethod("prepare",
+          File.class, PocketModelStore.AssetSource.class, BooleanSupplier.class);
+      try { return (File) method.invoke(store, parent, assets, cancelled); }
+      catch (java.lang.reflect.InvocationTargetException failure) {
+        Throwable cause = failure.getCause();
+        if (cause instanceof Exception) throw (Exception) cause;
+        if (cause instanceof Error) throw (Error) cause;
+        throw new AssertionError(cause);
+      }
+    } catch (NoSuchMethodException oldApi) { return store.prepare(parent, assets); }
+  }
+  private static void cancellationDuringCopyAndCacheHash(Path base) throws Exception {
+    byte[] large = new byte[128 * 1024];
+    Arrays.fill(large, (byte) 7);
+    PocketModelStore.ModelFile[] files = new PocketModelStore.ModelFile[3];
+    files[0] = new PocketModelStore.ModelFile(NAMES[0], large.length, hex(large));
+    for (int i = 1; i < 3; i++) files[i] = new PocketModelStore.ModelFile(NAMES[i], BYTES[i].length, hex(BYTES[i]));
+    PocketModelStore store = new PocketModelStore(files);
+    File privateParent = Files.createTempDirectory(base, "cancel-prepare-").toFile();
+    Path unrelated = Files.write(privateParent.toPath().resolve("keep.txt"), new byte[]{42});
+    AtomicBoolean cancelled = new AtomicBoolean();
+    PocketModelStore.AssetSource firstSource = name -> {
+      if (!name.equals(NAMES[0])) return source().open(name);
+      return new ByteArrayInputStream(large) {
+        boolean signalled;
+        @Override public synchronized int read(byte[] buffer, int offset, int length) {
+          int count = super.read(buffer, offset, Math.min(length, 4096));
+          if (count > 0 && !signalled) { signalled = true; cancelled.set(true); }
+          return count;
+        }
+      };
+    };
+    failed(() -> prepareCancellable(store, privateParent, firstSource, cancelled::get),
+        "cancellation during copy rejects model preparation");
+    check(Arrays.equals(Files.readAllBytes(unrelated), new byte[]{42}), "unrelated private file retained");
+    check(Objects.requireNonNull(privateParent.list()).length == 1,
+        "cancelled copy leaves no root or owned staging directory");
+    PocketModelStore.AssetSource complete = name -> name.equals(NAMES[0])
+        ? new ByteArrayInputStream(large) : source().open(name);
+    File root = prepareCancellable(store, privateParent, complete, () -> false);
+    check(Arrays.equals(Files.readAllBytes(new File(root, NAMES[0]).toPath()), large),
+        "explicit retry installs verified bytes");
+    AtomicInteger polls = new AtomicInteger();
+    failed(() -> prepareCancellable(store, privateParent,
+        name -> { throw new AssertionError("cached verification must not open assets"); },
+        () -> polls.incrementAndGet() >= 2),
+        "cancellation during cached verification rejects reuse");
+    check(polls.get() >= 2, "cached hash polls cancellation after entry");
+    check(Arrays.equals(Files.readAllBytes(new File(root, NAMES[0]).toPath()), large),
+        "cancelled verification retains previously valid private bytes");
+    check(root.equals(prepareCancellable(store, privateParent, complete, () -> false)),
+        "explicit retry reuses verified cache");
   }
   public static void main(String[] args) throws Exception {
     if (args.length != 1) throw new IllegalArgumentException("Expected temporary parent directory");
@@ -100,6 +160,7 @@ public final class PocketModelStoreTest {
     } catch (UnsupportedOperationException | SecurityException e) { System.out.println("Symlink case skipped: unsupported"); }
     catch (FileSystemException e) { System.out.println("Symlink case skipped: host privilege unavailable"); }
     checkRoot(store.prepare(base, source()));
+    cancellationDuringCopyAndCacheHash(base.toPath());
     System.out.println("PocketModelStore: " + checks + " checks passed");
   }
 }

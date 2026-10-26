@@ -2,6 +2,7 @@ import com.xmilo_at_your_side.sign_to_speak.SpeechSession;
 import java.util.Arrays;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.*;
+import java.util.function.BooleanSupplier;
 
 public final class SpeechSessionTest {
   static int checks;
@@ -224,6 +225,49 @@ public final class SpeechSessionTest {
     check(f.request.closes.get() == 1 && f.request.seen == null, "loose request closed without synthesis");
     s.close();
   }
+  static void stopCancelsFactoryPreparationPromptly() {
+    StubFactory f = new StubFactory();
+    CountDownLatch entered = new CountDownLatch(1), releaseLegacy = new CountDownLatch(1);
+    AtomicInteger prepared = new AtomicInteger();
+    AtomicInteger attempts = new AtomicInteger();
+    SpeechSession.Factory preparing = new SpeechSession.Factory() {
+      public SpeechSession.Request newRequest() {
+        entered.countDown();
+        await(releaseLegacy);
+        prepared.incrementAndGet();
+        return f.request;
+      }
+      // Compiles against the current Factory. A cancellable implementation should call this overload.
+      public SpeechSession.Request newRequest(BooleanSupplier cancelled) {
+        if (attempts.incrementAndGet() > 1) return f.request;
+        entered.countDown();
+        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(2);
+        while (!cancelled.getAsBoolean() && System.nanoTime() < deadline) {
+          try { Thread.sleep(5); } catch (InterruptedException e) { Thread.currentThread().interrupt(); break; }
+        }
+        if (!cancelled.getAsBoolean()) throw new AssertionError("factory cancellation never arrived");
+        return f.request;
+      }
+      public SpeechSession.Player newPlayer() { return f.player; }
+    };
+    SpeechSession s = new SpeechSession(preparing);
+    BlockingQueue<SpeechSession.Result> q = new LinkedBlockingQueue<>();
+    s.speak(s.begin(true), new byte[]{'A'}, q::add);
+    await(entered);
+    try {
+      s.stop();
+      SpeechSession.Result result = q.poll(750, TimeUnit.MILLISECONDS);
+      check(result == SpeechSession.Result.CANCELLED, "Stop completes blocked factory preparation promptly");
+      check(prepared.get() == 0 && f.request.seen == null && f.player.plays.get() == 0,
+          "cancelled preparation cannot synthesize or play stale audio");
+      releaseLegacy.countDown();
+      long retry = s.begin(true);
+      s.speak(retry, new byte[]{'B'}, q::add);
+      check(take(q) == SpeechSession.Result.COMPLETED && f.player.plays.get() == 1,
+          "explicit retry can play only fresh speech");
+    } catch (InterruptedException e) { throw new AssertionError(e); }
+    finally { releaseLegacy.countDown(); s.close(); }
+  }
   static void cleanupFaultAndCallbackFailure() {
     StubFactory f = new StubFactory();
     f.request = new StubRequest() { @Override public void close() { super.close(); throw new IllegalStateException(); } };
@@ -250,7 +294,7 @@ public final class SpeechSessionTest {
     callback.close();
   }
   public static void main(String[] args) {
-    completedAndWiped(); busyAndCancelDuringSynthesis(); cancelDuringPlayback(); cancellationFaultReported(); fatalErrorPropagatesAfterCleanup(); fatalDispatchFailureWipesAndRecovers(); nativeLinkageFailureIsSanitized(); invalidInput(); pendingAndRejectedExecutor(); cancelBeforeFactoryReturns(); cleanupFaultAndCallbackFailure();
+    completedAndWiped(); busyAndCancelDuringSynthesis(); cancelDuringPlayback(); cancellationFaultReported(); fatalErrorPropagatesAfterCleanup(); fatalDispatchFailureWipesAndRecovers(); nativeLinkageFailureIsSanitized(); invalidInput(); pendingAndRejectedExecutor(); cancelBeforeFactoryReturns(); stopCancelsFactoryPreparationPromptly(); cleanupFaultAndCallbackFailure();
     System.out.println("SpeechSession: " + checks + " checks passed");
   }
 }

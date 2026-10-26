@@ -2,6 +2,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import struct
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -51,10 +52,93 @@ class PocketApkRetirementTest(unittest.TestCase):
             readelf.return_value = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
             audit.main(apk, 'arm64-v8a', self.root / 'readelf', self.root)
 
+    def stored_apk(self, native_residues):
+        """Write real stored entries whose local payload offsets have chosen residues."""
+        apk = self.root / 'aligned-fixture.apk'
+        with zipfile.ZipFile(apk, 'w') as archive:
+            for name, data in self.entries.items():
+                info = zipfile.ZipInfo(name)
+                info.compress_type = zipfile.ZIP_STORED
+                if name in native_residues:
+                    # Local header is 30 bytes plus filename and extra. Use a
+                    # well-formed private ZIP extra field to place the payload.
+                    start = archive.fp.tell() + 30 + len(name.encode())
+                    padding = (native_residues[name] - start) % 16384
+                    if padding < 4:
+                        padding += 16384
+                    info.extra = struct.pack('<HH', 0xCAFE, padding - 4) + bytes(padding - 4)
+                archive.writestr(info, data)
+        with zipfile.ZipFile(apk) as archive, apk.open('rb') as raw:
+            for name, expected in native_residues.items():
+                entry = archive.getinfo(name)
+                raw.seek(entry.header_offset)
+                header = raw.read(30)
+                self.assertEqual(header[:4], b'PK\x03\x04')
+                filename_length, extra_length = struct.unpack_from('<HH', header, 26)
+                offset = entry.header_offset + 30 + filename_length + extra_length
+                self.assertEqual(offset % 16384, expected, name)
+                self.assertEqual(entry.compress_type, zipfile.ZIP_STORED)
+        return apk
+
+    def audit_with_readelf(self, apk, readelf_output):
+        with patch.object(audit, 'check'), patch.object(audit.subprocess, 'check_output',
+                                                     side_effect=readelf_output) as readelf:
+            audit.main(apk, 'arm64-v8a', self.root / 'readelf', self.root)
+        return readelf
+
     def test_tensorflow_lite_asset_and_library_are_allowed(self):
         self.entries['assets/models/hand_landmarks.tflite'] = b'TFL3'
         self.entries['lib/arm64-v8a/libtensorflowlite_jni.so'] = b'fixture'
         self.verify()
+
+    def test_all_stored_native_libraries_at_16k_offsets_are_accepted(self):
+        self.entries['assets/models/hand_landmarks.tflite'] = b'TFL3'
+        self.entries['lib/arm64-v8a/libtensorflowlite_jni.so'] = b'fixture'
+        native = {name: 0 for name in self.entries if name.endswith('.so')}
+        apk = self.stored_apk(native)
+        aligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+        readelf = self.audit_with_readelf(apk, lambda *args, **kwargs: aligned)
+        checked_segments = {Path(call.args[0][-1]).name for call in readelf.call_args_list
+                            if call.args[0][1] == '-lW'}
+        self.assertEqual(checked_segments, {Path(name).name for name in native})
+
+    def test_stored_native_library_at_4k_offset_is_rejected(self):
+        extra = 'lib/arm64-v8a/libtensorflowlite_jni.so'
+        self.entries[extra] = b'fixture'
+        native = {name: (4096 if name == extra else 0)
+                  for name in self.entries if name.endswith('.so')}
+        apk = self.stored_apk(native)
+        aligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+        with self.assertRaisesRegex(ValueError, '16 KiB'):
+            self.audit_with_readelf(apk, lambda *args, **kwargs: aligned)
+
+    def test_stored_required_library_at_4k_offset_is_rejected(self):
+        required = 'lib/arm64-v8a/libc++_shared.so'
+        native = {name: (4096 if name == required else 0)
+                  for name in self.entries if name.endswith('.so')}
+        apk = self.stored_apk(native)
+        aligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+        with self.assertRaisesRegex(ValueError, '16 KiB'):
+            self.audit_with_readelf(apk, lambda *args, **kwargs: aligned)
+
+    def test_additional_native_library_bad_load_alignment_is_rejected(self):
+        extra = 'libtensorflowlite_jni.so'
+        self.entries['lib/arm64-v8a/' + extra] = b'fixture'
+        native = {name: 0 for name in self.entries if name.endswith('.so')}
+        apk = self.stored_apk(native)
+        aligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x4000\n'
+        misaligned = '  LOAD 0x000000 0x000000 0x000000 0x100 0x100 R E 0x1000\n'
+        seen = []
+
+        def readelf_output(command, **kwargs):
+            if command[1] == '-lW':
+                seen.append(Path(command[-1]).name)
+                return misaligned if Path(command[-1]).name == extra else aligned
+            return aligned
+
+        with self.assertRaisesRegex(ValueError, '16 KiB'):
+            self.audit_with_readelf(apk, readelf_output)
+        self.assertIn(extra, seen)
 
     def test_old_flite_library_is_rejected(self):
         self.entries['lib/arm64-v8a/libflite_usenglish.so'] = b'old engine'
