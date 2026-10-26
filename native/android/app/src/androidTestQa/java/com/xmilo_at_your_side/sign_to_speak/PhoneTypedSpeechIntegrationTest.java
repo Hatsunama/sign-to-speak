@@ -73,7 +73,7 @@ public final class PhoneTypedSpeechIntegrationTest {
     @Test(timeout = 150000) public void typedInputValidatesPlaysCompletesAndBackgroundClearsDraft() throws Exception {
         input(repeat('x', 257));
         tap("typed-speech-speak", "Speak typed text");
-        awaitStatus("Use 1 to 256 printable ASCII characters. Edit the text and try again.");
+        awaitStatus("Use 1 to 256 characters. Edit the text and try again.");
         assertNull("Invalid UI input never creates a native job", currentJob());
         assertCameraDenied();
 
@@ -123,6 +123,31 @@ public final class PhoneTypedSpeechIntegrationTest {
         Playback retry = awaitPlaying();
         awaitStatus("Typed text spoken.");
         assertPlaybackCleaned(retry);
+        assertCameraDenied();
+    }
+
+    @Test(timeout = 150000) public void accentedDraftPlaysAndUnsupportedUnicodeKeepsReviewedDraft() throws Exception {
+        String accented = "Caf\u00e9 is ready.";
+        input(accented);
+        tap("typed-speech-speak", "Speak typed text");
+        Playback supported = awaitPlaying();
+        awaitStatus("Typed text spoken.");
+        assertPlaybackCleaned(supported);
+        assertEquals("Completed speech keeps reviewed text visible", accented, findInput().getText());
+
+        for (String unsupported : new String[]{"Ready \u6771\u4eac.", "Ready \ud83d\ude42."}) {
+            input(unsupported);
+            tap("typed-speech-speak", "Speak typed text");
+            awaitStatus("This text is unsupported by the local English voice. Edit it and try again.");
+            assertEquals("Unsupported draft remains available for editing", unsupported, findInput().getText());
+            assertNull("Unsupported Unicode never leaves a native audio job", currentJob());
+        }
+
+        input("Caf\u00e9 is ready again.");
+        tap("typed-speech-speak", "Speak typed text");
+        Playback recovered = awaitPlaying();
+        awaitStatus("Typed text spoken.");
+        assertPlaybackCleaned(recovered);
         assertCameraDenied();
     }
 

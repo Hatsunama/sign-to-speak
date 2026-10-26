@@ -27,7 +27,7 @@ import org.junit.runner.RunWith;
 
 /**
  * Physical ARM64 integration journey. Uses the installed QA Activity, its real ReactContext,
- * production LocalSpeechModule, Pocket JNI, and protected AudioTrack. Synthetic ASCII only.
+ * production LocalSpeechModule, Pocket JNI, and protected AudioTrack. Synthetic reviewed text only.
  * Reflection reads state under production locks; no factory replacement or product hook.
  */
 @RunWith(AndroidJUnit4.class)
@@ -70,7 +70,7 @@ public final class PhoneSpeechIntegrationTest {
     @Test public void realPocketPcmProtectedPlaybackAndInputBoundaries() throws Exception {
         String token = begin();
         assertNotNull("Explicit begin must work on resumed real Activity", token);
-        for (String invalid : new String[]{"", " ", "line\nfeed", "caf\u00e9", repeat('x', 257)}) {
+        for (String invalid : new String[]{"", " ", "line\nfeed", repeat('x', 257)}) {
             assertEquals("INVALID_INPUT", speak(token, invalid).get(5, TimeUnit.SECONDS));
         }
         assertNull("Rejected input must never start a job", currentJob());
@@ -89,6 +89,30 @@ public final class PhoneSpeechIntegrationTest {
                 evidence.completionAt - evidence.firstHeadAt + 200 >= remainingMs);
         assertCleaned(evidence.pcm, evidence.player);
         assertNull("Worker releases completed job", currentJob());
+    }
+
+    @Test public void accentedUtf8PlaysAndUnsupportedUnicodeRejectsWithoutSubstitution() throws Exception {
+        String token = begin();
+        assertNotNull("Explicit begin must work on resumed real Activity", token);
+
+        // Each string is valid Unicode within the bridge's length limits. A permissive
+        // tokenizer must not drop its unsupported code point and speak the ASCII prefix.
+        for (String unsupported : new String[]{
+                "Ready \u6771\u4eac.", "Ready \ud83d\ude42.", "Ready \udbff\udfff."}) {
+            assertEquals("Unsupported Unicode must reach Pocket and report INVALID_INPUT: " + unsupported,
+                    "INVALID_INPUT", speak(token, unsupported).get(WAIT_MS, TimeUnit.MILLISECONDS));
+            assertNull("Rejected text must not leave an audio job", currentJob());
+        }
+
+        CompletableFuture<Object> recovered = speak(token, "Caf\u00e9 is ready.");
+        AudioEvidence audio = observeRealPlayback(recovered);
+        assertTrue("Supported accented UTF-8 produces nonzero Pocket PCM", audio.nonzeroPcm);
+        assertTrue("Supported accented UTF-8 reaches protected AudioTrack", audio.playing && audio.maxHead > 0);
+        assertTrue("Pocket PCM stays within the 30 second bound", audio.pcmFrames > 0
+                && audio.pcmFrames <= 720_000);
+        assertEquals("COMPLETED", recovered.get(WAIT_MS, TimeUnit.MILLISECONDS));
+        assertCleaned(audio.pcm, audio.player);
+        assertNull("Recovered worker releases its job", currentJob());
     }
 
     @Test public void cancelStopsOwnedRealTrackBeforeReturning() throws Exception {
