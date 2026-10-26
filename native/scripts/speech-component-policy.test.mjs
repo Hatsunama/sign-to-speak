@@ -53,6 +53,7 @@ function audit(w) {
     '.github/workflows/sign-speech-component-probe.yml', 'native/scripts/speech-component-policy.test.mjs',
     'native/scripts/python-host-dependency-policy.test.mjs', 'native/requirements-host-tests.txt',
     'native/scripts/pocket-license-audit.py', 'native/scripts/pocket-license-audit.test.py',
+    'native/scripts/prepare-pocket-assets.py', 'native/scripts/prepare-pocket-assets.test.py',
     'native/scripts/pocket-tts-component-probe.py', 'native/scripts/pocket-tts-component-probe.test.py',
     'native/scripts/pocket-tts-audition.py', 'native/scripts/pocket-tts-audition.test.py',
     'native/scripts/speech-component-android-policy.test.mjs',
@@ -116,6 +117,14 @@ function audit(w) {
   assert.match(resolve.run, /bootstrap-unadmitted/);
   assert.match(resolve.run, /resolved_lock_sha256/);
   assert.match(resolve.run, /echo 'bootstrap=true' >> "\$GITHUB_OUTPUT"/);
+  const collect = step(w, 'Collect unadmitted Cargo source notice inventory');
+  assert.match(collect.run, /prepare-pocket-assets\.py --collect-license-receipt/);
+  assert.match(collect.run, /--metadata "\$RUNNER_TEMP\/pocket-cargo-metadata\.json" --output-dir "\$candidate"/);
+  assert.match(collect.run, /UNADMITTED inventory, not legal clearance/);
+  for (const field of ['app_source_sha', 'resolved_lock_sha256', 'cargo_metadata_sha256',
+    'candidate_receipt_sha256']) assert.ok(collect.run.includes(field));
+  assert.match(collect.run, /echo 'collected=true' >> "\$GITHUB_OUTPUT"/);
+  assert.doesNotMatch(collect.run, /--asset-dir|pocket-component-assets|model\.safetensors/);
   const build = step(w, 'Compile cdylib and execute component unit tests');
   assert.deepEqual(cargoLines(build.run), ['cargo test --release --locked --offline --jobs 2',
     'cargo build --release --locked --offline --jobs 2 --lib']);
@@ -180,7 +189,15 @@ function audit(w) {
   assert.deepEqual(bootstrap.with.path.trim().split('\n').map(x => x.trim()), [
     '${{ runner.temp }}/pocket-component-bootstrap/Cargo.lock',
     '${{ runner.temp }}/pocket-component-bootstrap/resolution-receipt.json']);
-  for (const upload of [success, bootstrap]) {
+  const noticeUpload = step(w, 'Upload unadmitted Cargo notice candidate separately');
+  assert.equal(noticeUpload.if, "${{ always() && steps.collect_notices.outputs.collected == 'true' }}");
+  assert.match(noticeUpload.with.name, /unadmitted-cargo-notices/);
+  assert.deepEqual(noticeUpload.with.path.trim().split('\n').map(x => x.trim()), [
+    '${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-cargo-license-files.json',
+    '${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices-index.json',
+    '${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-inventory-provenance.json',
+    '${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices/**']);
+  for (const upload of [success, bootstrap, noticeUpload]) {
     assert.equal(upload.uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
     assert.equal(upload.with['retention-days'], 3);
     assert.equal(upload.with['if-no-files-found'], 'error');
@@ -192,6 +209,9 @@ function audit(w) {
     if (s.name !== 'Provision pinned Python host-test wheel') assert.doesNotMatch(s.run ?? '', /pip install/);
   }
   assert.ok(job.steps.indexOf(resolve) < job.steps.indexOf(build));
+  assert.ok(job.steps.indexOf(resolve) < job.steps.indexOf(collect));
+  assert.ok(job.steps.indexOf(collect) < job.steps.indexOf(build));
+  assert.ok(job.steps.indexOf(build) < job.steps.indexOf(noticeUpload));
   assert.ok(job.steps.indexOf(local) < job.steps.indexOf(resolve));
   assert.ok(job.steps.indexOf(build) < job.steps.indexOf(jniBuild));
   assert.ok(job.steps.indexOf(jniBuild) < job.steps.indexOf(download));
@@ -228,6 +248,10 @@ for (const [name, mutate] of [
   ['unlocked fetch', w => {step(w, 'Resolve complete Cargo graph before compiling').run = step(w, 'Resolve complete Cargo graph before compiling').run.replace('cargo fetch --locked', 'cargo fetch'); }],
   ['target-limited fetch', w => {step(w, 'Resolve complete Cargo graph before compiling').run = step(w, 'Resolve complete Cargo graph before compiling').run.replace('cargo fetch --locked', 'cargo fetch --locked --target x86_64-unknown-linux-gnu'); }],
   ['offline metadata after build', w => {const a = step(w, 'Resolve complete Cargo graph before compiling'), b = step(w, 'Compile cdylib and execute component unit tests'); a.run = a.run.replace('cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-cargo-metadata.json"', ''); b.run += '\ncargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-cargo-metadata.json"'; }],
+  ['missing notice collection', w => {step(w, 'Collect unadmitted Cargo source notice inventory').run = ':'; }],
+  ['notice collection after build', w => {const steps = w.jobs.probe.steps, a = step(w, 'Collect unadmitted Cargo source notice inventory'); steps.splice(steps.indexOf(a), 1); steps.splice(steps.indexOf(step(w, 'Download pinned English 18M and Alba assets')), 0, a); }],
+  ['notice upload includes models', w => {step(w, 'Upload unadmitted Cargo notice candidate separately').with.path += '\n${{ runner.temp }}/pocket-component-assets/**'; }],
+  ['notice upload only after success', w => {step(w, 'Upload unadmitted Cargo notice candidate separately').if = 'success()'; }],
   ['unlocked build', w => {step(w, 'Compile cdylib and execute component unit tests').run = step(w, 'Compile cdylib and execute component unit tests').run.replaceAll('--locked', ''); }],
   ['missing full Node suite', w => {step(w, 'Run complete bounded host checks').run = step(w, 'Run complete bounded host checks').run.replace('npm test', ':'); }],
   ['missing TypeScript check', w => {step(w, 'Run complete bounded host checks').run = step(w, 'Run complete bounded host checks').run.replace('npm run typecheck', ':'); }],

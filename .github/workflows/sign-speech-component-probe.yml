@@ -12,6 +12,8 @@ on:
       - native/requirements-host-tests.txt
       - native/scripts/pocket-license-audit.py
       - native/scripts/pocket-license-audit.test.py
+      - native/scripts/prepare-pocket-assets.py
+      - native/scripts/prepare-pocket-assets.test.py
       - native/scripts/pocket-tts-component-probe.py
       - native/scripts/pocket-tts-component-probe.test.py
       - native/scripts/pocket-tts-audition.py
@@ -158,6 +160,26 @@ jobs:
             echo 'bootstrap=true' >> "$GITHUB_OUTPUT"
           fi
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+      - name: Collect unadmitted Cargo source notice inventory
+        id: collect_notices
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          candidate="$RUNNER_TEMP/pocket-cargo-notice-candidate"
+          python3 native/scripts/prepare-pocket-assets.py --collect-license-receipt \
+            --metadata "$RUNNER_TEMP/pocket-cargo-metadata.json" --output-dir "$candidate"
+          python3 - "$candidate" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          candidate = pathlib.Path(sys.argv[1])
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          receipt = {'status': 'UNADMITTED inventory, not legal clearance',
+                     'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+                     'resolved_lock_sha256': sha(pathlib.Path('native/vendor/pocket-tts-runtime/Cargo.lock')),
+                     'cargo_metadata_sha256': sha(pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-cargo-metadata.json'),
+                     'candidate_receipt_sha256': sha(candidate / 'candidate-cargo-license-files.json')}
+          (candidate / 'candidate-inventory-provenance.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+          echo 'collected=true' >> "$GITHUB_OUTPUT"
       - name: Compile cdylib and execute component unit tests
         timeout-minutes: 10
         run: |
@@ -317,3 +339,15 @@ jobs:
           path: |
             ${{ runner.temp }}/pocket-component-bootstrap/Cargo.lock
             ${{ runner.temp }}/pocket-component-bootstrap/resolution-receipt.json
+      - name: Upload unadmitted Cargo notice candidate separately
+        if: ${{ always() && steps.collect_notices.outputs.collected == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-unadmitted-cargo-notices-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-cargo-license-files.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices-index.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-inventory-provenance.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices/**
