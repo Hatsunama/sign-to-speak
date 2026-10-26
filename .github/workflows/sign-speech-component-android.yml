@@ -53,7 +53,7 @@ jobs:
           for tool in rustc cargo rustup python3 node cmake sha256sum; do command -v "$tool"; done
           mkdir -p "$RUNNER_TEMP/pocket-android-evidence"
           printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$RUNNER_TEMP/pocket-android-evidence/tested-sha.txt"
-          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/android/app/src/main/cpp/pocket/CMakeLists.txt native/android/app/src/main/cpp/pocket/pocket_jni.cpp native/android/app/src/main/cpp/pocket/exports.map native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
+          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/build.rs native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/android/app/src/main/cpp/pocket/CMakeLists.txt native/android/app/src/main/cpp/pocket/pocket_jni.cpp native/android/app/src/main/cpp/pocket/exports.map native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
       - name: Select pinned Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
         with:
@@ -162,11 +162,16 @@ jobs:
           allowed = {'libc.so', 'libm.so', 'libdl.so', 'liblog.so', 'libc++_shared.so'}
           if not needed or not needed <= allowed:
               raise SystemExit(f'Unexpected NEEDED libraries: {sorted(needed)}')
+          soname = re.findall(r'\(SONAME\).*?\[([^]]+)\]', dynamic)
+          if soname != ['libsign_pocket_tts_runtime.so']:
+              raise SystemExit(f'Unexpected Rust runtime DT_SONAME: {soname}')
+          if re.search(r'\((?:RPATH|RUNPATH)\)', dynamic):
+              raise SystemExit('RPATH/RUNPATH forbidden in Rust runtime')
           symbols = {line.split()[-1] for line in exports.splitlines() if line.split()}
           expected = {'sts_pocket_create', 'sts_pocket_synthesize', 'sts_pocket_cancel', 'sts_pocket_close'}
           if not expected <= symbols:
               raise SystemExit(f'Missing C ABI exports: {sorted(expected - symbols)}')
-          (root / 'elf-audit.txt').write_text(f'abi=arm64-v8a\nload_segments={len(loads)}\nneeded={sorted(needed)}\nrequired_exports={sorted(expected)}\n16k_alignment=pass\n')
+          (root / 'elf-audit.txt').write_text(f'abi=arm64-v8a\nload_segments={len(loads)}\nsoname={soname[0]}\nneeded={sorted(needed)}\nrequired_exports={sorted(expected)}\n16k_alignment=pass\n')
           PY
       - name: Cross compile and audit actual Android JNI bridge linkage
         timeout-minutes: 3

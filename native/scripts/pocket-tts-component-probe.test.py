@@ -72,6 +72,15 @@ class ProbeContractTests(unittest.TestCase):
         capture = probe.checked_synth(fake, 10, b"\xff", probe.INVALID)
         self.assertEqual(capture.calls, 0)
 
+    def test_unsupported_text_cases_are_invalid_without_pcm(self):
+        self.assertEqual([label for label, _ in probe.UNSUPPORTED_TEXT_CASES],
+                         ["noncharacter", "CJK", "emoji", "zero-width"])
+        for label, text in probe.UNSUPPORTED_TEXT_CASES:
+            with self.subTest(label=label):
+                capture = probe.checked_synth(FakeABI(status=probe.INVALID), 10,
+                                              text.encode("utf-8"), probe.INVALID)
+                self.assertEqual(capture.calls, 0)
+
     def test_callback_rejects_wrong_id_without_raising_through_ffi(self):
         fake = FakeABI(callback_id=11)
         with self.assertRaisesRegex(probe.ProbeError, "request ID mismatch"):

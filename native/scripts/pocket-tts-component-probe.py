@@ -33,6 +33,12 @@ OK, CANCELLED, INVALID, ASSETS, SINK, UNKNOWN, BUSY = 0, 1, 2, 3, 5, 7, 8
 SAMPLE_RATE = 24_000
 MAX_SAMPLES = SAMPLE_RATE * 30
 MAX_CHUNK = 1920
+UNSUPPORTED_TEXT_CASES = (
+    ("noncharacter", "Hello \U0010ffff."),
+    ("CJK", "你好。"),
+    ("emoji", "Hello 👋."),
+    ("zero-width", "Hello\u200bworld."),
+)
 SINK_FN = ctypes.CFUNCTYPE(ctypes.c_bool, ctypes.c_uint64,
                            ctypes.POINTER(ctypes.c_int16), ctypes.c_size_t,
                            ctypes.c_void_p)
@@ -199,11 +205,16 @@ def run_probe(abi, flat: Path, output: Path) -> dict:
     empty = SINK_FN(lambda *_args: False)
     request_id = abi.create(flat)
     try:
-        # Validation must precede any PCM callback. Unicode unknown reaches token preflight.
+        # Validation must precede any PCM callback. These real-model cases
+        # reach SentencePiece byte fallback and must be rejected before audio.
         for label, data in (("invalid UTF-8", b"\xff"), ("NUL", b"a\x00b"),
                             ("control", b"a\nb"), ("too long", b"a" * 513)):
             checked_synth(abi, request_id, data, INVALID)
-        checked_synth(abi, request_id, "Hello \U0010ffff.".encode(), INVALID)
+        for label, text in UNSUPPORTED_TEXT_CASES:
+            try:
+                checked_synth(abi, request_id, text.encode("utf-8"), INVALID)
+            except ProbeError as exc:
+                raise ProbeError(f"{label}: {exc}") from exc
 
         outputs = []
         for index, (stem, utterance) in enumerate(audition.UTTERANCES[:4]):
@@ -258,7 +269,9 @@ def run_probe(abi, flat: Path, output: Path) -> dict:
             "sample_rate": SAMPLE_RATE, "channels": 1,
             "pcm_format": "signed_16_bit_little_endian", "outputs": outputs,
             "negative_cases": ["invalid_utf8", "nul", "control", "too_long",
-                               "unknown_token", "wrong_asset_root", "cancel_before_synthesis",
+                               "noncharacter_byte_fallback", "cjk_byte_fallback",
+                               "emoji_byte_fallback", "zero_width_byte_fallback",
+                               "wrong_asset_root", "cancel_before_synthesis",
                                "cancel_in_callback", "close_in_callback", "sink_rejection",
                                "reentrant_busy", "stale_request",
                                "recovery_new_request"],

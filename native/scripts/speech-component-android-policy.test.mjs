@@ -9,6 +9,7 @@ const pocketSource = new URL('../android/app/src/main/cpp/pocket/', import.meta.
 const cmakeSource = readFileSync(new URL('CMakeLists.txt', pocketSource), 'utf8');
 const jniSource = readFileSync(new URL('pocket_jni.cpp', pocketSource), 'utf8');
 const exportMap = readFileSync(new URL('exports.map', pocketSource), 'utf8');
+const rustBuild = readFileSync(new URL('../vendor/pocket-tts-runtime/build.rs', import.meta.url), 'utf8');
 const repo = 'Hatsunama/sign-to-speak';
 const branch = 'codex/native-recognition-flow-20261024';
 const step = (job, name) => {
@@ -72,6 +73,7 @@ function audit(w) {
   const preflight = step(job, 'Verify source, committed lock, and hosted tools');
   assert.match(preflight.run, /git rev-parse HEAD.*EXPECTED_SOURCE_SHA/);
   assert.match(preflight.run, /test -s native\/vendor\/pocket-tts-runtime\/Cargo.lock/);
+  assert.match(preflight.run, /sha256sum[^\n]*native\/vendor\/pocket-tts-runtime\/build\.rs/);
   assert.doesNotMatch(preflight.run, /cargo generate-lockfile|curl |wget /);
   for (const file of ['CMakeLists.txt', 'pocket_jni.cpp', 'exports.map'])
     assert.ok(preflight.run.includes(`native/android/app/src/main/cpp/pocket/${file}`), file);
@@ -101,6 +103,9 @@ function audit(w) {
     'sts_pocket_create', 'sts_pocket_synthesize', 'sts_pocket_cancel', 'sts_pocket_close'])
     assert.ok(elf.run.includes(value), value);
   assert.match(elf.run, /not needed <= allowed/);
+  assert.match(elf.run, /soname != \['libsign_pocket_tts_runtime\.so'\]/);
+  assert.match(elf.run, /RPATH\|RUNPATH/);
+  assert.match(elf.run, /soname=\{soname\[0\]\}/);
   const jni = step(job, 'Cross compile and audit actual Android JNI bridge linkage');
   for (const token of ['-S "$source_dir"', '-B "$build"',
     'native/android/app/src/main/cpp/pocket', '-DCMAKE_TOOLCHAIN_FILE="$CMAKE_TOOLCHAIN_FILE"',
@@ -152,11 +157,22 @@ function auditSourceGraph(cmake, cpp, map) {
     assert.ok(map.includes(`${symbol};`), symbol);
   }
   assert.match(map, /local:\s*\*;/);
+  assert.doesNotMatch(cmake, /IMPORTED_NO_SONAME|RPATH|RUNPATH/);
+}
+
+function auditRustBuild(source) {
+  assert.match(source, /CARGO_CFG_TARGET_OS/);
+  assert.match(source, /matches!\(target_os\.as_str\(\), "android" \| "linux"\)/);
+  assert.match(source, /cargo:rustc-link-arg-cdylib=-Wl,-soname,libsign_pocket_tts_runtime\.so/);
+  assert.match(source, /if target_os == "android"/);
+  assert.match(source, /cargo:rustc-link-arg-cdylib=-Wl,-z,max-page-size=16384/);
+  assert.doesNotMatch(source, /RPATH|RUNPATH|patchelf|objcopy|IMPORTED_NO_SONAME/);
 }
 
 test('hosted component workflow enforces source, cost, lock, cross compiler, ELF, and key boundaries', () => audit(workflow));
 test('JNI bridge source graph binds the real Rust runtime and four Java exports', () =>
   auditSourceGraph(cmakeSource, jniSource, exportMap));
+test('Rust producer assigns a stable SONAME and Android page alignment', () => auditRustBuild(rustBuild));
 for (const [name, mutate] of [
   ['fork PR', w => { w.jobs.component.if = 'true'; }],
   ['private repository', w => { w.jobs.component.if = w.jobs.component.if.replace('github.event.repository.private == false', 'true'); }],
@@ -165,6 +181,7 @@ for (const [name, mutate] of [
   ['unbounded job', w => { w.jobs.component['timeout-minutes'] = 60; }],
   ['unlocked build', w => { step(w.jobs.component, 'Cross compile actual Android ARM64 C ABI library').run = 'cargo build --target aarch64-linux-android'; }],
   ['missing segment audit', w => { step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run = 'echo skip'; }],
+  ['missing Rust SONAME audit', w => { step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run = step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run.replace("soname != ['libsign_pocket_tts_runtime.so']", 'false'); }],
   ['missing JNI probe', w => { w.jobs.component.steps.splice(w.jobs.component.steps.findIndex(x => x.name === 'Cross compile and audit actual Android JNI bridge linkage'), 1); }],
   ['early JNI probe', w => { const steps = w.jobs.component.steps; const index = steps.findIndex(x => x.name === 'Cross compile and audit actual Android JNI bridge linkage'); steps.splice(2, 0, steps.splice(index, 1)[0]); }],
   ['JNI source bypass', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = 'echo bypass'; }],
@@ -179,3 +196,7 @@ for (const [name, cmake, cpp, map] of [
   ['missing JNI source', cmakeSource.replace('SHARED pocket_jni.cpp', 'SHARED dummy.cpp'), jniSource, exportMap],
   ['missing export', cmakeSource, jniSource, exportMap.replace('PocketTtsRequest_nativeClose;', 'PocketTtsRequest_other;')],
 ]) test(`rejects ${name} in JNI source graph`, () => assert.throws(() => auditSourceGraph(cmake, cpp, map)));
+for (const [name, source] of [
+  ['missing SONAME', rustBuild.replace('-Wl,-soname,libsign_pocket_tts_runtime.so', '-Wl,--no-soname')],
+  ['missing Android alignment', rustBuild.replace('-Wl,-z,max-page-size=16384', '-Wl,-z,max-page-size=4096')],
+]) test(`rejects ${name} in Rust producer`, () => assert.throws(() => auditRustBuild(source)));
