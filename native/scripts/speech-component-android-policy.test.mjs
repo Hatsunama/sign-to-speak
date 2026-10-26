@@ -12,6 +12,7 @@ const exportMap = readFileSync(new URL('exports.map', pocketSource), 'utf8');
 const rustBuild = readFileSync(new URL('../vendor/pocket-tts-runtime/build.rs', import.meta.url), 'utf8');
 const repo = 'Hatsunama/sign-to-speak';
 const branch = 'codex/native-recognition-flow-20261024';
+const dynamicPathAudit = String.raw`if re.search(r'\((?:RPATH|RUNPATH)\)', dynamic):`;
 const step = (job, name) => {
   const found = job.steps.find(value => value.name === name);
   assert.ok(found, name);
@@ -118,6 +119,7 @@ function audit(w) {
     assert.ok(jni.run.includes(token), token);
   assert.match(jni.run, /runtime not in needed/);
   assert.match(jni.run, /'\/' in name/);
+  assert.ok(jni.run.includes(dynamicPathAudit));
   for (const name of ['Create', 'Synthesize', 'Cancel', 'Close'])
     assert.ok(jni.run.includes(`'${name}'`), name);
   assert.match(jni.run, /tee "\$evidence\/jni-cmake-configure\.txt"/);
@@ -157,7 +159,7 @@ function auditSourceGraph(cmake, cpp, map) {
     assert.ok(map.includes(`${symbol};`), symbol);
   }
   assert.match(map, /local:\s*\*;/);
-  assert.doesNotMatch(cmake, /IMPORTED_NO_SONAME|RPATH|RUNPATH/);
+  assert.doesNotMatch(cmake, /IMPORTED_NO_SONAME/);
 }
 
 function auditRustBuild(source) {
@@ -187,6 +189,7 @@ for (const [name, mutate] of [
   ['JNI source bypass', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = 'echo bypass'; }],
   ['JNI runtime mismatch', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run.replace('runtime not in needed', 'false'); }],
   ['JNI path audit bypass', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run.replace("'/' in name", 'false'); }],
+  ['JNI dynamic path audit bypass', w => { const jni = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage'); jni.run = jni.run.replace(dynamicPathAudit, 'if False:'); }],
   ['no offline metadata', w => { step(w.jobs.component, 'Fetch complete locked Cargo graph and verify offline metadata').run = 'cargo fetch --locked'; }],
   ['key generation', w => { w.jobs.component.steps.push({run: 'keytool -genkeypair'}); }],
   ['long artifact retention', w => { step(w.jobs.component, 'Retain source and ELF audit evidence').with['retention-days'] = 90; }],
