@@ -1,6 +1,6 @@
 # Pocket TTS feasibility for local English speech
 
-Checked 2026-10-25. **Phase 1 decision: admit a bounded conversion experiment, not a production speech model.** Kyutai's October 2026 small English models offer a plausible permissively distributable text-to-PCM path without eSpeak or OpenRAIL-M. The existing community LiteRT Android implementation is useful source, but its published graphs, hard-coded tensor shapes and Pixel measurements apply to the older roughly 100M-parameter English model. No small-model LiteRT conversion, APK, speech quality, phone performance or peak PSS was verified here. No weights or graphs were downloaded; no build or device was run.
+Checked 2026-10-25. **Historical Phase 1 proposal, written before the current integration.** The [October 26 Pocket speech checkpoint](POCKET_SPEECH_CHECKPOINT_20261026.md) is authoritative for the actual bundled Rust/JNI Pocket 18M/Alba QA APK, full CI, bounded Samsung execution and remaining acceptance gates. The LiteRT conversion steps below were an earlier alternative proposal, not the implementation or a current next step. Kyutai's small English models offered a plausible distributable text-to-PCM path without eSpeak or OpenRAIL-M; this note did not itself download weights, build, or run a device.
 
 ## Rights and exact source candidates
 

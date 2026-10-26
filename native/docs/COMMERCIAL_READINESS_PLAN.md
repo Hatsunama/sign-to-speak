@@ -1,21 +1,21 @@
 # Sign to Speak Commercial Readiness Plan
 
-Updated October 25, 2026. Status: roadmap for the full product; commercial release remains blocked.
+Updated October 26, 2026. Status: roadmap for the full product; commercial release remains blocked.
 
 The target is a free, open-source Android app that supports an ASL signer and a hearing conversation partner using local recognition, reviewed English text, natural local speech and local reply captions. Commercial readiness here means a useful, distributable and supportable product, even though the app will be free.
 
 Continuous ASL-to-English quality and lawful model/data use are the largest uncertainties. Run their feasibility gate early. A hand tracker, a 250-label classifier or a typed-speech demonstration does not complete that product.
 
-Execution evidence and the current unresolved failures are in the [October 25 checkpoint](READINESS_CHECKPOINT_20261025.md). The [release contract](RELEASE_CONTRACT.md) and [model admission record](MODEL_ADMISSION.md) distinguish verified baselines, proposed gates and remaining decisions.
+Current speech integration evidence and unresolved gates are in the [October 26 Pocket speech checkpoint](POCKET_SPEECH_CHECKPOINT_20261026.md). The [October 25 checkpoint](READINESS_CHECKPOINT_20261025.md) preserves the preceding baseline. The [release contract](RELEASE_CONTRACT.md) and [model admission record](MODEL_ADMISSION.md) distinguish verified baselines, proposed gates and remaining decisions.
 
 ## Verified starting point
 
 | Area | Current evidence | Remaining work |
 | --- | --- | --- |
-| Source | Repository checkpoint c26161e records the current implementation and evidence. Phone app/test source is 46e7805; later 74866a6 changes emulator tests only. | Establish an approved release scope and preserve reproducible source, build inputs and model manifests. |
+| Source | Current Pocket speech checkpoint is `8d4f71abe2272c1f7202a853c47f36759142d1f8`. Earlier Flite phone app/test source was `46e7805`. | Approve release scope and preserve reproducible inputs. |
 | Camera | Rear default, front/rear selection before and during preview, Stop/Back/Home and repeated landscape passed on Samsung and Seeker. | Add analysis with the same ownership and cancellation protections. |
-| Speech | Reviewed typed text reaches actual Flite PCM and app-owned AudioTrack. | Owner rejects the current voice. Printable ASCII/256-character and older-OS restrictions remain. |
-| Checks | 151 normal Android tests passed; the exact signed QA pair passed 12 cases per phone. | These are bounded QA results, not recognition, privacy-matrix or shipping-artifact acceptance. |
+| Speech | Bundled Pocket TTS/Alba replaces Flite, with reviewed Unicode text and protected 24 kHz PCM. Actual component CI [40359863180](https://github.com/Hatsunama/sign-to-speak/actions/runs/40359863180) passed on component files unchanged at current source; UI-to-Pocket playback and rejection/recovery passed on Samsung. | Owner 50-utterance listening/naturalness and long-text quality, Seeker new-artifact QA, soak/performance/privacy and OS gates. API 26–28 speech remains outside the protected contract. |
+| Checks | Full Android CI [40361137118](https://github.com/Hatsunama/sign-to-speak/actions/runs/40361137118) passed 154 normal tests, zero failures/errors/skips. Same signed app/test pair passed 14 bounded Samsung cases, zero failures. Signed ZIP payloads, selected model/notices and all 15 native libraries passed the bounded static audit. Seeker is NOT_RUN; Samsung uses 4 KiB pages. | Complete Seeker QA, 16 KiB runtime, 100 cycles/30-minute soak, accessibility, capture/privacy and full APK framework/NDK notices. Earlier Flite checks do not transfer to this engine. |
 | Tracking SDK | A pinned source-built offline MediaPipe core is admitted to QA instrumentation. Its source rebuild succeeded. | Production has no tracker dependency or frame analyzer; actual tracker/model video execution remains unverified. |
 | Recognition | Existing benchmark validator/scorer and an opt-in recorded-video phone probe can be reused. A pinned isolated-sign model has only synthetic desktop invocation evidence. | Real RGB tracking, feature parity, recognition, fingerspelling and sentence translation. |
 | Reply captions | No customer microphone flow. | Local capture, speech recognition, editable captions and turn management. |
@@ -99,7 +99,7 @@ Begin the continuous-translation feasibility spike here. Require a suitable alig
 
 ## Phase 2 Replace unacceptable speech quality
 
-First compare current engine PCM with actual playback. Verify sample rate, signed format, channels, playback rate, clipping, gain, underruns, pronunciation and sentence prosody. Fix any playback defect before judging replacement models.
+The earlier Flite comparison found matching 16 kHz generation/playback but did not establish acceptable voice quality. The current Pocket candidate requires fresh actual-playback checks at its 24 kHz contract, including format, channels, clipping, gain, underruns, pronunciation and sentence prosody.
 
 Use a fixed listening set covering short replies, questions, negation, dates, times, names, numbers, abbreviations, punctuation and long text. Let the owner compare equivalent samples at matched loudness on both phones.
 
@@ -109,9 +109,9 @@ Candidate investigation:
 | --- | --- | --- |
 | Kokoro-82M | Natural-speech candidate with Apache-licensed weights | Audit exact Android conversion, voices and phonemizer. Its common eSpeak path is not automatically an Apache-only distribution. |
 | Supertonic | Local ONNX candidate with an official model release | Weights have OpenRAIL terms; code licensing does not replace those terms. Resolve suitability before integration. |
-| Current Flite | Functional baseline for diagnosis and comparisons | Do not retain it as a hidden fallback after the accepted replacement takes over its responsibilities. |
+| Retired Flite | Earlier functional baseline for diagnosis and comparisons | Production source has been removed from the current candidate; it must not return as a hidden fallback. |
 
-The official [Kokoro card](https://huggingface.co/hexgrad/Kokoro-82M), [sherpa-onnx Android/runtime project](https://github.com/k2-fsa/sherpa-onnx), [Supertonic card](https://huggingface.co/Supertone/supertonic) and [eSpeak license](https://github.com/espeak-ng/espeak-ng/blob/master/COPYING) are starting evidence, not a completed license review. Current [Piper development is GPL](https://github.com/OHF-Voice/piper1-gpl); do not describe it generically as an MIT dependency. Copyleft obligations require a deliberate distribution decision.
+The table records earlier alternatives; the current implementation candidate is pinned Pocket TTS/Alba. The official [Kokoro card](https://huggingface.co/hexgrad/Kokoro-82M), [sherpa-onnx Android/runtime project](https://github.com/k2-fsa/sherpa-onnx), [Supertonic card](https://huggingface.co/Supertone/supertonic) and [eSpeak license](https://github.com/espeak-ng/espeak-ng/blob/master/COPYING) are starting evidence, not a completed license review. Current [Piper development is GPL](https://github.com/OHF-Voice/piper1-gpl); do not describe it generically as an MIT dependency. Copyleft obligations require a deliberate distribution decision.
 
 Integrate the accepted engine behind the existing owned PCM playback path. Match its actual sample rate rather than reusing Flite's 16 kHz setting. Preserve cancellation generations, per-player capture policy, bounded output and zeroization.
 
