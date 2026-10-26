@@ -1,0 +1,76 @@
+{
+  "status": "Follow-up QA checkpoint; commercial release BLOCKED",
+  "source_sha": "c4f7222604d6a99cf0adb9a22cb9b7ac2e8fb867",
+  "baseline_source_sha": "d6f2527b874852f73d9af1fc89f2c4c34e81db8c",
+  "test_first_sha": "d97e9afe0986ddb0ada77908755fca3a3c1eeac1",
+  "android_ci_run": 40403992287,
+  "component_ci_run": 40404003996,
+  "android_component_ci_run": 40404003986,
+  "superseded_android_run": {
+    "run": 40403066627,
+    "reason": "Cancelled after strengthening the regression tests; not a product failure"
+  },
+  "artifacts": [
+    {
+      "role": "app",
+      "unsigned_sha256": "58f282cf5e59b343bb5fec54c89333951d1e70f0fb1d47098d45cf45457e4c8b",
+      "signed_sha256": "73c845ead587e90f8791bd8e9df6fad732ac1ddcf39cd0c857a7dbcc5d20da0f",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    },
+    {
+      "role": "test",
+      "unsigned_sha256": "d405eeeb62390b0fcc58dd3c675a7d61a386342d547d13adf8c949ec0a46fcaf",
+      "signed_sha256": "14c87cb7a7aeccb5e468d8c36270d0de5f827cf9256548896074c590006c6813",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    }
+  ],
+  "normal_android_unit_results": {
+    "tests": 154,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "intentional_counterfactual_failures_are_separate": true,
+  "static_artifact_audit": {
+    "source_sha": "c4f7222604d6a99cf0adb9a22cb9b7ac2e8fb867",
+    "signed_payloads_match_unsigned": true,
+    "model_assets_verified": 3,
+    "cargo_packages_verified": 133,
+    "cargo_notice_files_verified": 241,
+    "application_notice_files_verified": 3,
+    "manifest_policy_verified": true,
+    "native_alignment_gate": "all 15 APK native libraries; actual readelf and ZIP local offsets",
+    "signing_identity_unchanged": true
+  },
+  "samsung": {
+    "status": "PASS for bounded journeys",
+    "case_executions": 15,
+    "failed": 0,
+    "journeys": {
+      "preview-portrait": 2,
+      "preview-landscape": 2,
+      "preview-landscape-repeat": 2,
+      "typed-speech": 3,
+      "native-speech": 6
+    },
+    "started_utc": "2026-10-26T21:46:24.8581145Z",
+    "finished_utc": "2026-10-26T21:52:25.1912565Z",
+    "installed_hashes_match": true,
+    "original_camera_and_rotation_restored": true,
+    "returned_home": true,
+    "active_instrumentation_after_return": false,
+    "kernel_page_size_bytes": 4096,
+    "new_case_scope": "Controlled real bundled-model read using production SpeechSession/PocketModelStore in a separate session; exactly one read, no native creation, cleanup, then recovery through registered production speech bridge"
+  },
+  "seeker": {
+    "status": "NOT_RUN for this artifact; unavailable per owner; untouched"
+  },
+  "limits": [
+    "Native initialization cancellation latency inside opaque xn/ptts calls remains unmeasured; no universal Stop deadline established.",
+    "Cached-verification test proves rejection and byte preservation; a poll count alone is not proof of cancellation during a hash read. Copy/cache use the same read-cancellation helper.",
+    "No 16 KiB runtime execution; Samsung is 4 KiB.",
+    "Owner listening, long-text quality, latency/memory/soak, full privacy/accessibility/OS and framework/NDK notices remain incomplete.",
+    "Recognition, fingerspelling, continuous translation and customer reply ASR are absent. Recorded-video importer, feature parity and model/data admission remain unresolved."
+  ],
+  "local_evidence_root": "C:\\sign_to_speak\\followup-repairs-20261026\\phone-c4f7222"
+}
