@@ -15,6 +15,13 @@ ALLOWED = frozenset({
     'MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'Zlib',
     'Unicode-3.0', 'Unicode-DFS-2016', 'CC0-1.0', 'Unlicense', 'MPL-2.0',
 })
+# Cargo's historical slash convention means OR. Bound this probe to the
+# declarations actually observed, so other slash expressions need review.
+# https://doc.rust-lang.org/stable/style-guide/cargo.html#metadata-conventions
+LEGACY_SLASH_ALIASES = {
+    'MIT/Apache-2.0': 'MIT OR Apache-2.0',
+    'Unlicense/MIT': 'Unlicense OR MIT',
+}
 TOKEN = re.compile(r'[A-Za-z0-9][A-Za-z0-9.-]*|[()]')
 
 
@@ -118,8 +125,10 @@ def audit(metadata):
     for package in packages:
         name, version = package['name'], package['version']
         declaration = package.get('license')
+        legacy_slash_alias = isinstance(declaration, str) and declaration in LEGACY_SLASH_ALIASES
+        normalized = LEGACY_SLASH_ALIASES[declaration] if legacy_slash_alias else declaration
         try:
-            selected = route(parse(declaration))
+            selected = route(parse(normalized))
             reason = None if selected else 'no approved route in declaration'
         except InvalidExpression as error:
             selected = None
@@ -127,6 +136,8 @@ def audit(metadata):
         entries.append({
             'name': name, 'version': version,
             'license': declaration if declaration else 'not declared',
+            'normalized_expression': normalized,
+            'legacy_slash_alias': legacy_slash_alias,
             'allowed_for_probe': bool(selected),
             'selected_route': selected,
             'pending_review': reason,

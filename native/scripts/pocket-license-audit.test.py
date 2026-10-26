@@ -17,6 +17,26 @@ def package(name, license, version='1.0.0'):
 
 
 class AuditTests(unittest.TestCase):
+    def test_historical_cargo_slash_declarations_keep_raw_and_selected_route(self):
+        # Declarations observed in component-probe-40332632880, not invented aliases.
+        declarations = [
+            package('bitflags', 'MIT/Apache-2.0', '1.3.2'),
+            package('enum-as-inner', 'MIT/Apache-2.0', '0.6.1'),
+            package('same-file', 'Unlicense/MIT', '1.0.6'),
+            package('version_check', 'MIT/Apache-2.0', '0.9.5'),
+            package('walkdir', 'Unlicense/MIT', '2.5.0'),
+            package('xn', 'MIT/Apache-2.0', '0.2.12'),
+        ]
+        report = audit_module.audit({'packages': declarations})
+        self.assertEqual(report['blocked_packages'], [])
+        for item in report['packages']:
+            with self.subTest(name=item['name']):
+                self.assertEqual(item['license'], next(p['license'] for p in declarations
+                                                       if p['name'] == item['name']))
+                self.assertEqual(item['normalized_expression'], item['license'].replace('/', ' OR '))
+                self.assertTrue(item['legacy_slash_alias'])
+                self.assertEqual(item['selected_route'], item['license'].split('/')[0])
+
     def test_reported_alternatives_select_approved_route(self):
         report = audit_module.audit({'packages': [
             package('wasip2', 'Apache-2.0 WITH LLVM-exception OR Apache-2.0 OR MIT'),
@@ -48,7 +68,9 @@ class AuditTests(unittest.TestCase):
     def test_missing_unknown_and_malformed_are_pending(self):
         cases = [None, '', 'LGPL-2.1-or-later', 'MIT OR', 'MIT Apache-2.0',
                  'MIT | Apache-2.0', '(MIT OR Apache-2.0', 'MIT WITH',
-                 'MIT AND LGPL-2.1-or-later']
+                 'MIT AND LGPL-2.1-or-later', 'MIT/GPL-3.0',
+                 'GPL-3.0/MIT', 'MIT/Apache-2.0/GPL-3.0',
+                 'MIT / Apache-2.0', 'Unlicense/MIT/Apache-2.0']
         report = audit_module.audit({'packages': [package(str(i), value) for i, value in enumerate(cases)]})
         self.assertEqual(len(report['blocked_packages']), len(cases))
         self.assertTrue(all(not p['allowed_for_probe'] and p['selected_route'] is None
