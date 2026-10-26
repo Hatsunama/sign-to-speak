@@ -427,16 +427,52 @@ test('typed speech speaks exact reviewed text without camera permission and reta
   assert.equal(h.input().props.value, '');
 });
 
-test('typed speech rejects unsupported characters and length visibly without changing text', async t => {
+test('typed speech rejects empty and overlength drafts before native speech without changing text', async t => {
   const calls = [];
   const h = await renderHome(t, {ready: true}, {begin: async () => {calls.push('begin'); return 't';}, speak: async () => calls.push('speak')});
-  for (const value of ['', '   ', 'Hello\nworld', 'café', 'A'.repeat(257)]) {
+  for (const value of ['', '   ', 'A'.repeat(257)]) {
     await h.edit(value);
     await h.press('Speak typed text');
     assert.equal(h.input().props.value, value);
-    assert.match(h.speechStatus(), /printable|256|enter/i);
+    assert.match(h.speechStatus(), /256|enter/i);
   }
   assert.deepEqual(calls, []);
+});
+
+test('typed speech passes supported Unicode unchanged to native speech and completes', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => {calls.push(['begin']); return 'unicode-token';},
+    speak: async (token, value) => {calls.push(['speak', token, value]); return 'COMPLETED';},
+    cancel: () => {},
+  });
+  const draft = 'Café — please.';
+  await h.edit(draft);
+  await h.press('Speak typed text');
+  assert.deepEqual(calls, [['begin'], ['speak', 'unicode-token', draft]]);
+  assert.match(h.speechStatus(), /spoken|finished|complete/i);
+  assert.equal(h.input().props.value, draft);
+  assert.equal(h.permissions.length, 0);
+  assert.doesNotMatch(h.text(), /printable English ASCII|printable ASCII/i);
+});
+
+test('native unsupported Unicode reports an actionable local English voice limit and keeps the draft', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'emoji-token',
+    speak: async (token, value) => {calls.push([token, value]); return 'INVALID_INPUT';},
+    cancel: () => {},
+  });
+  const draft = 'Hello 😀';
+  await h.edit(draft);
+  await h.press('Speak typed text');
+  assert.deepEqual(calls, [['emoji-token', draft]]);
+  assert.equal(h.input().props.value, draft);
+  assert.match(h.speechStatus(), /unsupported|not supported/i);
+  assert.match(h.speechStatus(), /local English voice/i);
+  assert.match(h.speechStatus(), /edit|change|try/i);
+  assert.doesNotMatch(h.speechStatus(), /ASCII/i);
+  assert.equal(h.button('Speak typed text').props.disabled, false);
 });
 
 test('double Speak in one React batch starts only one native utterance', async t => {
