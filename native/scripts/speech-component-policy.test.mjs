@@ -51,6 +51,7 @@ function audit(w) {
   assert.deepEqual(w.on.pull_request.types, ['opened', 'synchronize', 'reopened']);
   assert.deepEqual(w.on.pull_request.paths, [
     '.github/workflows/sign-speech-component-probe.yml', 'native/scripts/speech-component-policy.test.mjs',
+    'native/scripts/python-host-dependency-policy.test.mjs', 'native/requirements-host-tests.txt',
     'native/scripts/pocket-license-audit.py', 'native/scripts/pocket-license-audit.test.py',
     'native/scripts/pocket-tts-component-probe.py', 'native/scripts/pocket-tts-component-probe.test.py',
     'native/scripts/pocket-tts-audition.py', 'native/scripts/pocket-tts-audition.test.py',
@@ -187,7 +188,8 @@ function audit(w) {
   for (const s of job.steps) {
     assert.notEqual(s['continue-on-error'], true);
     assert.equal(s.with?.cache, undefined);
-    assert.doesNotMatch(s.run ?? '', /\|\|\s*true|cargo install|rustup (?:update|install)|apt(?:-get)? install|pip install|torch|cuda|--allow-network/);
+    assert.doesNotMatch(s.run ?? '', /\|\|\s*true|cargo install|rustup (?:update|install)|apt(?:-get)? install|torch|cuda|--allow-network/);
+    if (s.name !== 'Provision pinned Python host-test wheel') assert.doesNotMatch(s.run ?? '', /pip install/);
   }
   assert.ok(job.steps.indexOf(resolve) < job.steps.indexOf(build));
   assert.ok(job.steps.indexOf(local) < job.steps.indexOf(resolve));

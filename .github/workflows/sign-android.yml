@@ -56,6 +56,14 @@ jobs:
           sha256sum package-lock.json android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties > "$RUNNER_TEMP/sign-evidence/source-checksums.txt"
       - name: Install locked JavaScript dependencies without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Provision pinned Python host-test wheel
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/sign-python-host-tests"
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir --target "$target" -r requirements-host-tests.txt
+          PYTHONPATH="$target" python3 -c 'import numpy; assert numpy.__version__ == "2.3.2"'
+          echo "PYTHONPATH=$target" >> "$GITHUB_ENV"
       - name: Full host suite, TypeScript and workflow policy
         id: host
         run: |
@@ -63,7 +71,7 @@ jobs:
           npm test
           npm run typecheck
           sh tests/run-java-tests.sh
-          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
+          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs scripts/python-host-dependency-policy.test.mjs
           for test_file in scripts/*.test.py; do python3 "$test_file"; done
           python3 tests/flite/test_prepared_sources.py
       - name: Verify Android prerequisites without accepting new licenses

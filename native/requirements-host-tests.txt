@@ -1,0 +1,4 @@
+# Ubuntu 24.04 x64 / CPython 3.12 host tests only. Wheel digest from PyPI's
+# numpy 2.3.2 release JSON: https://pypi.org/pypi/numpy/2.3.2/json
+# This records package provenance and integrity; it is not a license grant.
+numpy==2.3.2 --hash=sha256:8145dd6d10df13c559d1e4314df29695613575183fa2e2d11fac4c208c8a1f73

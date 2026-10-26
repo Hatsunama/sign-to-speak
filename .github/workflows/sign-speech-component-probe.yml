@@ -8,6 +8,8 @@ on:
     paths:
       - .github/workflows/sign-speech-component-probe.yml
       - native/scripts/speech-component-policy.test.mjs
+      - native/scripts/python-host-dependency-policy.test.mjs
+      - native/requirements-host-tests.txt
       - native/scripts/pocket-license-audit.py
       - native/scripts/pocket-license-audit.test.py
       - native/scripts/pocket-tts-component-probe.py
@@ -90,6 +92,14 @@ jobs:
         with:
           node-version: '24.19.0'
           check-latest: false
+      - name: Provision pinned Python host-test wheel
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/sign-python-host-tests"
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir --target "$target" -r native/requirements-host-tests.txt
+          PYTHONPATH="$target" python3 -c 'import numpy; assert numpy.__version__ == "2.3.2"'
+          echo "PYTHONPATH=$target" >> "$GITHUB_ENV"
       - name: Run complete bounded host checks
         timeout-minutes: 5
         run: |
