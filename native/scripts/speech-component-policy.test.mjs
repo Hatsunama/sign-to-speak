@@ -51,6 +51,7 @@ function audit(w) {
   assert.deepEqual(w.on.pull_request.types, ['opened', 'synchronize', 'reopened']);
   assert.deepEqual(w.on.pull_request.paths, [
     '.github/workflows/sign-speech-component-probe.yml', 'native/scripts/speech-component-policy.test.mjs',
+    'native/scripts/pocket-license-audit.py', 'native/scripts/pocket-license-audit.test.py',
     'native/scripts/pocket-tts-component-probe.py', 'native/scripts/pocket-tts-component-probe.test.py',
     'native/scripts/pocket-tts-audition.py', 'native/vendor/pocket-tts-runtime/**',
     'native/vendor/pocket-tts-audition/manifest.json']);
@@ -83,6 +84,7 @@ function audit(w) {
   assert.match(local.run, /npm ci --ignore-scripts --no-audit --no-fund/);
   assert.match(local.run, /node --test native\/scripts\/speech-component-policy\.test\.mjs/);
   assert.match(local.run, /pocket-tts-component-probe\.test\.py/);
+  assert.match(local.run, /pocket-license-audit\.test\.py/);
   const seed = step(w, 'Verify upstream lock seed for first-run bootstrap');
   assert.match(seed.if, /hashFiles\('native\/vendor\/pocket-tts-runtime\/Cargo\.lock'\) == ''/);
   assert.match(seed.run, /codeload\.github\.com\/kyutai-labs\/pocket-tts\/tar\.gz\/\$POCKET_SOURCE_COMMIT/);
@@ -108,8 +110,9 @@ function audit(w) {
   const provenance = step(w, 'Record component provenance and dependency declarations');
   for (const field of ['source_files_sha256', 'cargo_lock_sha256', 'component_cdylib_sha256',
     'model_manifest_sha256', 'tool_versions', 'runner_image', 'dependency-license-report.json',
-    'allowed_for_probe']) assert.ok(provenance.run.includes(field));
-  assert.match(provenance.run, /metadata = json\.loads/);
+    'pocket-license-audit.py']) assert.ok(provenance.run.includes(field));
+  assert.match(provenance.run, /--metadata "\$RUNNER_TEMP\/pocket-cargo-metadata\.json"/);
+  assert.doesNotMatch(provenance.run, /re\.findall|identifiers\s*=/);
   assert.doesNotMatch(provenance.run, /cargo metadata/);
   const inference = step(w, 'Execute real component in network namespace');
   assert.match(inference.run, /sudo unshare --net -- runuser/);
@@ -127,6 +130,13 @@ function audit(w) {
     '${{ runner.temp }}/pocket-component-evidence/*.wav',
     '${{ runner.temp }}/pocket-component-evidence/*.json',
     '${{ runner.temp }}/pocket-component-evidence/*.txt']);
+  const diagnostics = step(w, 'Upload declaration diagnostics on failure');
+  assert.equal(diagnostics.if, 'failure()');
+  assert.equal(diagnostics.with.path, '${{ runner.temp }}/pocket-component-evidence/dependency-license-report.json');
+  assert.match(diagnostics.with.name, /declaration-diagnostics/);
+  assert.equal(diagnostics.with['if-no-files-found'], 'ignore');
+  assert.equal(diagnostics.with['retention-days'], 3);
+  assert.equal(diagnostics.uses, 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02');
   const bootstrap = step(w, 'Upload bootstrap lock and resolution receipt separately');
   assert.equal(bootstrap.if, "${{ always() && steps.resolve.outputs.bootstrap == 'true' }}");
   assert.deepEqual(bootstrap.with.path.trim().split('\n').map(x => x.trim()), [
@@ -168,6 +178,8 @@ for (const [name, mutate] of [
   ['online inference', w => {step(w, 'Execute real component in network namespace').run = step(w, 'Execute real component in network namespace').run.replace('sudo unshare --net -- runuser', 'runuser'); }],
   ['four WAVs', w => {step(w, 'Execute real component in network namespace').run = step(w, 'Execute real component in network namespace').run.replace('-eq 5', '-eq 4'); }],
   ['failure success upload', w => {step(w, 'Upload successful WAVs and sanitized records only').if = 'always()'; }],
+  ['missing declaration helper', w => {step(w, 'Record component provenance and dependency declarations').run = step(w, 'Record component provenance and dependency declarations').run.replace('pocket-license-audit.py', 'missing.py'); }],
+  ['diagnostics mislabeled success', w => {step(w, 'Upload declaration diagnostics on failure').with.name = 'successful-wavs'; }],
   ['model upload', w => {step(w, 'Upload successful WAVs and sanitized records only').with.path += '\n${{ runner.temp }}/pocket-component-assets/'; }],
   ['unconditional lock upload', w => {step(w, 'Upload bootstrap lock and resolution receipt separately').if = 'always()'; }],
 ]) test(`rejects ${name}`, () => { const copy = structuredClone(workflow); mutate(copy); assert.throws(() => audit(copy)); });

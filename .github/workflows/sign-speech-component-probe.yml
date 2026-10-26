@@ -8,6 +8,8 @@ on:
     paths:
       - .github/workflows/sign-speech-component-probe.yml
       - native/scripts/speech-component-policy.test.mjs
+      - native/scripts/pocket-license-audit.py
+      - native/scripts/pocket-license-audit.test.py
       - native/scripts/pocket-tts-component-probe.py
       - native/scripts/pocket-tts-component-probe.test.py
       - native/scripts/pocket-tts-audition.py
@@ -79,6 +81,7 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           cd "$GITHUB_WORKSPACE"
           node --test native/scripts/speech-component-policy.test.mjs
+          python3 native/scripts/pocket-license-audit.test.py
           python3 -m unittest discover -s native/vendor/pocket-tts-runtime/tests -p 'test_*.py'
           python3 native/scripts/pocket-tts-component-probe.test.py
       - name: Verify upstream lock seed for first-run bootstrap
@@ -145,27 +148,16 @@ jobs:
         timeout-minutes: 1
         run: |
           set -euo pipefail
+          python3 native/scripts/pocket-license-audit.py \
+            --metadata "$RUNNER_TEMP/pocket-cargo-metadata.json" \
+            --output "$RUNNER_TEMP/pocket-component-evidence/dependency-license-report.json"
           python3 - <<'PY'
-          import hashlib, json, os, pathlib, re, subprocess
+          import hashlib, json, os, pathlib, subprocess
           root = pathlib.Path('native/vendor/pocket-tts-runtime')
           output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-component-evidence'
           digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
           source = {p.relative_to(root).as_posix(): digest(p) for p in sorted(root.rglob('*'))
                     if p.is_file() and not p.is_symlink() and 'target' not in p.parts and '__pycache__' not in p.parts}
-          metadata = json.loads((pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-cargo-metadata.json').read_text())
-          allowed = {'MIT', 'Apache-2.0', 'BSD-2-Clause', 'BSD-3-Clause', 'ISC', 'Zlib',
-                     'Unicode-3.0', 'Unicode-DFS-2016', 'CC0-1.0', 'Unlicense', 'MPL-2.0'}
-          dependencies = []
-          for package in metadata['packages']:
-              license_expression = package.get('license') or ''
-              identifiers = set(re.findall(r'[A-Za-z][A-Za-z0-9.-]*', license_expression)) - {'AND', 'OR', 'WITH'}
-              approved = bool(identifiers) and identifiers <= allowed
-              dependencies.append({'name': package['name'], 'version': package['version'],
-                                   'license': license_expression or 'not declared', 'allowed_for_probe': approved})
-          dependencies.sort(key=lambda item: (item['name'], item['version']))
-          (output / 'dependency-license-report.json').write_text(json.dumps(dependencies, indent=2) + '\n')
-          if any(not item['allowed_for_probe'] for item in dependencies):
-              raise SystemExit('Cargo graph contains a license declaration requiring review')
           library = root / 'target/release/libsign_pocket_tts_runtime.so'
           receipt = {'status': 'compiled-component-not-android-admission',
                      'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
@@ -220,6 +212,14 @@ jobs:
             ${{ runner.temp }}/pocket-component-evidence/*.wav
             ${{ runner.temp }}/pocket-component-evidence/*.json
             ${{ runner.temp }}/pocket-component-evidence/*.txt
+      - name: Upload declaration diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-declaration-diagnostics-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: ignore
+          path: ${{ runner.temp }}/pocket-component-evidence/dependency-license-report.json
       - name: Upload bootstrap lock and resolution receipt separately
         if: ${{ always() && steps.resolve.outputs.bootstrap == 'true' }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
