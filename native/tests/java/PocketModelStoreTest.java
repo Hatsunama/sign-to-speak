@@ -61,11 +61,13 @@ public final class PocketModelStoreTest {
     File privateParent = Files.createTempDirectory(base, "cancel-prepare-").toFile();
     Path unrelated = Files.write(privateParent.toPath().resolve("keep.txt"), new byte[]{42});
     AtomicBoolean cancelled = new AtomicBoolean();
+    AtomicInteger readCalls = new AtomicInteger();
     PocketModelStore.AssetSource firstSource = name -> {
       if (!name.equals(NAMES[0])) return source().open(name);
       return new ByteArrayInputStream(large) {
         boolean signalled;
         @Override public synchronized int read(byte[] buffer, int offset, int length) {
+          readCalls.incrementAndGet();
           int count = super.read(buffer, offset, Math.min(length, 4096));
           if (count > 0 && !signalled) { signalled = true; cancelled.set(true); }
           return count;
@@ -74,6 +76,7 @@ public final class PocketModelStoreTest {
     };
     failed(() -> prepareCancellable(store, privateParent, firstSource, cancelled::get),
         "cancellation during copy rejects model preparation");
+    check(readCalls.get() == 1, "cancellation stops before a second model asset read");
     check(Arrays.equals(Files.readAllBytes(unrelated), new byte[]{42}), "unrelated private file retained");
     check(Objects.requireNonNull(privateParent.list()).length == 1,
         "cancelled copy leaves no root or owned staging directory");

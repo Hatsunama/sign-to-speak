@@ -235,6 +235,7 @@ public final class PhoneSpeechIntegrationTest {
         CountDownLatch readEntered = new CountDownLatch(1);
         CountDownLatch releaseRead = new CountDownLatch(1);
         AtomicBoolean firstRead = new AtomicBoolean();
+        AtomicInteger readCalls = new AtomicInteger();
         AtomicInteger nativeRequests = new AtomicInteger();
         AtomicInteger syntheses = new AtomicInteger();
         AtomicInteger players = new AtomicInteger();
@@ -245,6 +246,8 @@ public final class PhoneSpeechIntegrationTest {
             if (!name.equals("model.safetensors")) return bundled;
             return new FilterInputStream(bundled) {
                 @Override public int read(byte[] buffer, int offset, int length) throws IOException {
+                    if (readCalls.incrementAndGet() != 1)
+                        throw new IOException("Cancelled model read continued");
                     int count = super.read(buffer, offset, length);
                     if (count > 0 && firstRead.compareAndSet(false, true)) {
                         readEntered.countDown();
@@ -297,6 +300,7 @@ public final class PhoneSpeechIntegrationTest {
             releaseRead.countDown();
             assertEquals("CANCELLED", SpeechSession.Result.CANCELLED,
                     result.get(5, TimeUnit.SECONDS));
+            assertEquals("Cancellation stops before a second bundled model read", 1, readCalls.get());
             assertEquals("Cancellation must precede Pocket native creation", 0, nativeRequests.get());
             assertEquals("No synthesis after cancelled preparation", 0, syntheses.get());
             assertEquals("No player after cancelled preparation", 0, players.get());
