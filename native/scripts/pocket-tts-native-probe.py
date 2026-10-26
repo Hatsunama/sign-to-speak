@@ -43,7 +43,7 @@ def digest(path: Path) -> str:
 
 
 def render_local_config(upstream: str, weights: Path, tokenizer: Path) -> str:
-    """Select ungated weights directly: the Rust local resolver lacks Python's fallback."""
+    """Select verified ungated weights directly using local paths."""
     replacements = {
         "weights_path": weights.as_posix(),
         "weights_path_without_voice_cloning": "null",
@@ -273,8 +273,7 @@ def audition(asset_dir: Path, source_dir: Path, source_archive: Path, binary: Pa
         **source,
         "binary_sha256": digest(binary),
         "binary_version": version([str(binary), "--version"]),
-        "rustc_version": version(["rustc", "--version"]),
-        "cargo_version": version(["cargo", "--version"]),
+        "provision_receipt": "provision-receipt.json",
         "source_version": manifest["source"]["version"],
         "model_revision": manifest["model"]["revision"],
         "model_language": manifest["model"]["language"],

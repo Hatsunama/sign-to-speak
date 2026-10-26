@@ -126,6 +126,79 @@ class ProbeTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, 'diagnostic'):
             probe.compare_token_ids(model, self.root / 'missing')
 
+    def test_audition_records_runtime_result_without_compiler_in_isolated_path(self):
+        assets = self.root / "assets"
+        source = self.root / "source"
+        output = self.root / "output"
+        binary_dir = source / "rust/target/release"
+        binary_dir.mkdir(parents=True)
+        assets.mkdir()
+        binary = binary_dir / "pocket-tts"
+        diagnostic = binary_dir / "sign_token_probe"
+        binary.write_bytes(b"fixture native binary")
+        diagnostic.write_bytes(b"fixture diagnostic binary")
+        weights = assets / "model.safetensors"
+        tokenizer = assets / "tokenizer.model"
+        voice = assets / "alba.safetensors"
+        config = assets / "config.yaml"
+        for path in (weights, tokenizer, voice):
+            path.write_bytes(b"fixture")
+        config.write_text(
+            "weights_path: hf://cloning\nweights_path_without_voice_cloning: hf://ungated\n"
+            "flow_lm:\n  lookup_table:\n    tokenizer_path: hf://tokenizer\n"
+            "mimi:\n  sample_rate: 24000\n  channels: 1\n  n_bins: 4000\n"
+        )
+        files = {
+            probe.reference.CONFIG_NAME: config,
+            "languages/english_18m_2026-10/model.safetensors": weights,
+            "languages/english_18m_2026-10/tokenizer.model": tokenizer,
+            "languages/english_18m_2026-10/embeddings/alba.safetensors": voice,
+        }
+        manifest = {
+            "source": {"version": "fixture", "config_sha256": probe.digest(config)},
+            "model": {"revision": "fixture", "language": "English", "voice": "Alba",
+                      "assets": [{"path": name, "sha256": probe.digest(path)} for name, path in files.items()]},
+            "attribution": "fixture only",
+        }
+        expected_ids = [[1, 2] for _ in probe.TOKEN_PARITY_TEXTS]
+        fake_sp = mock.Mock()
+        fake_sp.encode.return_value = [1, 2]
+        fake_module = mock.Mock(SentencePieceProcessor=mock.Mock(return_value=fake_sp))
+        commands = []
+
+        def isolated_command(args, **kwargs):
+            commands.append(args)
+            if args[0] in ("rustc", "cargo"):
+                raise FileNotFoundError(args[0])
+            if args == [str(diagnostic), str(tokenizer)]:
+                return mock.Mock(returncode=0, stdout=json.dumps(expected_ids), stderr="")
+            if args == [str(binary), "--version"]:
+                return mock.Mock(returncode=0, stdout="pocket-tts fixture-version\n", stderr="")
+            if args[0] == str(binary) and args[1] == "generate":
+                Path(args[args.index("--output-path") + 1]).write_bytes(wav([8192, -8192]))
+                return mock.Mock(returncode=0, stdout="", stderr="")
+            self.fail(f"Unexpected subprocess: {args}")
+
+        with mock.patch.object(probe.reference, "_manifest", return_value=manifest), \
+             mock.patch.object(probe.reference, "verify_assets", return_value=files), \
+             mock.patch.object(probe, "rust_source_identity", return_value={"source_commit": probe.RUST_COMMIT}), \
+             mock.patch.dict("sys.modules", {"sentencepiece": fake_module}), \
+             mock.patch.object(probe.subprocess, "run", side_effect=isolated_command):
+            destination = probe.audition(assets, source, self.root / "source.tar.gz", binary, diagnostic, output)
+
+        result = json.loads(destination.read_text())
+        self.assertEqual(result["status"], "synthesized_for_native_cpu_probe_only")
+        self.assertEqual(result["binary_version"], "pocket-tts fixture-version")
+        self.assertEqual(result["binary_sha256"], probe.digest(binary))
+        self.assertEqual(result["token_id_parity"]["diagnostic_sha256"], probe.digest(diagnostic))
+        self.assertEqual(result["provision_receipt"], "provision-receipt.json")
+        self.assertEqual(len(result["outputs"]), len(probe.reference.UTTERANCES))
+        self.assertEqual(len([args for args in commands if args[0] == str(binary) and args[1] == "generate"]),
+                         len(probe.reference.UTTERANCES))
+        self.assertNotIn("rustc_version", result)
+        self.assertNotIn("cargo_version", result)
+        self.assertFalse(any(args[0] in ("rustc", "cargo") for args in commands))
+
     def test_extracted_rust_source_must_match_pinned_archive(self):
         source = self.root / "source"
         cargo = source / "rust"
