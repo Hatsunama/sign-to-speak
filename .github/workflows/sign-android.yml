@@ -80,9 +80,22 @@ jobs:
       - name: Verify Android prerequisites without accepting new licenses
         id: sdk
         run: bash scripts/ci-sdk.sh
+      - name: Verify QA lint model includes reviewed license asset producer
+        id: license_assets_graph
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain --dry-run \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
+            :app:generateQaLintVitalReportModel \
+            | tee "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
+          grep -Eq '^(> Task )?:app:generateQaLintVitalReportModel SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
+          grep -Eq '^(> Task )?:app:stageReviewedLicenses SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-lint-assets-task-graph.txt"
       - name: Build locked Pocket runtime for debug and phone QA ABIs
         id: pocket_runtime
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.license_assets_graph.outcome == 'success' }}
         timeout-minutes: 30
         run: |
           set -euo pipefail
@@ -106,7 +119,7 @@ jobs:
           test -s generated/pocket-assets/pocket-alba/alba.safetensors
       - name: Prove cleanup-isolation fail-before assertions and restore exact candidate
         id: baseline
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.license_assets_graph.outcome == 'success' }}
         timeout-minutes: 12
         run: bash scripts/ci-isolation-baseline.sh
       - name: Compile actual Kotlin and run full Android unit suite (Robolectric, no emulator)
