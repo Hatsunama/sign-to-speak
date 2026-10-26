@@ -1,0 +1,26 @@
+# Local offline adaptation
+
+Source: Kyutai Pocket TTS v4.0.1, commit `a922b912dfa366975294afb568d815b305acde5d` (MIT). Original file hashes are in `PINNED_SOURCES.txt`. The unmodified model YAML is embedded as a resource. All source changes are local to this directory. This component's original ABI and registry code is Apache 2.0 under the repository license. The adapted modules remain under Kyutai's MIT terms (`KYUTAI-MIT-LICENSE`). The `ptts` dependency is the exact `7efa26973f81bba42cf2ace8da2c1eb9b605d54d` fork of xn-ptts, with default features off; its license is MIT OR Apache 2.0.
+
+`xn` is pinned to exact `0.2.12`, matching the verified Kyutai `rust/Cargo.lock` entry (full lockfile SHA-256 `3f2c5396eaaad4c64258ae724e012fdaa0c7b3e71165bcf0ef2c6b0641d18d27`). The earlier `0.2.11` pin came from the upstream semver manifest rather than the resolved lockfile. `tests/test_xn_pin.py` checks this alignment from a small checked-in lock-entry fixture; it does not compile the Rust component.
+
+- `config.rs`: remove embedded language catalog, arbitrary configuration loading and dynamic source selection. The C ABI embeds only `english_18m_2026-10.yaml` and substitutes verified local paths into its weights and tokenizer fields. Its architecture and generation constants remain the publisher's.
+- `model.rs`: remove voice-cloning/audio-file loading, predefined voice selection, voice export and the two-thread unbounded latent channel. The existing model math, prompt construction, EOS rules and first-frame fade remain; each latent is decoded and delivered synchronously. Cancellation is checked before expensive steps and before output. The generation ceiling is 375 frames/30 seconds.
+- `tokenizer.rs`: retain SentencePiece only and reject unknown piece ID 0; no JSON/Hugging Face tokenizer.
+- `rng.rs`: retain the upstream fixed default seed and remove environment-controlled seed selection.
+- `text.rs`: retains the upstream prompt preparation and punctuation rules; removes sentence splitting, decoding helpers and logging. `weights.rs`: retained with no functional changes; safetensors key mapping follows the pinned source.
+- `lib.rs` and `include/sign_pocket_tts.h`: new bounded request registry, exact asset hash checks, C ABI, text checks, signed PCM conversion, callback cancellation and error status separation. No path, input text or audio is logged.
+
+Asset layout for a caller-controlled *private, immutable* directory: `model.safetensors` (111,728,528 bytes), `tokenizer.model` (59,339 bytes), and `alba.safetensors` (4,163,992 bytes). Exact SHA-256 values are compiled into `lib.rs` and match `native/vendor/pocket-tts-audition/manifest.json`. The originals are Kyutai CC BY 4.0, and the Alba embedding is attributed to Alba MacKenna under CC BY 4.0. No model asset is copied into this source tree. The component accepts no runtime downloader, network URL, cloning source, or alternate model name.
+
+`sts_pocket_create` does not load weights, allowing another thread to cancel a request during hash verification or load. Each synthesize call loads a private model instance; this deliberately avoids global model cache ownership until phone memory is profiled. The JNI owner must keep the PCM callback and userdata live for the synchronous call and must not unload the library until in-flight calls return. The component wipes its owned UTF-8 byte copy and PCM staging buffer, but makes no secure-erasure claim for upstream tensor allocations, borrowed JNI input or the model files. Source-only tests exercise registry ownership, cancellation, input validity and PCM callback bounds. A hosted full compile, unit suite and real-model component probe are required before admission; no build, model, device or key was used on the owner PC for this implementation.
+
+## Pending test-first contract regressions
+
+The current source includes failing unit expectations for three defensive contracts, with the production behavior intentionally unchanged pending a hosted red run:
+
+- A generation that reports success but delivers zero PCM samples must return `Model` while cancellation and sink failure keep their current precedence. The test calls the same completion decision used by the C ABI after an empty flush.
+- A decoded frame containing an out-of-range or nonfinite sample must return `Model` before any part of that frame reaches the sink or changes pending PCM. The tests place the invalid sample after enough valid samples to cross a callback boundary. Existing conversion still clamps finite out-of-range values and processes a frame incrementally.
+- Generation that exhausts its frame limit without completing the post-EOS period must report an error. The test calls the shared end-of-generation decision; the current loop still returns success when its limit is reached. Explicit EOS completion and cancellation precedence are separately asserted.
+
+These are control-flow and adapter-contract gaps; they do not establish that the pinned real model produces out-of-range samples, nonfinite samples, empty PCM, or an EOS failure. The component remains outside the app and has not been model-probed. Run the focused Rust tests in hosted CI, record the expected failures from this unchanged behavior, then apply and verify the fixes. No local Rust build or model invocation was performed for this test-only stage.

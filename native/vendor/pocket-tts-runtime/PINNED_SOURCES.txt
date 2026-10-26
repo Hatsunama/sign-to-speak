@@ -1,0 +1,11 @@
+Kyutai Pocket TTS 4.0.1 commit a922b912dfa366975294afb568d815b305acde5d
+https://github.com/kyutai-labs/pocket-tts
+rust/src/config.rs 9b952e0336565032ebee6ad6d59ca725b2931fe575e34ac5c1c551644ed3534a
+rust/src/model.rs 13744add16efe18dddcc550876a895e4ab95d1f7ebcfe9287a5192c1b0e11a88
+rust/src/text.rs dbdbb2d070b280109b0ea45c0b39ef8b90d66df3f387e71ab40db940a1ab0172
+rust/src/rng.rs 93795585b2f2fe06db706b3eae181798f7aca29917deeaa3fdb54dae2909f6a3
+rust/src/weights.rs 65d1488fd4b2cccccd5a52a7bca6a079145d999594e50542b96d20e5b1833aff
+Core math: xn-ptts fork commit 7efa26973f81bba42cf2ace8da2c1eb9b605d54d, package ptts; xn 0.2.12 (Kyutai rust/Cargo.lock SHA-256 3f2c5396eaaad4c64258ae724e012fdaa0c7b3e71165bcf0ef2c6b0641d18d27).
+rust/src/tokenizer.rs 6a773be3cdd1a1b25e2de728d844f662dfbc1975767fe59b094c6a5bcbef5103
+pocket_tts/config/english_18m_2026-10.yaml 3ec91f2f298d3fd283b98093d432f236c30523262f74e7e820a60d9625426700
+LICENSE 23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3
