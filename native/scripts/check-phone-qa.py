@@ -25,7 +25,9 @@ REQUIRED_FRAMEWORK_ASSETS=('react-native-LICENSE.txt',
                            'double-conversion-LICENSE.txt', 'glog-COPYING.txt',
                            'fast_float-LICENSE-MIT.txt', 'folly-LICENSE.txt',
                            'hermes-dtoa.c-NOTICE.txt', 'hermes-g_fmt.c-NOTICE.txt',
-                           'fresco-ijg-README.txt', 'fresco-ijg-ACKNOWLEDGMENT.txt')
+                           'fresco-ijg-README.txt', 'fresco-ijg-ACKNOWLEDGMENT.txt',
+                           'bolts-tasks-LICENSE.txt', 'old-facebook-MIT.txt',
+                           'camera-libyuv-LICENSE.txt')
 FRAMEWORK_SHA256={
     'react-native-LICENSE.txt':'da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93',
     'react-native-safe-area-context-LICENSE.txt':'f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c',
@@ -39,6 +41,9 @@ FRAMEWORK_SHA256={
     'hermes-g_fmt.c-NOTICE.txt':'be5981b1b47d165581f00f9915679ecd19a4fa44ba259f5b60ee1fd1be1df31f',
     'fresco-ijg-README.txt':'4b7b9f8c03bb8d60270dfd12684e70ab21e4abfd27e73905cd1a7c4cae6f5cdb',
     'fresco-ijg-ACKNOWLEDGMENT.txt':'d903a69ab39425283b44e2ea355cbfaf79bcd738b69c2b1c3c700ce80f2d89f9',
+    'bolts-tasks-LICENSE.txt':'9e69750c616877af2dec86f961a53e39324c3655e25b1d6ceed06e9661ec072b',
+    'old-facebook-MIT.txt':'52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85',
+    'camera-libyuv-LICENSE.txt':'2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f',
 }
 
 def require(condition, message='APK validation failed'):

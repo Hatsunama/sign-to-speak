@@ -34,6 +34,29 @@ test('Android stages the four pinned React Native native-dependency notices', ()
   }
 });
 
+test('Android stages the resolved Maven grants with the reviewed upstream bytes', () => {
+  const mapping = read('android/app/license-assets.gradle').toString();
+  for (const [name, hash, grant] of [
+    ['bolts-tasks-LICENSE.txt', '9e69750c616877af2dec86f961a53e39324c3655e25b1d6ceed06e9661ec072b', /BSD License[\s\S]*Copyright \(c\) 2013-present, Facebook, Inc\./],
+    ['old-facebook-MIT.txt', '52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85', /MIT License[\s\S]*Copyright \(c\) Facebook, Inc\. and its affiliates\./],
+    ['camera-libyuv-LICENSE.txt', '2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f', /Copyright 2011 The LibYuv Project Authors\.[\s\S]*Redistribution and use in source and binary forms/],
+  ]) {
+    assert.ok(mapping.includes(`framework/${name}`), `${name} must be staged`);
+    const bytes = read(`licenses/framework/${name}`);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), hash);
+    assert.match(bytes.toString(), grant);
+  }
+  const provenance = read('licenses/framework/README.md').toString();
+  for (const coordinate of [
+    'com.parse.bolts:bolts-tasks:1.4.0',
+    'com.facebook.infer.annotation:infer-annotation:0.18.0',
+    'com.facebook.yoga:proguard-annotations:1.19.0',
+    'androidx.camera:camera-core:1.4.2',
+  ]) assert.ok(provenance.includes(coordinate), `${coordinate} must have a grant mapping`);
+  assert.match(provenance, /hermes-v250829098\.0\.17/);
+  assert.match(provenance, /\.hermesv1version/);
+});
+
 test('Android stages Hermes dtoa notices and the Fresco IJG terms and acknowledgment', () => {
   const mapping = read('android/app/license-assets.gradle').toString();
   for (const name of [
@@ -68,7 +91,7 @@ test('Hermes headers retain distinct full upstream notice bytes and IJG attribut
     'This software is based in part on the work of the Independent JPEG Group.\n');
   const provenance = read('licenses/framework/README.md').toString();
   for (const sourceHash of [
-    '9404ae4acb020e64cc24904e92d036da90126b02815147d0ab95ff5330ade2f8',
+    '081a79092e4c239dd51e7c0e759df4dd46926162131dc27f54db219ca26ed821',
     '0a1f2438e3ff2c270653a3fc51b0448570fd0ea2791590678ba54500fa349f16',
   ]) assert.ok(provenance.includes(sourceHash));
   assert.match(provenance, /\[0, 861\)/);

@@ -26,6 +26,15 @@ class LicenseCheckoutBytesTest(unittest.TestCase):
 spec=importlib.util.spec_from_file_location('qa',pathlib.Path(__file__).with_name('check-phone-qa.py'))
 qa=importlib.util.module_from_spec(spec);spec.loader.exec_module(qa)
 class PhoneQaApkTest(unittest.TestCase):
+ def test_resolved_maven_grants_are_required_and_pinned(self):
+  expected={'bolts-tasks-LICENSE.txt':'9e69750c616877af2dec86f961a53e39324c3655e25b1d6ceed06e9661ec072b',
+            'old-facebook-MIT.txt':'52412d7bc7ce4157ea628bbaacb8829e0a9cb3c58f57f99176126bc8cf2bfc85',
+            'camera-libyuv-LICENSE.txt':'2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f'}
+  self.assertTrue(expected.keys() <= set(qa.REQUIRED_FRAMEWORK_ASSETS))
+  for name,digest in expected.items():
+   with self.subTest(name=name):
+    self.assertEqual(qa.FRAMEWORK_SHA256[name],digest)
+    self.assertEqual(hashlib.sha256((qa.LICENSE_ROOT/'framework'/name).read_bytes()).hexdigest(),digest)
  def test_hermes_and_ijg_notices_are_required_and_pinned(self):
   expected={'hermes-dtoa.c-NOTICE.txt','hermes-g_fmt.c-NOTICE.txt','fresco-ijg-README.txt','fresco-ijg-ACKNOWLEDGMENT.txt'}
   self.assertTrue(expected.issubset(qa.REQUIRED_FRAMEWORK_ASSETS))
