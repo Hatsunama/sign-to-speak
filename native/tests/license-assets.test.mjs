@@ -114,3 +114,17 @@ test('Pocket model bundling is guarded by exact pinned hashes and Cargo notices'
   assert.match(mapping, /cargo-declaration-routes\.json/);
   assert.match(mapping, /KYUTAI-MIT-LICENSE/);
 });
+
+test('Android stages the reviewed actual bundle JavaScript grant inventory', () => {
+  const mapping = read('android/app/license-assets.gradle').toString();
+  const receipt = JSON.parse(read('licenses/bundled-js/reviewed-manifest.json'));
+  assert.match(mapping, /bundled-js\/reviewed-manifest\.json/);
+  assert.match(mapping, /bundledJsReceipt\.packages\.collect/);
+  assert.equal(receipt.packages.length, 20);
+  for (const row of receipt.packages) {
+    const bytes = read(`licenses/${row.asset}`);
+    assert.equal(createHash('sha256').update(bytes).digest('hex'), row.sha256, row.name);
+  }
+  assert.equal(new Set(receipt.packages.filter(row => row.asset.startsWith('bundled-js/')).map(row => row.asset)).size, 11);
+  assert.match(read('../.gitattributes').toString(), /native\/licenses\/bundled-js\/\*\* -text -whitespace/);
+});

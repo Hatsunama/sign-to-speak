@@ -21,10 +21,14 @@ MAX_LICENSE_BYTES = 1024 * 1024
 MAX_LICENSE_FILES = 32
 NOTICE_NAME = re.compile(r'^(?:license|licence|copying|notice)(?:[._-].*)?$', re.I)
 ALIAS_MANIFEST = pathlib.Path(__file__).resolve().parent.parent / 'licenses' / 'framework' / 'npm-root-license-aliases.json'
-REVIEWED_ALIAS_NAMES = frozenset({
-    '@react-native/assets-registry', '@react-native/js-polyfills',
-    '@react-native/normalize-colors', '@react-native/virtualized-lists',
-})
+REVIEWED_ALIAS_SOURCES = {
+    (name, '0.86.3', 'MIT'): 'https://github.com/react/react-native/blob/v0.86.3/LICENSE'
+    for name in ('@react-native/assets-registry', '@react-native/js-polyfills',
+                 '@react-native/normalize-colors', '@react-native/virtualized-lists')
+}
+REVIEWED_ALIAS_SOURCES[('metro-runtime', '0.84.6', 'MIT')] = (
+    'https://github.com/react/metro/blob/v0.84.6/LICENSE'
+)
 
 
 def inside(path, root):
@@ -136,11 +140,12 @@ def reviewed_aliases():
         if not isinstance(alias, dict) or set(alias) != required or not all(isinstance(alias[key], str) and alias[key] for key in required):
             raise ValueError('invalid reviewed alias entry')
         name, version, license_field = (alias[key] for key in ('name', 'version', 'license'))
-        if name not in REVIEWED_ALIAS_NAMES or version != '0.86.3' or license_field != 'MIT':
+        expected_url = REVIEWED_ALIAS_SOURCES.get((name, version, license_field))
+        if expected_url is None:
             raise ValueError('unreviewed npm root license alias')
         source_file = alias['source_file']
-        if source_file != 'react-native-LICENSE.txt' or alias['source_url'] != 'https://github.com/react/react-native/blob/v0.86.3/LICENSE':
-            raise ValueError('reviewed alias source is not the pinned React Native grant')
+        if source_file != 'react-native-LICENSE.txt' or alias['source_url'] != expected_url:
+            raise ValueError('reviewed alias source is not the pinned grant')
         if not re.fullmatch(r'[0-9a-f]{64}', alias['sha256']):
             raise ValueError('invalid reviewed alias SHA-256')
         path = framework / source_file

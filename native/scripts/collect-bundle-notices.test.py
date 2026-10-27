@@ -52,6 +52,50 @@ class BundleNoticeCollectorTest(unittest.TestCase):
         manifest.write_text(json.dumps({'schema_version': 1, 'aliases': [alias]}))
         return manifest, grant
 
+    def metro_alias_fixture(self):
+        manifest, grant = self.alias_fixture()
+        data = json.loads(manifest.read_text())
+        data['aliases'][0].update({
+            'name': 'metro-runtime',
+            'version': '0.84.6',
+            'source_url': 'https://github.com/react/metro/blob/v0.84.6/LICENSE',
+        })
+        manifest.write_text(json.dumps(data))
+        return manifest, grant
+
+    def test_metro_runtime_reviewed_grant_is_exact_and_version_scoped(self):
+        manifest, grant = self.metro_alias_fixture()
+        package = self.package('metro-runtime', 'metro-runtime', '0.84.6')
+        (package / 'LICENSE').unlink()
+        source = ['node_modules/metro-runtime/src/index.js']
+        result = self.run_collector(source)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        report = json.loads((self.output / 'inventory.json').read_text())
+        self.assertEqual(report['status'], 'COMPLETE')
+        notice = report['packages'][0]['license_files'][0]
+        self.assertEqual(notice['selected_from'], 'reviewed-alias')
+        self.assertEqual(notice['source_url'], 'https://github.com/react/metro/blob/v0.84.6/LICENSE')
+        self.assertEqual((self.output / notice['evidence_path']).read_bytes(), grant)
+
+        self.output = self.root / 'wrong-version-evidence'
+        (package / 'package.json').write_text(json.dumps({'name': 'metro-runtime', 'version': '0.84.7', 'license': 'MIT'}))
+        result = self.run_collector(source)
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads((self.output / 'inventory.json').read_text())['status'], 'INCOMPLETE')
+
+        (package / 'package.json').write_text(json.dumps({'name': 'metro-runtime', 'version': '0.84.6', 'license': 'MIT'}))
+        original = json.loads(manifest.read_text())
+        for invalid in ({'source_url': 'https://github.com/react/metro/blob/v0.84.7/LICENSE'},
+                        {'sha256': '0' * 64}):
+            with self.subTest(invalid=invalid):
+                self.output = self.root / ('invalid-metro-alias-' + next(iter(invalid)))
+                data = json.loads(json.dumps(original))
+                data['aliases'][0].update(invalid)
+                manifest.write_text(json.dumps(data))
+                result = self.run_collector(source)
+                self.assertEqual(result.returncode, 1)
+                self.assertFalse((self.output / 'inventory.json').exists())
+
     def test_collects_exact_bytes_scoped_and_nested_packages_without_map_content(self):
         top = self.package('@acme/top', '@acme/top', '1.2.3', b'MIT\r\nexact\x00')
         nested = self.package('parent/node_modules/child', 'child', '2.0.0', b'child\n')

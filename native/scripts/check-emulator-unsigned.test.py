@@ -13,6 +13,10 @@ class Unsigned(unittest.TestCase):
   self.patch_model=patch.object(m.phone,'POCKET_MODEL',{name:(len(data),hashlib.sha256(data).hexdigest()) for name,data in self.models.items()});self.patch_model.start();self.addCleanup(self.patch_model.stop)
   self.patch_root=patch.object(m.phone,'POCKET_ROOT',self.root/'pocket-assets');self.patch_root.start();self.addCleanup(self.patch_root.stop)
   self.files={'AndroidManifest.xml':b'x','classes.dex':b'x','lib/x86_64/libappmodules.so':b'x','lib/x86_64/libsign_pocket_tts_runtime.so':b'x','lib/x86_64/libprivate_pocket_tts.so':b'x','lib/x86_64/libc++_shared.so':b'x','assets/index.android.bundle':b'x',**{'assets/pocket-alba/'+name:data for name,data in self.models.items()},**{'assets/pocket-licenses/'+p.name:p.read_bytes() for p in self.notice_root.iterdir()},**{'assets/sign-to-speak/'+name:(m.phone.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in m.phone.REQUIRED_APPLICATION_ASSETS},'assets/react-native-template-MIT.txt':(m.phone.LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes(),**{'assets/framework/'+name:(m.phone.LICENSE_ROOT/'framework'/name).read_bytes() for name in m.phone.REQUIRED_FRAMEWORK_ASSETS}}
+  receipt=json.loads((m.phone.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_text())
+  self.files['assets/bundled-js/reviewed-manifest.json']=(m.phone.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_bytes()
+  for asset in {row['asset'] for row in receipt['packages'] if row['asset'].startswith('bundled-js/')}:
+   self.files['assets/'+asset]=(m.phone.LICENSE_ROOT/asset).read_bytes()
  def verify(self):
   for role,xml in [('app',self.app),('test',self.test)]:
    (self.root/(role+'.xml')).write_text(xml)

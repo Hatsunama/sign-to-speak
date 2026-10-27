@@ -40,6 +40,10 @@ def licenseFiles = ["sign-to-speak/LICENSE", "sign-to-speak/NOTICE", "react-nati
                     "framework/fresco-ijg-README.txt", "framework/fresco-ijg-ACKNOWLEDGMENT.txt",
                     "framework/bolts-tasks-LICENSE.txt", "framework/old-facebook-MIT.txt",
                     "framework/camera-libyuv-LICENSE.txt"]
+// The reviewed receipt is the single list of new bundled JavaScript grant files.
+def bundledJsReceipt = new groovy.json.JsonSlurper().parse(new File(licenseRoot, "bundled-js/reviewed-manifest.json"))
+licenseFiles += "bundled-js/reviewed-manifest.json"
+licenseFiles += bundledJsReceipt.packages.collect { it.asset }.findAll { it.startsWith("bundled-js/") }.unique()
 licenseFiles.each { relative ->
     def source = new File(licenseRoot, relative)
     if (!source.isFile() || source.length() == 0) {

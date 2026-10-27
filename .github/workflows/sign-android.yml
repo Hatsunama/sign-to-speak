@@ -193,6 +193,8 @@ jobs:
           python3 scripts/collect-bundle-notices.py . \
             android/app/build/generated/sourcemaps/react/qa/index.android.bundle.map \
             "$RUNNER_TEMP/sign-evidence/phone-qa/bundle-notices"
+          python3 scripts/check-phone-qa.py --verify-bundled-js-inventory \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/bundle-notices/inventory.json"
       - name: Retain bounded test evidence, including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4

@@ -1,0 +1,152 @@
+{
+  "schema": 1,
+  "provenance": {
+    "source_ci_commit": "2ded54a430aff4c4d89eab395c918f0e2dfbb947",
+    "source_ci_run": "40463131808",
+    "source_map_sha256": "9d2511dbbe319ba1178bcda8e44bd924480c3925004c822290257f7735262859",
+    "evidence_path": "sign-evidence/phone-qa/bundle-notices/inventory.json",
+    "metro_grant_source_url": "https://github.com/react/metro/blob/v0.84.6/LICENSE"
+  },
+  "packages": [
+    {
+      "name": "@babel/runtime",
+      "version": "7.29.10",
+      "license": "MIT",
+      "sha256": "117da2af0d4ce0fe1c8e19b5cff9dcd806adf973d328d27b11d4448c4ff24f76",
+      "asset": "bundled-js/babel-runtime-LICENSE.txt"
+    },
+    {
+      "name": "@react-native/assets-registry",
+      "version": "0.86.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "@react-native/js-polyfills",
+      "version": "0.86.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "@react-native/normalize-colors",
+      "version": "0.86.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "@react-native/virtualized-lists",
+      "version": "0.86.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "abort-controller",
+      "version": "3.0.0",
+      "license": "MIT",
+      "sha256": "dbbf03317f0101fed5643cd87ca80fb769e358fa4f428445bf2315deeb23a154",
+      "asset": "bundled-js/abort-controller-LICENSE.txt"
+    },
+    {
+      "name": "base64-js",
+      "version": "1.5.1",
+      "license": "MIT",
+      "sha256": "5b37224c080cdcc97c871ada971c224e9926370fe74f11b539aa1cf9f3b1aca1",
+      "asset": "bundled-js/base64-js-LICENSE.txt"
+    },
+    {
+      "name": "event-target-shim",
+      "version": "5.0.1",
+      "license": "MIT",
+      "sha256": "97d87142793695cd73243de7258694abe85b3b6060fca7f247b0a2afa8219678",
+      "asset": "bundled-js/event-target-shim-LICENSE.txt"
+    },
+    {
+      "name": "invariant",
+      "version": "2.2.4",
+      "license": "MIT",
+      "sha256": "f657f99d3fb9647db92628e96007aabb46e5f04f33e49999075aab8e250ca7ce",
+      "asset": "bundled-js/invariant-LICENSE.txt"
+    },
+    {
+      "name": "memoize-one",
+      "version": "5.2.1",
+      "license": "MIT",
+      "sha256": "b1c501095de70182748cb8e8d97ac5577701a4ef3b755ba30d59fd87b24bdb0f",
+      "asset": "bundled-js/memoize-one-LICENSE.txt"
+    },
+    {
+      "name": "metro-runtime",
+      "version": "0.84.6",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "nullthrows",
+      "version": "1.1.1",
+      "license": "MIT",
+      "sha256": "dd5f97aa25431e25fea6654f12f4ce167dc19b3148ab515cc271aa8efe6eb0be",
+      "asset": "bundled-js/nullthrows-LICENSE.txt"
+    },
+    {
+      "name": "promise",
+      "version": "8.3.0",
+      "license": "MIT",
+      "sha256": "5e733eb92ed0c571da3f27c5da203e0a9f975b4f96e7692c9fa3660ca54820ec",
+      "asset": "bundled-js/promise-LICENSE.txt"
+    },
+    {
+      "name": "react",
+      "version": "19.2.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "react-native",
+      "version": "0.86.3",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "react-native-safe-area-context",
+      "version": "5.7.0",
+      "license": "MIT",
+      "sha256": "f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c",
+      "asset": "framework/react-native-safe-area-context-LICENSE.txt"
+    },
+    {
+      "name": "regenerator-runtime",
+      "version": "0.13.11",
+      "license": "MIT",
+      "sha256": "51887a3d47051ac2fce1210562e5b9fe0830a8a8fabeb272c2d586eeb18a05fd",
+      "asset": "bundled-js/regenerator-runtime-LICENSE.txt"
+    },
+    {
+      "name": "scheduler",
+      "version": "0.27.0",
+      "license": "MIT",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "asset": "framework/react-native-LICENSE.txt"
+    },
+    {
+      "name": "stacktrace-parser",
+      "version": "0.1.11",
+      "license": "MIT",
+      "sha256": "e1898814043cb5500483d9c8517edda824b352f696d35e5043fcfb537c221531",
+      "asset": "bundled-js/stacktrace-parser-LICENSE.txt"
+    },
+    {
+      "name": "whatwg-fetch",
+      "version": "3.6.20",
+      "license": "MIT",
+      "sha256": "c887d1c97797646dbb216925ab44a93c6b3e7f03bbe6ef6e0f92b8b8ade63014",
+      "asset": "bundled-js/whatwg-fetch-LICENSE.txt"
+    }
+  ]
+}

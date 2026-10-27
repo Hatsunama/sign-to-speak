@@ -124,3 +124,5 @@ MIT declaration against this list, verifies the pinned grant bytes, and
 records `assets/framework/react-native-LICENSE.txt` as the source asset URI
 for copied evidence. Unknown omissions remain `INCOMPLETE` in the saved
 inventory and cause a nonzero exit.
+
+The source-only alias list also admits `metro-runtime@0.84.6` using the byte-identical [Metro v0.84.6 root MIT grant](https://github.com/react/metro/blob/v0.84.6/LICENSE). It does not extend the rule to other package names, versions or license declarations. The actual 20-package bundle is separately mapped in `../bundled-js/reviewed-manifest.json`.

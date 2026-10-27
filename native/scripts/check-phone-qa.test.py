@@ -14,6 +14,7 @@ class LicenseCheckoutBytesTest(unittest.TestCase):
     'native/licenses/react-native-template-MIT.txt':b'upstream\nlicense\n',
     'native/licenses/framework/react-native-LICENSE.txt':b'upstream\r\nlicense\r\n',
     'native/licenses/sign-to-speak/NOTICE':b'application\nnotice\n',
+    'native/licenses/bundled-js/abort-controller-LICENSE.txt':b'upstream\r\nlicense\r\n',
    }
    for path,original in samples.items():
     with self.subTest(path=path):
@@ -59,12 +60,49 @@ class PhoneQaApkTest(unittest.TestCase):
   self.patch_model=patch.object(qa,'POCKET_MODEL',{name:(len(data),hashlib.sha256(data).hexdigest()) for name,data in self.models.items()});self.patch_model.start();self.addCleanup(self.patch_model.stop)
   self.patch_root=patch.object(qa,'POCKET_ROOT',self.root/'pocket-assets');self.patch_root.start();self.addCleanup(self.patch_root.stop)
   self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libsign_pocket_tts_runtime.so':b'fixture','lib/arm64-v8a/libprivate_pocket_tts.so':b'fixture','lib/arm64-v8a/libc++_shared.so':b'fixture','assets/index.android.bundle':b'fixture','assets/react-native-template-MIT.txt':(qa.LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes(),**{'assets/pocket-alba/'+name:data for name,data in self.models.items()},**{'assets/pocket-licenses/'+p.name:p.read_bytes() for p in self.notice_root.iterdir()},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')},**{'assets/framework/'+name:(qa.LICENSE_ROOT/'framework'/name).read_bytes() for name in qa.REQUIRED_FRAMEWORK_ASSETS}}
+  receipt=json.loads((qa.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_text())
+  self.entries['assets/bundled-js/reviewed-manifest.json']=(qa.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_bytes()
+  for asset in {row['asset'] for row in receipt['packages'] if row['asset'].startswith('bundled-js/')}:
+   self.entries['assets/'+asset]=(qa.LICENSE_ROOT/asset).read_bytes()
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
   with zipfile.ZipFile(a,'w') as z:
    for name,data in self.entries.items():z.writestr(name,data)
   qa.verify(m,a)
  def test_valid_unsigned_arm64_qa(self):self.verify()
+ def test_frozen_actual_bundle_inventory(self):
+  receipt=json.loads((qa.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_text())
+  expected={'@babel/runtime@7.29.10','@react-native/assets-registry@0.86.3','@react-native/js-polyfills@0.86.3','@react-native/normalize-colors@0.86.3','@react-native/virtualized-lists@0.86.3','abort-controller@3.0.0','base64-js@1.5.1','event-target-shim@5.0.1','invariant@2.2.4','memoize-one@5.2.1','metro-runtime@0.84.6','nullthrows@1.1.1','promise@8.3.0','react@19.2.3','react-native@0.86.3','react-native-safe-area-context@5.7.0','regenerator-runtime@0.13.11','scheduler@0.27.0','stacktrace-parser@0.1.11','whatwg-fetch@3.6.20'}
+  self.assertEqual({p['name']+'@'+p['version'] for p in receipt['packages']},expected)
+  self.assertEqual({p['license'] for p in receipt['packages']},{'MIT'})
+ def test_missing_bundle_notice_rejected(self):
+  self.entries.pop('assets/bundled-js/abort-controller-LICENSE.txt')
+  with self.assertRaisesRegex(AssertionError,'bundled JS'):self.verify()
+ def test_changed_bundle_notice_rejected(self):
+  self.entries['assets/bundled-js/abort-controller-LICENSE.txt']=b'changed'
+  with self.assertRaisesRegex(AssertionError,'bundled JS'):self.verify()
+ def test_extra_bundle_notice_rejected(self):
+  self.entries['assets/bundled-js/unreviewed.txt']=b'extra'
+  with self.assertRaisesRegex(AssertionError,'bundled JS'):self.verify()
+ def test_missing_bundle_receipt_rejected(self):
+  self.entries.pop('assets/bundled-js/reviewed-manifest.json')
+  with self.assertRaisesRegex(AssertionError,'bundled JS'):self.verify()
+ def test_actual_inventory_rejects_package_mutations(self):
+  receipt=json.loads((qa.LICENSE_ROOT/'bundled-js'/'reviewed-manifest.json').read_text())
+  actual={'status':'COMPLETE','package_count':20,'unresolved_count':0,'packages':[{'name':p['name'],'version':p['version'],'license':p['license'],'notice_status':'resolved','license_files':[{'sha256':p['sha256']}]} for p in receipt['packages']]}
+  qa.verify_bundled_js_inventory(actual)
+  mutations=[]
+  import copy
+  for kind in ('missing','extra','wrong-version','wrong-grant','unresolved'):
+   changed=copy.deepcopy(actual)
+   if kind=='missing':changed['packages'].pop();changed['package_count']=19
+   if kind=='extra':changed['packages'].append({'name':'unreviewed','version':'1.0.0','license':'MIT','notice_status':'resolved','license_files':[{'sha256':'0'*64}]});changed['package_count']=21
+   if kind=='wrong-version':changed['packages'][0]['version']='999.0.0'
+   if kind=='wrong-grant':changed['packages'][0]['license_files'][0]['sha256']=changed['packages'][1]['license_files'][0]['sha256']
+   if kind=='unresolved':changed['status']='INCOMPLETE';changed['unresolved_count']=1
+   mutations.append((kind,changed))
+  for kind,changed in mutations:
+   with self.subTest(kind=kind),self.assertRaisesRegex(AssertionError,'bundled JS'):qa.verify_bundled_js_inventory(changed)
  def test_tensorflow_lite_library_is_not_retired_flite(self):
   self.entries['lib/arm64-v8a/libtensorflowlite_jni.so']=b'fixture'
   self.entries['assets/models/hand_landmarks.tflite']=b'TFL3'

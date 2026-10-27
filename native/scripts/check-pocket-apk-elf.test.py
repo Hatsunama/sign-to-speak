@@ -42,6 +42,10 @@ class PocketApkRetirementTest(unittest.TestCase):
             **{'lib/arm64-v8a/' + name: b'fixture' for name in (
                 'libsign_pocket_tts_runtime.so', 'libprivate_pocket_tts.so', 'libc++_shared.so')},
         }
+        receipt = json.loads((audit.asset_module.LICENSE_ROOT / 'bundled-js' / 'reviewed-manifest.json').read_text())
+        self.entries['assets/bundled-js/reviewed-manifest.json'] = (audit.asset_module.LICENSE_ROOT / 'bundled-js' / 'reviewed-manifest.json').read_bytes()
+        for asset in {row['asset'] for row in receipt['packages'] if row['asset'].startswith('bundled-js/')}:
+            self.entries['assets/' + asset] = (audit.asset_module.LICENSE_ROOT / asset).read_bytes()
         self.patch_pin = patch.object(audit.asset_module, 'POCKET_MODEL', model_pin)
         self.patch_pin.start()
         self.addCleanup(self.patch_pin.stop)

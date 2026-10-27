@@ -28,6 +28,8 @@ REQUIRED_FRAMEWORK_ASSETS=('react-native-LICENSE.txt',
                            'fresco-ijg-README.txt', 'fresco-ijg-ACKNOWLEDGMENT.txt',
                            'bolts-tasks-LICENSE.txt', 'old-facebook-MIT.txt',
                            'camera-libyuv-LICENSE.txt')
+BUNDLED_JS_MANIFEST='bundled-js/reviewed-manifest.json'
+BUNDLED_JS_MANIFEST_SHA256='ae3337ec32835885c46193090479f9f7dbb018fe2c04298e55618698ac553370'
 FRAMEWORK_SHA256={
     'react-native-LICENSE.txt':'da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93',
     'react-native-safe-area-context-LICENSE.txt':'f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c',
@@ -114,6 +116,62 @@ def verify_application_assets(archive, names):
     expected={'assets/framework/'+name for name in REQUIRED_FRAMEWORK_ASSETS}
     actual={name for name in names if name.startswith('assets/framework/') and not name.endswith('/')}
     require(actual==expected, 'APK framework license asset set differs from reviewed inventory')
+    verify_bundled_js_assets(archive,names)
+
+
+def reviewed_bundled_js_manifest():
+    source=LICENSE_ROOT/BUNDLED_JS_MANIFEST
+    raw=source.read_bytes()
+    require(hashlib.sha256(raw).hexdigest()==BUNDLED_JS_MANIFEST_SHA256,
+            'bundled JS reviewed manifest changed')
+    manifest=json.loads(raw)
+    packages=manifest['packages']
+    require(manifest['schema']==1 and len(packages)==20 and
+            len({p['name'] for p in packages})==20, 'bundled JS reviewed package set invalid')
+    for package in packages:
+        asset=package['asset']
+        require(asset.startswith(('bundled-js/','framework/')) and
+                '..' not in pathlib.PurePosixPath(asset).parts and
+                re.fullmatch(r'[0-9a-f]{64}',package['sha256']),
+                'bundled JS reviewed grant mapping invalid')
+    return manifest,raw
+
+
+def verify_bundled_js_assets(archive,names):
+    manifest,raw=reviewed_bundled_js_manifest()
+    entry='assets/'+BUNDLED_JS_MANIFEST
+    require(entry in names and archive.read(entry)==raw,
+            'Missing or changed bundled JS reviewed manifest')
+    assets={p['asset'] for p in manifest['packages']}
+    expected={'assets/'+BUNDLED_JS_MANIFEST}|{'assets/'+asset for asset in assets if asset.startswith('bundled-js/')}
+    actual={name for name in names if name.startswith('assets/bundled-js/') and not name.endswith('/')}
+    require(actual==expected, 'APK bundled JS asset set differs from reviewed inventory')
+    for package in manifest['packages']:
+        asset=package['asset']; source=LICENSE_ROOT/asset; entry='assets/'+asset
+        data=source.read_bytes()
+        require(data and hashlib.sha256(data).hexdigest()==package['sha256'],
+                'bundled JS source grant differs from reviewed bytes: '+package['name'])
+        require(entry in names and archive.read(entry)==data,
+                'Missing or changed bundled JS grant: '+package['name'])
+
+
+def verify_bundled_js_inventory(actual_report, reviewed_manifest=None):
+    if isinstance(actual_report,(str,pathlib.Path)):
+        actual_report=json.loads(pathlib.Path(actual_report).read_bytes())
+    reviewed=reviewed_manifest if reviewed_manifest is not None else reviewed_bundled_js_manifest()[0]
+    expected={(p['name'],p['version'],p['license']):p['sha256'] for p in reviewed['packages']}
+    packages=actual_report.get('packages',[])
+    identities=[(p.get('name'),p.get('version'),p.get('license')) for p in packages]
+    require(actual_report.get('status')=='COMPLETE' and actual_report.get('unresolved_count')==0 and
+            actual_report.get('package_count')==len(packages)==len(expected) and
+            len(set(identities))==len(identities) and set(identities)==set(expected),
+            'bundled JS actual package inventory differs from reviewed set')
+    for package,identity in zip(packages,identities):
+        grants=package.get('license_files',[])
+        require(package.get('notice_status')=='resolved' and len(grants)==1 and
+                grants[0].get('sha256')==expected[identity],
+                'bundled JS grant differs for '+str(identity))
+    return True
 
 
 def validate_app_manifest(manifest, identity_message='APK must use the isolated QA identity'):
@@ -197,4 +255,9 @@ def verify(manifest, apk):
         require(not any(is_retired_speech_artifact(name) for name in libraries),
                 'Retired speech runtime must not ship')
     print('Unsigned arm64-only, test-only QA APK identity and manifest verified.')
-if __name__=='__main__':verify(sys.argv[1],sys.argv[2])
+if __name__=='__main__':
+    if len(sys.argv)==3 and sys.argv[1]=='--verify-bundled-js-inventory':
+        verify_bundled_js_inventory(sys.argv[2])
+        print('Actual QA bundled JS package inventory matches reviewed grants.')
+    else:
+        verify(sys.argv[1],sys.argv[2])

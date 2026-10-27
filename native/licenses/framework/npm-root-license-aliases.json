@@ -32,6 +32,14 @@
       "source_file": "react-native-LICENSE.txt",
       "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
       "source_url": "https://github.com/react/react-native/blob/v0.86.3/LICENSE"
+    },
+    {
+      "name": "metro-runtime",
+      "version": "0.84.6",
+      "license": "MIT",
+      "source_file": "react-native-LICENSE.txt",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "source_url": "https://github.com/react/metro/blob/v0.84.6/LICENSE"
     }
   ]
 }

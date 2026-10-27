@@ -18,3 +18,5 @@ native/android/app/src/main/cpp/flite/generated/** -whitespace
 native/android/app/src/main/cpp/flite/modifications.patch -whitespace
 native/licenses/flite/THIRD_PARTY_NOTICES.txt -whitespace
 native/licenses/framework/*.txt -whitespace
+
+native/licenses/bundled-js/** -text -whitespace
