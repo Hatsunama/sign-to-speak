@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "aliases": [
+    {
+      "name": "@react-native/assets-registry",
+      "version": "0.86.3",
+      "license": "MIT",
+      "source_file": "react-native-LICENSE.txt",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "source_url": "https://github.com/react/react-native/blob/v0.86.3/LICENSE"
+    },
+    {
+      "name": "@react-native/js-polyfills",
+      "version": "0.86.3",
+      "license": "MIT",
+      "source_file": "react-native-LICENSE.txt",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "source_url": "https://github.com/react/react-native/blob/v0.86.3/LICENSE"
+    },
+    {
+      "name": "@react-native/normalize-colors",
+      "version": "0.86.3",
+      "license": "MIT",
+      "source_file": "react-native-LICENSE.txt",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "source_url": "https://github.com/react/react-native/blob/v0.86.3/LICENSE"
+    },
+    {
+      "name": "@react-native/virtualized-lists",
+      "version": "0.86.3",
+      "license": "MIT",
+      "source_file": "react-native-LICENSE.txt",
+      "sha256": "da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93",
+      "source_url": "https://github.com/react/react-native/blob/v0.86.3/LICENSE"
+    }
+  ]
+}

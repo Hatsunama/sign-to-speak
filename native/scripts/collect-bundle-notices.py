@@ -20,6 +20,11 @@ MAX_SOURCE_LENGTH = 4096
 MAX_LICENSE_BYTES = 1024 * 1024
 MAX_LICENSE_FILES = 32
 NOTICE_NAME = re.compile(r'^(?:license|licence|copying|notice)(?:[._-].*)?$', re.I)
+ALIAS_MANIFEST = pathlib.Path(__file__).resolve().parent.parent / 'licenses' / 'framework' / 'npm-root-license-aliases.json'
+REVIEWED_ALIAS_NAMES = frozenset({
+    '@react-native/assets-registry', '@react-native/js-polyfills',
+    '@react-native/normalize-colors', '@react-native/virtualized-lists',
+})
 
 
 def inside(path, root):
@@ -119,6 +124,42 @@ def package_for(source, modules):
     return directory, name, version, license_field
 
 
+def reviewed_aliases():
+    """Load only explicitly reviewed name/version/license grants from our source tree."""
+    manifest = bounded_json(ALIAS_MANIFEST, 64 * 1024)
+    if not isinstance(manifest, dict) or set(manifest) != {'schema_version', 'aliases'} or manifest['schema_version'] != 1 or not isinstance(manifest['aliases'], list):
+        raise ValueError('invalid reviewed alias manifest schema')
+    framework = ALIAS_MANIFEST.parent.resolve(strict=True)
+    aliases = {}
+    required = {'name', 'version', 'license', 'source_file', 'sha256', 'source_url'}
+    for alias in manifest['aliases']:
+        if not isinstance(alias, dict) or set(alias) != required or not all(isinstance(alias[key], str) and alias[key] for key in required):
+            raise ValueError('invalid reviewed alias entry')
+        name, version, license_field = (alias[key] for key in ('name', 'version', 'license'))
+        if name not in REVIEWED_ALIAS_NAMES or version != '0.86.3' or license_field != 'MIT':
+            raise ValueError('unreviewed npm root license alias')
+        source_file = alias['source_file']
+        if source_file != 'react-native-LICENSE.txt' or alias['source_url'] != 'https://github.com/react/react-native/blob/v0.86.3/LICENSE':
+            raise ValueError('reviewed alias source is not the pinned React Native grant')
+        if not re.fullmatch(r'[0-9a-f]{64}', alias['sha256']):
+            raise ValueError('invalid reviewed alias SHA-256')
+        path = framework / source_file
+        resolved = path.resolve(strict=True)
+        if not inside(resolved, framework) or resolved != path or not resolved.is_file():
+            raise ValueError('reviewed alias source outside framework root or symlinked')
+        size = resolved.stat().st_size
+        if size == 0 or size > MAX_LICENSE_BYTES:
+            raise ValueError('reviewed alias source empty or exceeds limit')
+        data = resolved.read_bytes()
+        if len(data) != size or hashlib.sha256(data).hexdigest() != alias['sha256']:
+            raise ValueError('reviewed alias source SHA-256 mismatch')
+        key = (name, version, license_field)
+        if key in aliases:
+            raise ValueError('duplicate reviewed alias')
+        aliases[key] = (alias, data)
+    return aliases
+
+
 def collect(native, map_path, output):
     native = native.resolve(strict=True)
     modules = (native / 'node_modules').resolve(strict=True)
@@ -147,14 +188,13 @@ def collect(native, map_path, output):
     if len(matched) > MAX_SOURCES:
         raise ValueError('npm package count exceeds limit')
 
-    # Validate every file before creating evidence, so failures leave no
-    # partial report that could be mistaken for a complete inventory.
+    # Validate all paths and reviewed aliases before creating evidence.
+    aliases = reviewed_aliases()
     entries = []
+    unresolved = 0
     for item in sorted(matched.values(), key=lambda p: (p['name'], p['version'], str(p['directory']))):
         directory = item['directory']
         files = sorted((p for p in directory.iterdir() if NOTICE_NAME.fullmatch(p.name)), key=lambda p: p.name)
-        if not files:
-            raise ValueError(f"{item['name']} {item['version']}: missing root license text")
         if len(files) > MAX_LICENSE_FILES:
             raise ValueError(f"{item['name']} {item['version']}: too many root notice files")
         package_id = quote(item['name'], safe='') + '-' + quote(item['version'], safe='')
@@ -163,6 +203,20 @@ def collect(native, map_path, output):
         if any(entry['evidence_directory'] == package_id for entry in entries):
             raise ValueError(f"{item['name']} {item['version']}: ambiguous duplicate installation")
         notices = []
+        status = 'resolved'
+        if not files:
+            reviewed = aliases.get((item['name'], item['version'], item['license']))
+            if reviewed is None:
+                status = 'missing-root-notice'
+                unresolved += 1
+            else:
+                alias, data = reviewed
+                evidence_path = f'licenses/{package_id}/{alias["source_file"]}'
+                notices.append({'source_file': alias['source_file'], 'evidence_path': evidence_path,
+                                'size': len(data), 'sha256': alias['sha256'],
+                                'selected_from': 'reviewed-alias',
+                                'source_asset_uri': f'assets/framework/{alias["source_file"]}',
+                                'source_url': alias['source_url'], '_bytes': data})
         for path in files:
             resolved = path.resolve()
             if not inside(resolved, directory) or not resolved.is_file():
@@ -179,7 +233,7 @@ def collect(native, map_path, output):
         entries.append({'name': item['name'], 'version': item['version'], 'license': item['license'],
                         'install_path': directory.relative_to(modules).as_posix(),
                         'matched_sources': sorted(item['sources']),
-                        'evidence_directory': package_id, 'license_files': notices})
+                        'evidence_directory': package_id, 'notice_status': status, 'license_files': notices})
 
     output.mkdir(parents=True)
     for entry in entries:
@@ -187,12 +241,13 @@ def collect(native, map_path, output):
             target = output / notice['evidence_path']
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(notice.pop('_bytes'))
-    report = {'status': 'actual-qa-source-map-npm-inventory',
+    report = {'status': 'INCOMPLETE' if unresolved else 'COMPLETE',
+              'inventory_kind': 'actual-qa-source-map-npm-inventory',
               'scope': 'Installed package metadata and root notice bytes for npm sources in the generated QA bundle map; APK notice coverage and redistribution clearance require separate review.',
               'source_map_sha256': hashlib.sha256(map_path.read_bytes()).hexdigest(),
-              'package_count': len(entries), 'packages': entries}
+              'package_count': len(entries), 'unresolved_count': unresolved, 'packages': entries}
     (output / 'inventory.json').write_text(json.dumps(report, indent=2, ensure_ascii=False) + '\n', encoding='utf-8')
-    return len(entries)
+    return len(entries), unresolved
 
 
 def main():
@@ -200,9 +255,12 @@ def main():
         print('usage: collect-bundle-notices.py NATIVE_ROOT MAP_PATH FRESH_OUTPUT_DIR', file=sys.stderr)
         return 2
     try:
-        count = collect(*(pathlib.Path(value) for value in sys.argv[1:]))
+        count, unresolved = collect(*(pathlib.Path(value) for value in sys.argv[1:]))
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f'Bundle notice collection failed: {error}', file=sys.stderr)
+        return 1
+    if unresolved:
+        print(f'Bundle notice inventory INCOMPLETE: {unresolved} of {count} npm packages lack reviewed root license text', file=sys.stderr)
         return 1
     print(f'Collected root notice bytes for {count} npm packages from generated QA map; review required')
     return 0

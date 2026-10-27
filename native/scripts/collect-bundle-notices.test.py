@@ -1,6 +1,7 @@
 import hashlib
 import json
 import pathlib
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -20,6 +21,7 @@ class BundleNoticeCollectorTest(unittest.TestCase):
         (self.native / 'node_modules').mkdir()
         self.output = self.root / 'evidence'
         self.source_map = self.root / 'index.android.bundle.map'
+        self.script = SCRIPT
 
     def package(self, relative, name, version, license_text=b'grant\r\n'):
         package = self.native / 'node_modules' / relative
@@ -32,7 +34,23 @@ class BundleNoticeCollectorTest(unittest.TestCase):
 
     def run_collector(self, sources, extra=None):
         self.source_map.write_text(json.dumps({'version': 3, 'sources': sources, 'sourcesContent': ['private'] * len(sources), 'mappings': 'secret', **(extra or {})}))
-        return subprocess.run([sys.executable, str(SCRIPT), str(self.native), str(self.source_map), str(self.output)], capture_output=True, text=True)
+        return subprocess.run([sys.executable, str(self.script), str(self.native), str(self.source_map), str(self.output)], capture_output=True, text=True)
+
+    def alias_fixture(self, sha=None, source_file='react-native-LICENSE.txt', version='0.86.3'):
+        scripts = self.native / 'scripts'
+        scripts.mkdir()
+        self.script = scripts / SCRIPT.name
+        shutil.copyfile(SCRIPT, self.script)
+        framework = self.native / 'licenses' / 'framework'
+        framework.mkdir(parents=True)
+        grant = b'reviewed shared grant\r\n'
+        (framework / 'react-native-LICENSE.txt').write_bytes(grant)
+        alias = {'name': '@react-native/assets-registry', 'version': version, 'license': 'MIT',
+                 'source_file': source_file, 'sha256': sha or hashlib.sha256(grant).hexdigest(),
+                 'source_url': 'https://github.com/react/react-native/blob/v0.86.3/LICENSE'}
+        manifest = framework / 'npm-root-license-aliases.json'
+        manifest.write_text(json.dumps({'schema_version': 1, 'aliases': [alias]}))
+        return manifest, grant
 
     def test_collects_exact_bytes_scoped_and_nested_packages_without_map_content(self):
         top = self.package('@acme/top', '@acme/top', '1.2.3', b'MIT\r\nexact\x00')
@@ -57,6 +75,77 @@ class BundleNoticeCollectorTest(unittest.TestCase):
         result = self.run_collector(['node_modules/pkg/src/index.js'])
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('license text', result.stderr)
+        report = json.loads((self.output / 'inventory.json').read_text())
+        self.assertEqual(report['status'], 'INCOMPLETE')
+        self.assertEqual(report['unresolved_count'], 1)
+        self.assertEqual(report['packages'][0]['notice_status'], 'missing-root-notice')
+
+    def test_missing_notice_retains_other_package_evidence_without_map_contents(self):
+        good = self.package('good', 'good', '1.0.0', b'exact\r\n')
+        missing = self.package('missing', 'missing', '1.0.0')
+        (missing / 'LICENSE').unlink()
+        result = self.run_collector(['node_modules/good/src/index.js', 'node_modules/missing/src/index.js'])
+        self.assertEqual(result.returncode, 1)
+        report = json.loads((self.output / 'inventory.json').read_text())
+        self.assertEqual(report['package_count'], 2)
+        self.assertEqual(report['unresolved_count'], 1)
+        self.assertEqual((self.output / report['packages'][0]['license_files'][0]['evidence_path']).read_bytes(), (good / 'LICENSE').read_bytes())
+        self.assertNotIn('private', (self.output / 'inventory.json').read_text())
+        self.assertNotIn('secret', (self.output / 'inventory.json').read_text())
+
+    def test_reviewed_alias_copies_exact_grant_with_provenance(self):
+        _, grant = self.alias_fixture()
+        package = self.package('@react-native/assets-registry', '@react-native/assets-registry', '0.86.3')
+        (package / 'LICENSE').unlink()
+        result = self.run_collector(['node_modules/@react-native/assets-registry/src/index.js'])
+        self.assertEqual(result.returncode, 0, result.stderr)
+        entry = json.loads((self.output / 'inventory.json').read_text())['packages'][0]
+        notice = entry['license_files'][0]
+        self.assertEqual(notice['selected_from'], 'reviewed-alias')
+        self.assertEqual(notice['source_asset_uri'], 'assets/framework/react-native-LICENSE.txt')
+        self.assertEqual((self.output / notice['evidence_path']).read_bytes(), grant)
+
+    def test_unknown_version_does_not_inherit_alias(self):
+        self.alias_fixture()
+        package = self.package('@react-native/assets-registry', '@react-native/assets-registry', '0.86.4')
+        (package / 'LICENSE').unlink()
+        result = self.run_collector(['node_modules/@react-native/assets-registry/src/index.js'])
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads((self.output / 'inventory.json').read_text())['status'], 'INCOMPLETE')
+
+    def test_wrong_license_declaration_does_not_inherit_alias(self):
+        self.alias_fixture()
+        package = self.package('@react-native/assets-registry', '@react-native/assets-registry', '0.86.3')
+        (package / 'LICENSE').unlink()
+        (package / 'package.json').write_text(json.dumps({'name': '@react-native/assets-registry', 'version': '0.86.3', 'license': 'BSD-3-Clause'}))
+        result = self.run_collector(['node_modules/@react-native/assets-registry/src/index.js'])
+        self.assertEqual(result.returncode, 1)
+        self.assertEqual(json.loads((self.output / 'inventory.json').read_text())['status'], 'INCOMPLETE')
+
+    def test_bad_alias_hash_or_path_fails_without_inventory(self):
+        self.alias_fixture()
+        package = self.package('@react-native/assets-registry', '@react-native/assets-registry', '0.86.3')
+        (package / 'LICENSE').unlink()
+        manifest = self.native / 'licenses' / 'framework' / 'npm-root-license-aliases.json'
+        original = json.loads(manifest.read_text())
+        for invalid in ({'sha256': '0' * 64}, {'source_file': '../escape.txt'}):
+            with self.subTest(invalid=invalid):
+                self.output = self.root / ('evidence-' + str(len(list(self.root.glob('evidence-*')))))
+                data = json.loads(json.dumps(original))
+                data['aliases'][0].update(invalid)
+                manifest.write_text(json.dumps(data))
+                result = self.run_collector(['node_modules/@react-native/assets-registry/src/index.js'])
+                self.assertEqual(result.returncode, 1)
+                self.assertFalse((self.output / 'inventory.json').exists())
+
+    def test_corrupt_alias_manifest_fails_closed(self):
+        manifest, _ = self.alias_fixture()
+        manifest.write_text('{broken')
+        package = self.package('@react-native/assets-registry', '@react-native/assets-registry', '0.86.3')
+        (package / 'LICENSE').unlink()
+        result = self.run_collector(['node_modules/@react-native/assets-registry/src/index.js'])
+        self.assertEqual(result.returncode, 1)
+        self.assertFalse((self.output / 'inventory.json').exists())
 
     def test_unresolved_node_module_fails(self):
         result = self.run_collector(['node_modules/missing/index.js'])
