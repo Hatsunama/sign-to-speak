@@ -2,7 +2,7 @@
 
 ## Scope and current output boundary
 
-This Android foundation has a camera preview and local UI. It has **no ASL recognition, translation, TTS engine, PCM playback, player, earcon or speech fallback**. Nothing in this change enables them. The existing web prototype is a separate application and is not covered by these native Android controls.
+The current Android QA app has camera preview and typed, bundled Pocket TTS/Alba speech. Synthesis and protected 24 kHz PCM playback run in the app process and UID; they do not use an Android TTS engine service. Production ASL recognition, continuous translation and microphone reply captions remain absent. See the [current exact-artifact evidence and remaining acceptance](RECOGNITION_FOLLOWUP_20261026.md). The historical foundation checkpoints below predate speech and apply only to their named artifacts.
 
 Screen protection and audio protection are separate acceptance criteria. A black recording with audible app content is a failure. Silence from a build that never played audio is not evidence that playback capture was blocked.
 
@@ -12,7 +12,7 @@ Screen protection and audio protection are separate acceptance criteria. A black
 - The starting window uses an opaque constant color. Android 12+ can show the static launcher icon and this background. No session state, camera frame or transcript is put in the starting window. This does not claim the system-owned splash itself is flagged secure before the Activity exists.
 - The application manifest explicitly disables `allowAudioPlaybackCapture`. On API 29+, `MainApplication` sets `AudioManager` capture policy to `ALLOW_CAPTURE_BY_NONE` and checks its readback before loading React Native. Android's manifest opt-out alone still permits system capture; `NONE` is the stronger request. This can also prevent system live-caption/accessibility playback processing.
 - A missing service, thrown policy/readback call or rejected readback leaves a native capability false. The synchronous, read-only `CapturePrivacy` module exposes only that boolean. The first React render chooses a generic unavailable screen without mounting Home. There is no optimistic loading frame or in-process retry control. Native `PrivateCameraView` independently refuses a start while this capability is false. No exception detail or user content is logged or displayed.
-- API 26–28 keep the preview usable. The public playback-capture API and these audio-policy calls start at API 29; no unsupported call runs on older Android. Older-OS/OEM audio restrictions are not certified, and future speech remains unavailable there until its own reviewed policy exists.
+- API 26–28 keep the preview usable. The public playback-capture API and these audio-policy calls start at API 29; no unsupported call runs on older Android. Older-OS/OEM audio restrictions are not certified; the current speech capability remains unavailable on API 26–28.
 
 Sources: [secure windows](https://developer.android.com/reference/android/view/WindowManager.LayoutParams#FLAG_SECURE), [screen-protection limits](https://developer.android.com/security/fraud-prevention/activities), [static system splash behavior](https://developer.android.com/develop/ui/views/launch/splash-screen/migrate), [playback capture](https://developer.android.com/media/platform/av-capture), [app-wide capture policy](https://developer.android.com/reference/android/media/AudioManager#setAllowedCapturePolicy(int)), [NONE policy and accessibility tradeoff](https://developer.android.com/reference/android/media/AudioAttributes#ALLOW_CAPTURE_BY_NONE).
 
@@ -22,17 +22,19 @@ The production foundation declares one Activity and creates no app dialog, popup
 
 Pinned React Native 0.86.3's `ReactModalHostView.showOrUpdate` explicitly copies the current Activity's secure flag to its `ComponentDialog` before `show()`. A regression exercises that actual dependency path, including dialog recreation. This establishes only that pinned implementation, not a guarantee for arbitrary future native dialogs. Activity tests cover creation before the React delegate, pause, restart, new intents and recreation. Keep the static startup boundary, unavailable state, process recreation and recents in real compositor tests too.
 
-## Future audio integration gate
+## Current app-owned audio boundary
 
-`tests/capture-privacy.test.mjs` rejects known audio-output APIs and new private secondary windows in current shipping sources. This is a review alarm, **not** a sandbox or proof that every possible future library cannot play audio. The app-wide policy protects playback owned by this app; it does not assign this app's UID or manifest to another service.
+`tests/capture-privacy.test.mjs` permits the reviewed `ProtectedPcmPlayer` sink and flags other known audio-output APIs or private secondary windows in shipping sources. It is a source-review alarm, not a sandbox. The sink also has Android policy tests. Neither layer proves every possible dependency's behavior or substitutes for capture testing.
 
-Android TTS commonly runs in an engine service. The framework's `TextToSpeechService` receives audio attributes and its `BlockingAudioTrack` constructs the playback track in that service. Consequently, app manifest/runtime flags alone cannot certify a selected engine's output. Before any real TTS/player is enabled:
+Pocket synthesis runs in-process. `SpeechOwner` supplies protected playback with volatile PCM; `ProtectedPcmPlayer` requires API 29+, checks app-wide policy readback and creates each `AudioTrack` with media/speech attributes and `ALLOW_CAPTURE_BY_NONE`. Model files use a separate verified private cache. The current speech path does not persist transcripts or synthesized audio.
 
-1. Identify the actual producer, its UID, package/version and every output path, including prerecorded speech, earcons and fallback.
-2. Set `AudioAttributes.Builder.setAllowedCapturePolicy(ALLOW_CAPTURE_BY_NONE)` **on each player before creation/playback**. For TTS, apply those attributes with `TextToSpeech.setAudioAttributes`, check `SUCCESS`, and reject error/unknown engine behavior. Use a truthful usage/content type; do not disguise media as calls to evade capture rules.
-3. Do not reuse a player created before policy installation. Android documents that changing the app policy does not retrofit an already playing track.
-4. Require per-engine end-to-end screen plus playback-loopback acceptance and lifecycle stop/cancellation tests. Reject unvalidated output, engine changes, initialization failure, unsupported devices or fallback. A successful setter is configuration evidence only.
-5. If output must be app-owned, design the synthesis/playback boundary explicitly without quietly writing speech to disk or exposing synthesis data. This change does not implement such a path.
+1. Identify the actual producer UID and every output path. The current producer is the app; any added prerecorded audio, earcon or fallback needs its own review.
+2. Set the capture policy on every player before creation/playback. Keep truthful usage/content types and the app-wide policy check.
+3. Do not reuse a player created before policy installation. Changing app policy does not retrofit an already playing track.
+4. Complete end-to-end screen plus playback-loopback acceptance with real synthetic sample production, cancellation, pause/Back, failure and recovery. A successful setter or a moving playback head alone is configuration/execution evidence.
+5. Preserve app ownership, volatile audio, cancellation eligibility and cleanup when changing the engine. This boundary is implemented, while independent capture acceptance remains open.
+
+Android's `TextToSpeechService` normally constructs playback under an engine-service UID. App flags cannot certify that separate producer. If such an engine is introduced, its audio attributes, producer identity and output paths need separate runtime proof.
 
 Sources: [TTS audio attributes and return status](https://developer.android.com/reference/android/speech/tts/TextToSpeech#setAudioAttributes(android.media.AudioAttributes)), [framework engine audio parameters](https://android.googlesource.com/platform/frameworks/base/+/HEAD/core/java/android/speech/tts/TextToSpeechService.java), [framework engine track creation](https://android.googlesource.com/platform/frameworks/base/+/master/core/java/android/speech/tts/BlockingAudioTrack.java).
 
@@ -47,14 +49,14 @@ Run API 29, 30, 31/32, 34 and 36; retain API 28 as a screen-only/legacy compatib
 3. **Protected playback independently:** a test-only synthetic probe executes under the target app's UID with app-owned playback. Confirm actual sample production and playback progress; collect separate loopback PCM while the secure window is present. Analyze tone correlation/energy against the validated positive control. Silence with no active playback, a stalled recorder, an incorrect UID filter or a muted source is inconclusive.
 4. **Combined failure sentinel:** evaluate video and PCM separately. Black video plus a recoverable synthetic tone fails the run. Never let a screenshot assertion alone mark privacy passed.
 5. **System recorder:** where the image supplies a recorder with internal-audio mode, repeat without microphone mode. A third-party MediaProjection recorder cannot demonstrate the system-only branch of `NONE` by itself. If unavailable, report this row untested.
-6. **Future TTS:** after a real reviewed engine exists, repeat using synthetic text and the **engine/actual producer UID**, not only the Sign UID. Include queue/cancel, pause/Back, engine failure/change, reinitialization and every fallback. This row is currently not applicable because no engine is implemented; it is not a pass.
+6. **Current Pocket TTS:** repeat with fixed synthetic text and the actual app producer UID. Include preparation, active playback, queue/cancel, pause/Back, failure and reinitialization. This row is **required and NOT_RUN for independent playback capture**, not inapplicable: a real synthesizer/player is implemented. Any later engine-service integration needs the engine/actual producer UID instead. Muted AudioTrack progress tests cannot satisfy this row.
 7. **Teardown:** revoke projection and verify recorder cleanup. Keep only bounded synthetic artifacts. No monitoring, microphone recording or screen/audio recording of the user is authorized by this test plan.
 
 The full matrix still requires compositor video, positive-control PCM, protected-probe PCM, objective comparison output and per-row pass/fail/inconclusive records. It has not executed. The limited physical app-only screenshot observations below do not complete this matrix.
 
 ## Verification labels and limits
 
-Host/component tests establish first-render gating and source boundaries. Robolectric tests establish production startup ordering, native failure handling and window/lifecycle flag behavior using controlled service/React boundaries. They do not exercise Android's compositor, real AudioFlinger mixing, a real TTS engine, screen recording or playback loopback. The exact hosted red/green checkpoints are recorded below; neither establishes real capture acceptance.
+Host/component tests establish first-render gating and source boundaries. Robolectric tests establish production startup ordering, native failure handling and window/lifecycle flag behavior using controlled service/React boundaries. They do not exercise Android's compositor, real AudioFlinger mixing, a physical speech path, screen recording or playback loopback. The later physical Pocket tests exercise app-owned synthesis and playback progress, but do not complete independent capture acceptance. The exact hosted red/green checkpoints are recorded below; neither establishes real capture acceptance.
 
 These controls request Android's platform capture protections. They do not prevent a separate physical microphone/camera recording sound or light, a compromised OS, or a vendor path that ignores the policy. The app does not try to disable another app's microphone or change device-wide recording settings. Do not describe this as absolute prevention or a privacy/compliance certification.
 

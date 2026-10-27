@@ -1,6 +1,6 @@
 # Recognition, translation and customer flow
 
-The [commercial readiness plan](COMMERCIAL_READINESS_PLAN.md) is the current delivery roadmap and release gate list. This document retains the detailed recognition research contracts and provenance.
+The [commercial readiness plan](COMMERCIAL_READINESS_PLAN.md) is the current delivery roadmap and release gate list. This document retains the detailed recognition research contracts and provenance. The [October 27 follow-up](RECOGNITION_FOLLOWUP_20261026.md) records the repaired input handoff and exact two-phone video execution; it does not establish independent feature parity or release accuracy.
 
 ## Approved scope and preserved foundation
 
@@ -13,7 +13,7 @@ Evaluation uses existing annotated signing videos. Recruiting Deaf testers is no
 ## Current implementation boundaries
 
 - CameraX still provides preview only. No analyzer, tracker or sign recognizer is connected to the customer UI.
-- Typed text review, Speak, Stop and Clear use bundled local Pocket TTS/Alba. Flite production code has been retired. This is manual text-to-speech, not recognition or translation. The [current speech checkpoint](POCKET_SPEECH_CHECKPOINT_20261026.md) records bounded Samsung evidence and the untested Seeker replacement. The older two-phone Flite receipt applies only to that earlier artifact. Voice quality and full release acceptance remain separate gates.
+- Typed text review, Speak, Stop and Clear use bundled local Pocket TTS/Alba. Flite production code has been retired. This is manual text-to-speech, not recognition or translation. The [final candidate checkpoint](RECOGNITION_FOLLOWUP_20261026.md) records bounded muted playback on Samsung and Seeker. The [earlier Pocket checkpoint](POCKET_SPEECH_CHECKPOINT_20261026.md) and older two-phone Flite receipt apply to their named artifacts. Voice quality and full release acceptance remain separate gates.
 - Speech accepts nonblank reviewed Unicode text within 256 UTF-16 code units and 512 strict UTF-8 bytes; malformed encodings and control characters are rejected. Native synthesis bounds generated audio. Acceptance at this boundary does not prove pronunciation or multilingual support. No silent truncation or spelling substitution is permitted.
 - Speech and camera stop on Back, leaving the screen or backgrounding. Draft text is cleared on leaving/backgrounding; it is not saved or logged. Cleanup failures latch and require reopening rather than silently retrying.
 - Customer microphone captions and continuous ASL translation remain absent.
