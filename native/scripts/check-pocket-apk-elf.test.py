@@ -31,6 +31,14 @@ class PocketApkRetirementTest(unittest.TestCase):
         self.entries = {
             **{'assets/pocket-alba/' + name: data for name, data in model_bytes.items()},
             **{'assets/pocket-licenses/' + path.name: path.read_bytes() for path in notice_root.iterdir()},
+            **{'assets/sign-to-speak/' + name:
+               (audit.asset_module.LICENSE_ROOT / 'sign-to-speak' / name).read_bytes()
+               for name in audit.asset_module.REQUIRED_APPLICATION_ASSETS},
+            'assets/react-native-template-MIT.txt':
+                (audit.asset_module.LICENSE_ROOT / 'react-native-template-MIT.txt').read_bytes(),
+            **{'assets/framework/' + name:
+               (audit.asset_module.LICENSE_ROOT / 'framework' / name).read_bytes()
+               for name in audit.asset_module.REQUIRED_FRAMEWORK_ASSETS},
             **{'lib/arm64-v8a/' + name: b'fixture' for name in (
                 'libsign_pocket_tts_runtime.so', 'libprivate_pocket_tts.so', 'libc++_shared.so')},
         }
@@ -40,6 +48,16 @@ class PocketApkRetirementTest(unittest.TestCase):
         self.patch_root = patch.object(audit.asset_module, 'POCKET_ROOT', self.root / 'prepared')
         self.patch_root.start()
         self.addCleanup(self.patch_root.stop)
+
+    def test_missing_framework_notice_is_rejected(self):
+        del self.entries['assets/framework/ndk-libcxxabi-NOTICE.txt']
+        with self.assertRaisesRegex(AssertionError, 'framework license asset'):
+            self.verify()
+
+    def test_changed_framework_notice_is_rejected(self):
+        self.entries['assets/framework/react-native-safe-area-context-LICENSE.txt'] = b'changed'
+        with self.assertRaisesRegex(AssertionError, 'framework license asset'):
+            self.verify()
 
     def verify(self):
         apk = self.stored_apk({name: 0 for name in self.entries if name.endswith('.so')})

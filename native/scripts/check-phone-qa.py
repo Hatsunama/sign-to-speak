@@ -19,6 +19,15 @@ POCKET_MODEL={
     'alba.safetensors':(4163992,'11554cbe9f3d3a3e10722932df9952bb44928e534f7af3200524659166b5627a'),
 }
 REQUIRED_APPLICATION_ASSETS=('LICENSE','NOTICE')
+REQUIRED_FRAMEWORK_ASSETS=('react-native-LICENSE.txt',
+                           'react-native-safe-area-context-LICENSE.txt',
+                           'ndk-libcxx-NOTICE.txt', 'ndk-libcxxabi-NOTICE.txt')
+FRAMEWORK_SHA256={
+    'react-native-LICENSE.txt':'da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93',
+    'react-native-safe-area-context-LICENSE.txt':'f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c',
+    'ndk-libcxx-NOTICE.txt':'3f3d1da78246d5c2ffc879f8239d6e856b19ba813b8349cbe48f85bd018ee3af',
+    'ndk-libcxxabi-NOTICE.txt':'b043b7c5fdaf8df24b2c3b50f7651e6acfc8bdd73cc152ec5d090b8a7e0ede33',
+}
 
 def require(condition, message='APK validation failed'):
     if not condition:
@@ -64,6 +73,30 @@ def verify_pocket_assets(archive,names):
     require(routes.get('status')=='declarations-selected-for-component-probe' and
             len(routes.get('packages',[]))==133 and not routes.get('blocked_packages'),
             'Incomplete Cargo declaration routes')
+
+
+def verify_application_assets(archive, names):
+    for filename in REQUIRED_APPLICATION_ASSETS:
+        source=(LICENSE_ROOT/'sign-to-speak'/filename).read_bytes()
+        entry='assets/sign-to-speak/'+filename
+        require(source, f'Application license source is empty: {filename}')
+        require(entry in names and archive.read(entry)==source,
+                f'Missing or changed application license asset: {entry}')
+    template=(LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes()
+    require('assets/react-native-template-MIT.txt' in names and
+            archive.read('assets/react-native-template-MIT.txt')==template,
+            'Missing or changed React Native template notice')
+    for name in REQUIRED_FRAMEWORK_ASSETS:
+        source=(LICENSE_ROOT/'framework'/name).read_bytes()
+        entry='assets/framework/'+name
+        require(hashlib.sha256(source).hexdigest()==FRAMEWORK_SHA256[name],
+                f'Framework license source differs from reviewed bytes: {name}')
+        require(entry in names, f'Missing framework license asset: {entry}')
+        require(source and archive.read(entry)==source,
+                f'Missing or changed framework license asset: {entry}')
+    expected={'assets/framework/'+name for name in REQUIRED_FRAMEWORK_ASSETS}
+    actual={name for name in names if name.startswith('assets/framework/') and not name.endswith('/')}
+    require(actual==expected, 'APK framework license asset set differs from reviewed inventory')
 
 
 def validate_app_manifest(manifest, identity_message='APK must use the isolated QA identity'):
@@ -135,15 +168,7 @@ def verify(manifest, apk):
     with open_unsigned_apk(apk) as (archive,names):
         require('assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript')
         verify_pocket_assets(archive,names)
-        for filename in REQUIRED_APPLICATION_ASSETS:
-            source=(LICENSE_ROOT/'sign-to-speak'/filename).read_bytes()
-            entry='assets/sign-to-speak/'+filename
-            require(source, f'Application license source is empty: {filename}')
-            require(entry in names and archive.read(entry)==source, f'Missing or changed application license asset: {entry}')
-        template=(LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes()
-        require('assets/react-native-template-MIT.txt' in names and
-                archive.read('assets/react-native-template-MIT.txt')==template,
-                'Missing or changed React Native template notice')
+        verify_application_assets(archive,names)
         libraries=[name for name in names if name.startswith('lib/') and name.endswith('.so')]
         require(libraries and {name.split('/')[1] for name in libraries}=={'arm64-v8a'}, 'APK must contain only arm64 native libraries')
         require('lib/arm64-v8a/libsign_pocket_tts_runtime.so' in libraries,

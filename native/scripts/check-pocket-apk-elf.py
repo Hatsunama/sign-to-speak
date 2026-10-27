@@ -46,6 +46,7 @@ def main(apk: Path, abi: str, readelf: Path, evidence: Path) -> None:
     with zipfile.ZipFile(apk) as archive:
         names = archive.namelist()
         asset_module.verify_pocket_assets(archive, names)
+        asset_module.verify_application_assets(archive, names)
         if len(names) != len(set(names)) or not required <= set(names):
             raise ValueError(f"Missing or duplicate APK native libraries: {sorted(required - set(names))}")
         if any(asset_module.is_retired_speech_artifact(name) for name in names):

@@ -18,6 +18,7 @@ def unsigned(apk,expected_abi=None):
             require(libs and {n.split('/')[1] for n in libs}=={expected_abi})
             require('assets/index.android.bundle' in names and archive.getinfo('assets/index.android.bundle').file_size > 0, 'App must carry its nonempty bundled JavaScript')
             phone.verify_pocket_assets(archive,names)
+            phone.verify_application_assets(archive,names)
             require('lib/'+expected_abi+'/libsign_pocket_tts_runtime.so' in libs)
             require('lib/'+expected_abi+'/libprivate_pocket_tts.so' in libs)
             require('lib/'+expected_abi+'/libc++_shared.so' in libs)
