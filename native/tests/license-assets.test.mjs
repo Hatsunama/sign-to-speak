@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
+import { createHash } from 'node:crypto';
 
 const native = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const read = relative => readFileSync(path.join(native, relative));
@@ -18,6 +19,60 @@ test('Android bundles retained application notices and omits retired Flite notic
   assert.match(mapping, /includedPaths\.set\(licenseFiles\)/);
   assert.match(mapping, /variant\.sources\.assets\.addGeneratedSourceDirectory\(stageReviewedLicenses\)/);
   assert.doesNotMatch(mapping, /include\([^\n]*flite/);
+});
+
+test('Android stages the four pinned React Native native-dependency notices', () => {
+  const mapping = read('android/app/license-assets.gradle').toString();
+  for (const name of [
+    'double-conversion-LICENSE.txt',
+    'glog-COPYING.txt',
+    'fast_float-LICENSE-MIT.txt',
+    'folly-LICENSE.txt',
+  ]) {
+    assert.match(mapping, new RegExp(`framework/${name.replaceAll('.', '\\.')}\\b`));
+    assert.ok(read(`licenses/framework/${name}`).length > 0, `${name} must contain upstream text`);
+  }
+});
+
+test('Android stages Hermes dtoa notices and the Fresco IJG terms and acknowledgment', () => {
+  const mapping = read('android/app/license-assets.gradle').toString();
+  for (const name of [
+    'hermes-dtoa.c-NOTICE.txt',
+    'hermes-g_fmt.c-NOTICE.txt',
+    'fresco-ijg-README.txt',
+    'fresco-ijg-ACKNOWLEDGMENT.txt',
+  ]) {
+    assert.match(mapping, new RegExp(`framework/${name.replaceAll('.', '\\.')}\\b`));
+    assert.ok(read(`licenses/framework/${name}`).length > 0);
+  }
+  assert.match(read('licenses/framework/fresco-ijg-ACKNOWLEDGMENT.txt').toString(),
+    /This software is based in part on the work of the Independent JPEG Group\./);
+});
+
+test('Hermes headers retain distinct full upstream notice bytes and IJG attribution is exact', () => {
+  const digest = bytes => createHash('sha256').update(bytes).digest('hex');
+  const sources = [
+    ['hermes-dtoa.c-NOTICE.txt', '1991, 2000, 2001', '45a0b19676f406b6aaeb9ebc04961ba711d38b13003a15b38ff7174b2568b0c4'],
+    ['hermes-g_fmt.c-NOTICE.txt', '1991, 1996', 'be5981b1b47d165581f00f9915679ecd19a4fa44ba259f5b60ee1fd1be1df31f'],
+  ];
+  for (const [name, years, hash] of sources) {
+    const notice = read(`licenses/framework/${name}`);
+    assert.equal(digest(notice), hash);
+    assert.match(notice.toString(), new RegExp(`Copyright \\(c\\) ${years} by Lucent Technologies\\.`));
+    assert.match(notice.toString(), /this entire notice\s+\* is included in all copies/);
+    assert.match(notice.toString(), /THIS SOFTWARE IS BEING PROVIDED "AS IS"/);
+  }
+  assert.equal(digest(read('licenses/framework/fresco-ijg-README.txt')),
+    '4b7b9f8c03bb8d60270dfd12684e70ab21e4abfd27e73905cd1a7c4cae6f5cdb');
+  assert.equal(read('licenses/framework/fresco-ijg-ACKNOWLEDGMENT.txt').toString(),
+    'This software is based in part on the work of the Independent JPEG Group.\n');
+  const provenance = read('licenses/framework/README.md').toString();
+  for (const sourceHash of [
+    '9404ae4acb020e64cc24904e92d036da90126b02815147d0ab95ff5330ade2f8',
+    '0a1f2438e3ff2c270653a3fc51b0448570fd0ea2791590678ba54500fa349f16',
+  ]) assert.ok(provenance.includes(sourceHash));
+  assert.match(provenance, /\[0, 861\)/);
+  assert.match(provenance, /\[0, 855\)/);
 });
 
 test('Pocket model bundling is guarded by exact pinned hashes and Cargo notices', () => {

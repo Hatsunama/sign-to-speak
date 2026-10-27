@@ -21,12 +21,24 @@ POCKET_MODEL={
 REQUIRED_APPLICATION_ASSETS=('LICENSE','NOTICE')
 REQUIRED_FRAMEWORK_ASSETS=('react-native-LICENSE.txt',
                            'react-native-safe-area-context-LICENSE.txt',
-                           'ndk-libcxx-NOTICE.txt', 'ndk-libcxxabi-NOTICE.txt')
+                           'ndk-libcxx-NOTICE.txt', 'ndk-libcxxabi-NOTICE.txt',
+                           'double-conversion-LICENSE.txt', 'glog-COPYING.txt',
+                           'fast_float-LICENSE-MIT.txt', 'folly-LICENSE.txt',
+                           'hermes-dtoa.c-NOTICE.txt', 'hermes-g_fmt.c-NOTICE.txt',
+                           'fresco-ijg-README.txt', 'fresco-ijg-ACKNOWLEDGMENT.txt')
 FRAMEWORK_SHA256={
     'react-native-LICENSE.txt':'da6d3703ed11cbe42bd212c725957c98da23cbff1998c05fa4b3d976d1a58e93',
     'react-native-safe-area-context-LICENSE.txt':'f5c7a4d527258e11fdfe3d84eb73cd14fe6d64224ef051e59f6ee21fe378800c',
     'ndk-libcxx-NOTICE.txt':'3f3d1da78246d5c2ffc879f8239d6e856b19ba813b8349cbe48f85bd018ee3af',
     'ndk-libcxxabi-NOTICE.txt':'b043b7c5fdaf8df24b2c3b50f7651e6acfc8bdd73cc152ec5d090b8a7e0ede33',
+    'double-conversion-LICENSE.txt':'4af93c12062c58058378de2397dc1c92bbff9ddfb1d583a01c84127557ce97ca',
+    'glog-COPYING.txt':'0fc497129c5c69ff6f22da6933c7e4aaef082fde8437fd57680c2780100772a4',
+    'fast_float-LICENSE-MIT.txt':'e562f3f974ced7e69dd1db77b820b36bcf8f30377f1aa105723fba449c53c4e6',
+    'folly-LICENSE.txt':'2206c00af7013581ae0d7c8c8a0089f02fab621913daac019b32336bd4d1e1db',
+    'hermes-dtoa.c-NOTICE.txt':'45a0b19676f406b6aaeb9ebc04961ba711d38b13003a15b38ff7174b2568b0c4',
+    'hermes-g_fmt.c-NOTICE.txt':'be5981b1b47d165581f00f9915679ecd19a4fa44ba259f5b60ee1fd1be1df31f',
+    'fresco-ijg-README.txt':'4b7b9f8c03bb8d60270dfd12684e70ab21e4abfd27e73905cd1a7c4cae6f5cdb',
+    'fresco-ijg-ACKNOWLEDGMENT.txt':'d903a69ab39425283b44e2ea355cbfaf79bcd738b69c2b1c3c700ce80f2d89f9',
 }
 
 def require(condition, message='APK validation failed'):

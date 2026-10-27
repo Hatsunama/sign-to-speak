@@ -26,6 +26,20 @@ class LicenseCheckoutBytesTest(unittest.TestCase):
 spec=importlib.util.spec_from_file_location('qa',pathlib.Path(__file__).with_name('check-phone-qa.py'))
 qa=importlib.util.module_from_spec(spec);spec.loader.exec_module(qa)
 class PhoneQaApkTest(unittest.TestCase):
+ def test_hermes_and_ijg_notices_are_required_and_pinned(self):
+  expected={'hermes-dtoa.c-NOTICE.txt','hermes-g_fmt.c-NOTICE.txt','fresco-ijg-README.txt','fresco-ijg-ACKNOWLEDGMENT.txt'}
+  self.assertTrue(expected.issubset(qa.REQUIRED_FRAMEWORK_ASSETS))
+  for name in expected:
+   with self.subTest(name=name):
+    self.assertEqual(qa.FRAMEWORK_SHA256[name],hashlib.sha256((qa.LICENSE_ROOT/'framework'/name).read_bytes()).hexdigest())
+  self.assertIn(b'This software is based in part on the work of the Independent JPEG Group.',
+                (qa.LICENSE_ROOT/'framework'/'fresco-ijg-ACKNOWLEDGMENT.txt').read_bytes())
+ def test_native_dependency_notices_are_required_and_pinned(self):
+  expected={'double-conversion-LICENSE.txt','glog-COPYING.txt','fast_float-LICENSE-MIT.txt','folly-LICENSE.txt'}
+  self.assertTrue(expected.issubset(qa.REQUIRED_FRAMEWORK_ASSETS))
+  for name in expected:
+   with self.subTest(name=name):
+    self.assertEqual(qa.FRAMEWORK_SHA256[name],hashlib.sha256((qa.LICENSE_ROOT/'framework'/name).read_bytes()).hexdigest())
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
   self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
@@ -35,7 +49,7 @@ class PhoneQaApkTest(unittest.TestCase):
   (self.notice_root/'NOTICE.txt').write_bytes(b'fixture notice')
   self.patch_model=patch.object(qa,'POCKET_MODEL',{name:(len(data),hashlib.sha256(data).hexdigest()) for name,data in self.models.items()});self.patch_model.start();self.addCleanup(self.patch_model.stop)
   self.patch_root=patch.object(qa,'POCKET_ROOT',self.root/'pocket-assets');self.patch_root.start();self.addCleanup(self.patch_root.stop)
-  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libsign_pocket_tts_runtime.so':b'fixture','lib/arm64-v8a/libprivate_pocket_tts.so':b'fixture','lib/arm64-v8a/libc++_shared.so':b'fixture','assets/index.android.bundle':b'fixture','assets/react-native-template-MIT.txt':(qa.LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes(),**{'assets/pocket-alba/'+name:data for name,data in self.models.items()},**{'assets/pocket-licenses/'+p.name:p.read_bytes() for p in self.notice_root.iterdir()},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')},**{'assets/framework/'+name:(qa.LICENSE_ROOT/'framework'/name).read_bytes() for name in ('react-native-LICENSE.txt','react-native-safe-area-context-LICENSE.txt','ndk-libcxx-NOTICE.txt','ndk-libcxxabi-NOTICE.txt')}}
+  self.entries={'AndroidManifest.xml':b'fixture','classes.dex':b'fixture','lib/arm64-v8a/libappmodules.so':b'fixture','lib/arm64-v8a/libsign_pocket_tts_runtime.so':b'fixture','lib/arm64-v8a/libprivate_pocket_tts.so':b'fixture','lib/arm64-v8a/libc++_shared.so':b'fixture','assets/index.android.bundle':b'fixture','assets/react-native-template-MIT.txt':(qa.LICENSE_ROOT/'react-native-template-MIT.txt').read_bytes(),**{'assets/pocket-alba/'+name:data for name,data in self.models.items()},**{'assets/pocket-licenses/'+p.name:p.read_bytes() for p in self.notice_root.iterdir()},**{'assets/sign-to-speak/'+name:(qa.LICENSE_ROOT/'sign-to-speak'/name).read_bytes() for name in ('LICENSE','NOTICE')},**{'assets/framework/'+name:(qa.LICENSE_ROOT/'framework'/name).read_bytes() for name in qa.REQUIRED_FRAMEWORK_ASSETS}}
  def verify(self):
   m=self.root/'manifest.xml';m.write_text(self.xml);a=self.root/'app.apk'
   with zipfile.ZipFile(a,'w') as z:
@@ -86,19 +100,39 @@ class PhoneQaApkTest(unittest.TestCase):
   self.entries['assets/sign-to-speak/NOTICE']=b'changed'
   with self.assertRaisesRegex(AssertionError,'application license asset'):self.verify()
  def test_missing_framework_notice_rejected(self):
-  for name in ('react-native-LICENSE.txt','react-native-safe-area-context-LICENSE.txt','ndk-libcxx-NOTICE.txt','ndk-libcxxabi-NOTICE.txt'):
+  for name in qa.REQUIRED_FRAMEWORK_ASSETS:
    with self.subTest(name=name):
     entry='assets/framework/'+name; data=self.entries.pop(entry)
     try:
      with self.assertRaisesRegex(AssertionError,'framework license asset'):self.verify()
     finally:self.entries[entry]=data
  def test_changed_framework_notice_rejected(self):
-  for name in ('react-native-LICENSE.txt','react-native-safe-area-context-LICENSE.txt','ndk-libcxx-NOTICE.txt','ndk-libcxxabi-NOTICE.txt'):
+  for name in qa.REQUIRED_FRAMEWORK_ASSETS:
    with self.subTest(name=name):
     entry='assets/framework/'+name; data=self.entries[entry];self.entries[entry]=b'changed'
     try:
      with self.assertRaisesRegex(AssertionError,'framework license asset'):self.verify()
     finally:self.entries[entry]=data
+ def test_changed_native_dependency_source_rejected(self):
+  copied=self.root/'copied-licenses'
+  shutil.copytree(qa.LICENSE_ROOT,copied)
+  with patch.object(qa,'LICENSE_ROOT',copied):
+   for name in ('double-conversion-LICENSE.txt','glog-COPYING.txt','fast_float-LICENSE-MIT.txt','folly-LICENSE.txt'):
+    with self.subTest(name=name):
+     source=copied/'framework'/name; original=source.read_bytes();source.write_bytes(original+b'changed')
+     try:
+      with self.assertRaisesRegex(AssertionError,'source differs from reviewed bytes'):self.verify()
+     finally:source.write_bytes(original)
+ def test_changed_hermes_or_ijg_source_rejected(self):
+  copied=self.root/'copied-licenses'
+  shutil.copytree(qa.LICENSE_ROOT,copied)
+  with patch.object(qa,'LICENSE_ROOT',copied):
+   for name in ('hermes-dtoa.c-NOTICE.txt','hermes-g_fmt.c-NOTICE.txt','fresco-ijg-README.txt','fresco-ijg-ACKNOWLEDGMENT.txt'):
+    with self.subTest(name=name):
+     source=copied/'framework'/name; original=source.read_bytes();source.write_bytes(original+b'changed')
+     try:
+      with self.assertRaisesRegex(AssertionError,'source differs from reviewed bytes'):self.verify()
+     finally:source.write_bytes(original)
  def test_extra_framework_notice_rejected(self):
   self.entries['assets/framework/unreviewed.txt']=b'extra'
   with self.assertRaisesRegex(AssertionError,'framework license asset set'):self.verify()

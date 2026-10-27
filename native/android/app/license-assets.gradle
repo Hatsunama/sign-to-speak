@@ -33,7 +33,11 @@ abstract class StageReviewedLicenses extends DefaultTask {
 def licenseRoot = file("../../licenses")
 def licenseFiles = ["sign-to-speak/LICENSE", "sign-to-speak/NOTICE", "react-native-template-MIT.txt",
                     "framework/react-native-LICENSE.txt", "framework/react-native-safe-area-context-LICENSE.txt",
-                    "framework/ndk-libcxx-NOTICE.txt", "framework/ndk-libcxxabi-NOTICE.txt"]
+                    "framework/ndk-libcxx-NOTICE.txt", "framework/ndk-libcxxabi-NOTICE.txt",
+                    "framework/double-conversion-LICENSE.txt", "framework/glog-COPYING.txt",
+                    "framework/fast_float-LICENSE-MIT.txt", "framework/folly-LICENSE.txt",
+                    "framework/hermes-dtoa.c-NOTICE.txt", "framework/hermes-g_fmt.c-NOTICE.txt",
+                    "framework/fresco-ijg-README.txt", "framework/fresco-ijg-ACKNOWLEDGMENT.txt"]
 licenseFiles.each { relative ->
     def source = new File(licenseRoot, relative)
     if (!source.isFile() || source.length() == 0) {

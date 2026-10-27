@@ -165,10 +165,11 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
-            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
-            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
-            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+          qa_gradle_args=(--no-daemon --max-workers=2 --console=plain --stacktrace
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m'
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false)
+          ./gradlew "${qa_gradle_args[@]}" \
             :app:mergeQaAssets :app:generateQaLintVitalReportModel \
             :app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa :app:assembleQaAndroidTest
           cd ..
@@ -178,6 +179,20 @@ jobs:
           python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
             "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
             "$RUNNER_TEMP/sign-evidence/qa-elf"
+          cd android
+          ./gradlew --offline "${qa_gradle_args[@]}" \
+            :app:dependencies --configuration qaRuntimeClasspath \
+            | tee "$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          grep -q '^qaRuntimeClasspath ' "$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          report="$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          grep -Eq 'com\.facebook\.react:react-android(:|[[:space:]]*->[[:space:]]*)0\.86\.3([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-camera2(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-lifecycle(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-view(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          cd ..
+          python3 scripts/collect-bundle-notices.py . \
+            android/app/build/generated/sourcemaps/react/qa/index.android.bundle.map \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/bundle-notices"
       - name: Retain bounded test evidence, including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
