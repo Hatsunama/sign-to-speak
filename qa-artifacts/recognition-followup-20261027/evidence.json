@@ -1,0 +1,51 @@
+{
+  "status": "IN_PROGRESS_RELEASE_BLOCKED",
+  "input_repair_source": "ac9d010a15fd568f4e88e83221c0f080e98615b6",
+  "input_repair_ci": 40423335176,
+  "notice_candidate_source": "9061e3a22ea48058104a81e16fe532ba23ae0460",
+  "notice_candidate_ci": 40459969665,
+  "notice_candidate_phone_checks": "NOT_RUN",
+  "upstream_requests": {
+    "translation": "https://huggingface.co/FatimahEmadEldin/ytasl-t5-v1_1-base/discussions/1",
+    "vosk": "https://github.com/alphacep/vosk-api/issues/2072"
+  },
+  "samsung_input_repair": {
+    "synthetic_manifest_bytes": 310,
+    "sha_rejection": "PASS_BEFORE_PUBLICATION",
+    "cleanup_and_retry": "PASS",
+    "research_video_clips": 4,
+    "expected_top1_matches": 4,
+    "validated_accuracy": false,
+    "raw_media_or_landmarks_published": false
+  },
+  "standalone_asr": {
+    "product_integration": false,
+    "microphone_used": false,
+    "dex_sha256": "028722c4d8e42a605a44915254b10c134e6d500bf755b32bb75e89e395cc81ac",
+    "samsung": {
+      "silence_empty": true,
+      "fixed_synthetic_phrase_matched": true,
+      "load_ms": 422,
+      "silence_decode_ms": 135,
+      "speech_decode_ms": 519,
+      "cleanup_pending": false
+    },
+    "seeker": {
+      "silence_empty": true,
+      "fixed_synthetic_phrase_matched": true,
+      "load_ms": 667,
+      "silence_decode_ms": 215,
+      "speech_decode_ms": 830,
+      "cleanup_pending": false
+    },
+    "human_speech_accuracy_measured": false
+  },
+  "constraints": {
+    "production_network_or_microphone_permission_added": false,
+    "keys_generated_or_uploaded": false,
+    "main_updated": false,
+    "sound_settings_changed": false,
+    "new_store_builds": false
+  },
+  "private_receipts_root": "C:/sign_to_speak/recognition-io-20261026/phone-ac9d010"
+}
