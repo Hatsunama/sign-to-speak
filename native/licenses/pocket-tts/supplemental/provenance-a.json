@@ -1,0 +1,120 @@
+{
+  "schema": "supplemental-crate-license-provenance-v1",
+  "lockfile": "native/vendor/pocket-tts-runtime/Cargo.lock",
+  "entries": [
+    {
+      "name": "sentencepiece",
+      "version": "0.14.0",
+      "crate_url": "https://static.crates.io/crates/sentencepiece/sentencepiece-0.14.0.crate",
+      "crate_sha256": "199cd424616675812f71a43866e2fb6e4725538dd7cee7d537fea81c0d66c102",
+      "lockfile_checksum": "199cd424616675812f71a43866e2fb6e4725538dd7cee7d537fea81c0d66c102",
+      "repository": "https://github.com/danieldk/sentencepiece",
+      "vcs_commit": "ff5626ae0058103e16244b35772d6bb1d655a6df",
+      "vcs_path": "sentencepiece",
+      "vcs_info_sha256": "fdbcf59344d077a4aebd86aed2bc0e5954a6bd63ee815f887b9bae7f78b1eeb5",
+      "original_manifest_url": "https://raw.githubusercontent.com/danieldk/sentencepiece/ff5626ae0058103e16244b35772d6bb1d655a6df/sentencepiece/Cargo.toml",
+      "original_manifest_sha256": "30d08002eb06c9e10bfe8f6d688e1043695c0a0eed5a0cdc9398b26aacb1f3f5",
+      "archive_notice_named_files": [],
+      "selected_license": "MIT",
+      "files": [
+        {
+          "path": "sentencepiece-0.14.0/LICENSE-MIT",
+          "source_url": "https://raw.githubusercontent.com/danieldk/sentencepiece/ff5626ae0058103e16244b35772d6bb1d655a6df/LICENSE-MIT",
+          "source_ref": "ff5626ae0058103e16244b35772d6bb1d655a6df",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "bytes": 1023,
+          "origin": "matching upstream commit"
+        },
+        {
+          "path": "sentencepiece-0.14.0/COPYRIGHT.md",
+          "source_url": "https://raw.githubusercontent.com/danieldk/sentencepiece/ff5626ae0058103e16244b35772d6bb1d655a6df/COPYRIGHT.md",
+          "source_ref": "ff5626ae0058103e16244b35772d6bb1d655a6df",
+          "sha256": "44f18d3b54f6bc6b24bb3d2f859364dcbb71928fb8a2fb9f535a143b8e89d95a",
+          "bytes": 228,
+          "origin": "matching upstream commit"
+        }
+      ]
+    },
+    {
+      "name": "xn",
+      "version": "0.2.12",
+      "crate_url": "https://static.crates.io/crates/xn/xn-0.2.12.crate",
+      "crate_sha256": "bec55897173439907dd60c759df3d4793aa73af979336cf7f6f999532812d59f",
+      "lockfile_checksum": "bec55897173439907dd60c759df3d4793aa73af979336cf7f6f999532812d59f",
+      "repository": "https://github.com/LaurentMazare/xn",
+      "vcs_commit": "b50eef2488e6f0e1142ae9e115ad2ecca2052609",
+      "vcs_path": "xn-core",
+      "vcs_info_sha256": "ed1a677fa84c0e0cf96b363412b9b93914729a258a510511281b9e1b7510e835",
+      "original_manifest_url": "https://raw.githubusercontent.com/LaurentMazare/xn/b50eef2488e6f0e1142ae9e115ad2ecca2052609/xn-core/Cargo.toml",
+      "original_manifest_sha256": "db6ebfc830c75374c6965abf30f127e239e906c19b465eb3df3035ea35b3e0fc",
+      "archive_notice_named_files": [
+        "third_party/kleidiai/LICENSES/Apache-2.0.txt"
+      ],
+      "selected_license": "MIT",
+      "files": [
+        {
+          "path": "xn-0.2.12/LICENSE-MIT",
+          "source_url": "https://raw.githubusercontent.com/LaurentMazare/xn/b50eef2488e6f0e1142ae9e115ad2ecca2052609/LICENSE-MIT",
+          "source_ref": "b50eef2488e6f0e1142ae9e115ad2ecca2052609",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+          "bytes": 1023,
+          "origin": "matching upstream commit"
+        }
+      ]
+    },
+    {
+      "name": "r-efi",
+      "version": "5.3.0",
+      "crate_url": "https://static.crates.io/crates/r-efi/r-efi-5.3.0.crate",
+      "crate_sha256": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "lockfile_checksum": "69cdb34c158ceb288df11e18b4bd39de994f6657d83847bdffdbd7f346754b0f",
+      "repository": "https://github.com/r-efi/r-efi",
+      "vcs_commit": "97b55bed1c2c91dcbf787674849f05337ff80b33",
+      "vcs_path": "",
+      "vcs_info_sha256": "50e0c72ee0164f182d7b5db0213cdb1626bad950f2443b05d006c28c7f0641b5",
+      "original_manifest_url": "https://raw.githubusercontent.com/r-efi/r-efi/97b55bed1c2c91dcbf787674849f05337ff80b33/Cargo.toml",
+      "original_manifest_sha256": "57b6d9b9a1b6524f6b4dcc1dd24970ac03e6959786a6cfedaec9ba52878b4d3e",
+      "archive_notice_named_files": [],
+      "selected_license": "MIT",
+      "files": [
+        {
+          "path": "r-efi-5.3.0/AUTHORS",
+          "source_url": "https://raw.githubusercontent.com/r-efi/r-efi/97b55bed1c2c91dcbf787674849f05337ff80b33/AUTHORS",
+          "source_ref": "97b55bed1c2c91dcbf787674849f05337ff80b33",
+          "sha256": "ff92bed461f50338dd703a9ba9aee496a425957873df1d91192776e4bdf5dda7",
+          "bytes": 3693,
+          "origin": "published archive, byte-identical to matching upstream commit"
+        }
+      ]
+    },
+    {
+      "name": "pulp-wasm-simd-flag",
+      "version": "0.1.1",
+      "crate_url": "https://static.crates.io/crates/pulp-wasm-simd-flag/pulp-wasm-simd-flag-0.1.1.crate",
+      "crate_sha256": "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740",
+      "lockfile_checksum": "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740",
+      "repository": "https://github.com/sarah-quinones/pulp",
+      "vcs_commit": "5eb07fd7b68edf0a5e19f71737d315f72a510295",
+      "vcs_path": "pulp-wasm-simd-flag",
+      "vcs_info_sha256": "30cddf6acb10cad6c23f1ef7ac18d435c25aa2f72c114c5d974fc39c04999d1c",
+      "original_manifest_url": "https://raw.githubusercontent.com/sarah-quinones/pulp/5eb07fd7b68edf0a5e19f71737d315f72a510295/pulp-wasm-simd-flag/Cargo.toml",
+      "original_manifest_sha256": "5bb7f9eea7eef386b8ff1516876bc62c8a9f2ab122ac20a4600528042f5463fb",
+      "archive_notice_named_files": [],
+      "selected_license": "MIT",
+      "files": [
+        {
+          "path": "pulp-wasm-simd-flag-0.1.1/LICENSE",
+          "source_url": "https://raw.githubusercontent.com/sarah-quinones/pulp/5eb07fd7b68edf0a5e19f71737d315f72a510295/LICENSE",
+          "source_ref": "5eb07fd7b68edf0a5e19f71737d315f72a510295",
+          "sha256": "d64f878c89bd5f1e5ada7e4aad57690b122727cf5229b7b87ea1980c188da1d9",
+          "bytes": 1062,
+          "origin": "matching upstream commit"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "The crate archives identify repository commits through .cargo_vcs_info.json; that metadata does not independently prove a clean checkout at packaging time.",
+    "Full texts here are source evidence for human notice review, not redistribution clearance."
+  ]
+}

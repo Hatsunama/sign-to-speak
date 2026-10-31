@@ -1,0 +1,3 @@
+# Preserve pinned binary and upstream license bytes across platforms.
+**/*.aar -text
+licenses/sdk-licenses/* -text -whitespace

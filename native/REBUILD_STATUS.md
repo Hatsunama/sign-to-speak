@@ -1,4 +1,6 @@
-# Local speech integration reconstruction
+# Historical local speech integration reconstruction
+
+Current follow-up work adds a typed speech screen and a research-only video probe. See [the current phase plan](docs/RECOGNITION_PLAN.md). The source and artifact results below document the earlier backend reconstruction and do not verify the new customer flow.
 
 This work starts from verified follow-up foundation `10bc6fa8d4d5baa4e44c3fcebd75b2d675ba3b07` (foundation `78c71bd36bbd0f04c86bd85e4b795da35bcd56f7`). It reconstructs the missing native speech/session integration. It is not a recovery of the unpublished 477-file candidate, and does not reproduce that candidate's source inventory or APK.
 

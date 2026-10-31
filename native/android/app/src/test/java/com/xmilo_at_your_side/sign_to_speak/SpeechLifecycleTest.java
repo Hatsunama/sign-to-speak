@@ -96,9 +96,44 @@ public class SpeechLifecycleTest {
             Promise denied = mock(Promise.class);
             bridge.begin(denied);
             Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-            verify(denied).resolve(null);
+            verify(denied).reject(eq("CLEANUP_FAILED"), anyString());
+            verify(denied, never()).resolve(any());
             assertEquals(1, sessions.constructed().size());
             recreated.pause().stop().destroy();
+        }
+    }
+
+    @Test public void beginRejectsLatchedCleanupFaultWithoutPendingSpeechCallback() {
+        try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+             MockedConstruction<SpeechSession> sessions = mockConstruction(SpeechSession.class,
+                (session, context) -> {
+                    when(session.begin(true)).thenReturn(23L);
+                    when(session.isFaulted()).thenReturn(false, true);
+                })) {
+            ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+            MainActivity activity = controller.get();
+            MainApplication app = (MainApplication) activity.getApplication();
+            assertTrue(app.getCapturePrivacyReady());
+            ReactApplicationContext context = mock(ReactApplicationContext.class);
+            when(context.getCurrentActivity()).thenReturn(activity);
+            LocalSpeechModule bridge = new LocalSpeechModule(context);
+            Promise begun = mock(Promise.class);
+            bridge.begin(begun);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            ArgumentCaptor<Object> begunToken = ArgumentCaptor.forClass(Object.class);
+            verify(begun).resolve(begunToken.capture());
+            String token = (String) begunToken.getValue();
+            assertTrue(token.endsWith(":23"));
+            assertFalse(app.getSpeechCleanupFaulted());
+            bridge.cancel(token);
+            assertTrue(app.getSpeechCleanupFaulted());
+            Promise denied = mock(Promise.class);
+            bridge.begin(denied);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            verify(denied).reject(eq("CLEANUP_FAILED"), anyString());
+            verify(denied, never()).resolve(any());
+            assertEquals(1, sessions.constructed().size());
+            controller.pause().stop().destroy();
         }
     }
 

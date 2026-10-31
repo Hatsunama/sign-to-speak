@@ -1,8 +1,21 @@
 import importlib.util
+import os
+import subprocess
+import sys
 import pathlib
 import tempfile
 import unittest
 import zipfile
+
+REPO = pathlib.Path(__file__).resolve().parents[2]
+NOTICE = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/mediapipe-tasks-1.1.1-NOTICE'
+APACHE = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/Apache-2.0-LICENSE'
+LITERT = REPO / 'native/vendor/mediapipe-offline/licenses/sdk-licenses/litert-1.4.2-LICENSE'
+LICENSE_ASSETS = {
+    'assets/sdk-licenses/mediapipe-tasks-1.1.1-NOTICE': NOTICE,
+    'assets/sdk-licenses/Apache-2.0-LICENSE': APACHE,
+    'assets/sdk-licenses/litert-1.4.2-LICENSE': LITERT,
+}
 
 SCRIPT = pathlib.Path(__file__).with_name('check-phone-instrumentation.py')
 spec = importlib.util.spec_from_file_location('phone_instrumentation', SCRIPT)
@@ -18,6 +31,7 @@ class InstrumentationArtifact(unittest.TestCase):
         self.root = pathlib.Path(temporary.name)
         self.xml = f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{QA}.test"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.REORDER_TASKS"/><application android:testOnly="true"/><instrumentation android:name="androidx.test.runner.AndroidJUnitRunner" android:targetPackage="{QA}"/></manifest>'''
         self.entries = {'AndroidManifest.xml': b'manifest', 'classes.dex': b'dex'}
+        self.entries.update({name: path.read_bytes() for name, path in LICENSE_ASSETS.items()})
 
     def verify(self):
         manifest = self.root / 'manifest.xml'
@@ -35,6 +49,25 @@ class InstrumentationArtifact(unittest.TestCase):
 
     def test_valid(self):
         self.verify()
+
+    def test_missing_sdk_license_assets(self):
+        for name in LICENSE_ASSETS:
+            with self.subTest(name=name):
+                data = self.entries.pop(name)
+                try:
+                    with self.assertRaises(AssertionError): self.verify()
+                finally:
+                    self.entries[name] = data
+
+    def test_changed_sdk_license_assets(self):
+        for name in LICENSE_ASSETS:
+            with self.subTest(name=name):
+                original = self.entries[name]
+                self.entries[name] = original + b'changed'
+                try:
+                    with self.assertRaises(AssertionError): self.verify()
+                finally:
+                    self.entries[name] = original
 
     def test_arm64_library_allowed(self):
         self.entries['lib/arm64-v8a/libfoo.so'] = b'native'
@@ -57,6 +90,29 @@ class InstrumentationArtifact(unittest.TestCase):
 
     def test_not_test_only(self):
         self.reject_xml('android:testOnly="true"', 'android:testOnly="false"')
+
+    def test_unplanned_application_components(self):
+        components = (
+            '<service android:name="com.google.mediapipe.tasks.components.DataTransportService" android:exported="false"/>',
+            '<receiver android:name="com.google.mediapipe.tasks.components.DataTransportReceiver" android:exported="false"/>',
+            '<provider android:name="com.google.mediapipe.tasks.components.DataTransportProvider" android:authorities="test.provider" android:exported="false"/>',
+        )
+        self.verify()  # The baseline manifest requests only REORDER_TASKS.
+        for component in components:
+            with self.subTest(component=component):
+                self.xml = self.xml.replace('<application android:testOnly="true"/>',
+                                            f'<application android:testOnly="true">{component}</application>')
+                try:
+                    with self.assertRaises(AssertionError):
+                        self.verify()
+                finally:
+                    self.xml = self.xml.replace(f'<application android:testOnly="true">{component}</application>',
+                                                '<application android:testOnly="true"/>')
+
+    def test_androidx_test_activity_allowed(self):
+        self.xml = self.xml.replace('<application android:testOnly="true"/>',
+                                    '<application android:testOnly="true"><activity android:name="androidx.test.core.app.InstrumentationActivityInvoker$BootstrapActivity"/></application>')
+        self.verify()
 
     def test_network_permission(self):
         self.reject_xml('</manifest>', '<uses-permission android:name="android.permission.INTERNET"/></manifest>')
@@ -121,6 +177,22 @@ class InstrumentationArtifact(unittest.TestCase):
         data[central - 16:central] = b'APK Sig Block 42'
         apk.write_bytes(data)
         with self.assertRaises(AssertionError): audit.verify(manifest, apk)
+
+
+    def test_optimized_cli_rejects_wrong_runner(self):
+        self.xml = self.xml.replace('androidx.test.runner.AndroidJUnitRunner', 'other.Runner')
+        manifest = self.root / 'manifest.xml'
+        apk = self.root / 'test.apk'
+        manifest.write_text(self.xml, encoding='utf-8')
+        with zipfile.ZipFile(apk, 'w') as archive:
+            for name, data in self.entries.items():
+                archive.writestr(name, data)
+        for args, environment in ((['-O'], os.environ.copy()), ([], dict(os.environ, PYTHONOPTIMIZE='1'))):
+            with self.subTest(mode=args or 'PYTHONOPTIMIZE'):
+                result = subprocess.run([sys.executable, *args, str(SCRIPT), str(manifest), str(apk)],
+                                        capture_output=True, text=True, env=environment)
+                self.assertNotEqual(result.returncode, 0, result.stdout + result.stderr)
+                self.assertIn('AssertionError: APK validation failed', result.stderr)
 
 
 if __name__ == '__main__':

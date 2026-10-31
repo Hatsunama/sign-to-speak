@@ -5,6 +5,8 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioManager
 import androidx.lifecycle.Lifecycle
+import java.io.IOException
+import java.util.function.BooleanSupplier
 import java.util.concurrent.atomic.AtomicLong
 
 /** Activity-scoped speech authority. Native lifecycle revokes it without waiting for JS. */
@@ -34,10 +36,21 @@ internal class SpeechOwner(private val activity: MainActivity) {
   @Synchronized fun begin(): String? {
     if (!eligible()) return null
     if (session == null) {
+      val appContext = activity.applicationContext
       session = SpeechSession(object : SpeechSession.Factory {
-        override fun newRequest(): SpeechSession.Request = FliteRequest()
+        override fun newRequest(cancelled: BooleanSupplier): SpeechSession.Request {
+          try {
+            val parent = appContext.noBackupFilesDir.canonicalFile
+            val root = PocketModelStore().prepare(parent,
+                { name -> appContext.assets.open("pocket-alba/$name") }, cancelled)
+            if (cancelled.asBoolean) throw IOException("Speech request cancelled")
+            return PocketTtsRequest(root.absolutePath)
+          } catch (_: IOException) {
+            throw IllegalStateException("Local speech unavailable")
+          }
+        }
         override fun newPlayer(): SpeechSession.Player = ProtectedPcmPlayer(
-            activity.applicationContext, { eligible() }, { cancelAll() })
+            appContext, { eligible() }, { cancelAll() })
       })
     }
     val local = session!!.begin(true)
@@ -50,7 +63,7 @@ internal class SpeechOwner(private val activity: MainActivity) {
 
   @Synchronized fun speak(requestToken: String, text: String, done: (String) -> Unit) {
     if (requestToken != token || !eligible()) { done("UNAVAILABLE"); return }
-    val bytes = ascii(text)
+    val bytes = SpeechSession.encodeText(text)
     if (bytes == null) { done("INVALID_INPUT"); return }
     val target = session ?: run { done("UNAVAILABLE"); return }
     try {
@@ -64,12 +77,6 @@ internal class SpeechOwner(private val activity: MainActivity) {
       // buffer has no reason to survive an asynchronous completion.
       bytes.fill(0)
     }
-  }
-
-  private fun ascii(text: String): ByteArray? {
-    if (text.isEmpty() || text.length > 256 || text.all { it == ' ' } ||
-        text.any { it.code < 32 || it.code > 126 }) return null
-    return text.toByteArray(Charsets.US_ASCII)
   }
 
   @Synchronized fun cancel(requestToken: String) {

@@ -53,9 +53,21 @@ jobs:
           git rev-parse HEAD | tee "$RUNNER_TEMP/sign-evidence/tested-sha.txt"
           test "$(git rev-parse HEAD)" = "$TESTED_SHA"
           printf 'run=%s\nattempt=%s\nrunner-image=%s\n' "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "${ImageVersion:-unknown}" > "$RUNNER_TEMP/sign-evidence/run.txt"
-          sha256sum package-lock.json android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties > "$RUNNER_TEMP/sign-evidence/source-checksums.txt"
+          sha256sum package-lock.json android/gradle/wrapper/gradle-wrapper.jar android/gradle/wrapper/gradle-wrapper.properties \
+            vendor/pocket-tts-runtime/Cargo.toml vendor/pocket-tts-runtime/Cargo.lock vendor/pocket-tts-runtime/build.rs \
+            android/app/src/main/jni/CMakeLists.txt android/app/src/main/cpp/pocket/CMakeLists.txt \
+            scripts/build-pocket-runtime.sh scripts/prepare-pocket-assets.py scripts/check-pocket-apk-elf.py \
+            > "$RUNNER_TEMP/sign-evidence/source-checksums.txt"
       - name: Install locked JavaScript dependencies without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
+      - name: Provision pinned Python host-test wheel
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/sign-python-host-tests"
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir --target "$target" -r requirements-host-tests.txt
+          PYTHONPATH="$target" python3 -c 'import numpy; assert numpy.__version__ == "2.3.2"'
+          echo "PYTHONPATH=$target" >> "$GITHUB_ENV"
       - name: Full host suite, TypeScript and workflow policy
         id: host
         run: |
@@ -63,38 +75,56 @@ jobs:
           npm test
           npm run typecheck
           sh tests/run-java-tests.sh
-          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
+          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs scripts/python-host-dependency-policy.test.mjs scripts/pocket-build-policy.test.mjs
           for test_file in scripts/*.test.py; do python3 "$test_file"; done
-          python3 tests/flite/test_prepared_sources.py
       - name: Verify Android prerequisites without accepting new licenses
         id: sdk
         run: bash scripts/ci-sdk.sh
-      - name: Build and test source-built Flite engine and host JNI bridge
-        id: flite_host
+      - name: Verify QA asset merger includes reviewed license asset producer
+        id: license_assets_graph
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain --dry-run \
+            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:mergeQaAssets \
+            | tee "$RUNNER_TEMP/sign-evidence/qa-assets-task-graph.txt"
+          grep -Eq '^(> Task )?:app:mergeQaAssets SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-assets-task-graph.txt"
+          grep -Eq '^(> Task )?:app:stageQaReviewedLicenses SKIPPED[[:space:]]*$' "$RUNNER_TEMP/sign-evidence/qa-assets-task-graph.txt"
+      - name: Build locked Pocket runtime for debug and phone QA ABIs
+        id: pocket_runtime
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.license_assets_graph.outcome == 'success' }}
+        timeout-minutes: 30
+        run: |
+          set -euo pipefail
+          test -s vendor/pocket-tts-runtime/Cargo.lock
+          timeout 900 bash scripts/build-pocket-runtime.sh x86_64
+          timeout 900 bash scripts/build-pocket-runtime.sh arm64-v8a
+          cp "$RUNNER_TEMP"/pocket-{x86_64,arm64-v8a}-{header,segments,dynamic,symbols}.txt "$RUNNER_TEMP/sign-evidence/"
+      - name: Prepare pinned Pocket model and license assets
+        id: pocket_assets
+        if: ${{ !cancelled() && steps.pocket_runtime.outcome == 'success' }}
         timeout-minutes: 8
         run: |
           set -euo pipefail
-          python3 android/app/src/main/cpp/flite/prepare_sources.py --check
-          build="$RUNNER_TEMP/sign-flite-host"
-          cmake -S android/app/src/main/cpp/flite -B "$build" -DCMAKE_BUILD_TYPE=Debug
-          cmake --build "$build" --parallel 2
-          ctest --test-dir "$build" --output-on-failure | tee "$RUNNER_TEMP/sign-evidence/flite-ctest.log"
-          nm -D --undefined-only "$build/libprivate_tts.so" > "$RUNNER_TEMP/sign-evidence/flite-undefined-symbols.txt"
-          classes="$RUNNER_TEMP/sign-flite-java"
-          mkdir -p "$classes"
-          "$JAVA_HOME/bin/javac" -d "$classes" \
-            android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java \
-            android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/FliteRequest.java \
-            tests/java/FliteRequestHostTest.java
-          "$JAVA_HOME/bin/java" -Djava.library.path="$build" -cp "$classes" FliteRequestHostTest | tee "$RUNNER_TEMP/sign-evidence/flite-jni.log"
+          python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
+            --metadata "$RUNNER_TEMP/pocket-arm64-v8a-metadata.json" \
+            --output-dir generated/pocket-assets
+          test -s generated/pocket-assets/pocket-alba/model.safetensors
+          test -s generated/pocket-assets/pocket-alba/tokenizer.model
+          test -s generated/pocket-assets/pocket-alba/alba.safetensors
       - name: Prove cleanup-isolation fail-before assertions and restore exact candidate
         id: baseline
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.license_assets_graph.outcome == 'success' }}
         timeout-minutes: 12
         run: bash scripts/ci-isolation-baseline.sh
       - name: Compile actual Kotlin and run full Android unit suite (Robolectric, no emulator)
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -103,7 +133,7 @@ jobs:
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:testDebugUnitTest
       - name: Verify debug and release merged permissions
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -112,7 +142,7 @@ jobs:
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions
       - name: Assemble unsigned development APK only
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.flite_host.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
@@ -122,19 +152,49 @@ jobs:
             :app:assembleDebug
           find app/build/outputs/apk/debug -name '*.apk' -exec sha256sum {} + > "$RUNNER_TEMP/sign-evidence/apk-checksums.txt"
           test -s "$RUNNER_TEMP/sign-evidence/apk-checksums.txt"
+          mapfile -t apks < <(find app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          cd ..
+          python3 scripts/check-pocket-apk-elf.py "android/${apks[0]}" x86_64 \
+            "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            "$RUNNER_TEMP/sign-evidence/debug-elf"
       - name: Build unsigned arm64 test-only phone QA APK (no device operation)
         id: phone_qa
-        timeout-minutes: 10
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
+        timeout-minutes: 15
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
-            -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
-            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
-            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+          qa_gradle_args=(--no-daemon --max-workers=2 --console=plain --stacktrace
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m'
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false)
+          ./gradlew "${qa_gradle_args[@]}" \
+            :app:mergeQaAssets :app:generateQaLintVitalReportModel \
             :app:verifyUnsignedPhoneQaIsolation :app:verifyQaMergedPermissions :app:assembleQa :app:assembleQaAndroidTest
           cd ..
           bash scripts/ci-phone-qa-audit.sh
+          mapfile -t apks < <(find android/app/build/outputs/apk/qa -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
+            "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            "$RUNNER_TEMP/sign-evidence/qa-elf"
+          cd android
+          ./gradlew --offline "${qa_gradle_args[@]}" \
+            :app:dependencies --configuration qaRuntimeClasspath \
+            | tee "$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          grep -q '^qaRuntimeClasspath ' "$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          report="$RUNNER_TEMP/sign-evidence/phone-qa/runtime-dependencies.txt"
+          grep -Eq 'com\.facebook\.react:react-android(:|[[:space:]]*->[[:space:]]*)0\.86\.3([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-camera2(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-lifecycle(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          grep -Eq 'androidx\.camera:camera-view(:|[[:space:]]*->[[:space:]]*)1\.4\.2([[:space:]]|$)' "$report"
+          cd ..
+          python3 scripts/collect-bundle-notices.py . \
+            android/app/build/generated/sourcemaps/react/qa/index.android.bundle.map \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/bundle-notices"
+          python3 scripts/check-phone-qa.py --verify-bundled-js-inventory \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/bundle-notices/inventory.json"
       - name: Retain bounded test evidence, including failures
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4

@@ -1,10 +1,63 @@
-// Keep the reviewed license files as the single source of truth for APK assets.
-// Android preserves their relative paths as assets/flite/*.txt.
-def licenseRoot = file("../../licenses")
-["flite/THIRD_PARTY_NOTICES.txt", "flite/MODIFICATIONS.txt"].each { relative ->
-    def source = new File(licenseRoot, relative)
-    if (!source.isFile() || source.length() == 0) {
-        throw new GradleException("Required nonempty Flite license asset missing: ${source}")
+// Curate notices for code still in the APK. Historical Flite receipts remain
+// in source control for provenance, but are no longer bundled.
+abstract class StageReviewedLicenses extends DefaultTask {
+    @Internal
+    abstract org.gradle.api.file.DirectoryProperty getSourceRoot()
+
+    @InputFiles
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract org.gradle.api.file.ConfigurableFileCollection getSelectedFiles()
+
+    @Input
+    abstract org.gradle.api.provider.ListProperty<String> getIncludedPaths()
+
+    @OutputDirectory
+    abstract org.gradle.api.file.DirectoryProperty getOutputDirectory()
+
+    @javax.inject.Inject
+    abstract org.gradle.api.file.FileSystemOperations getFileSystemOperations()
+
+    @TaskAction
+    void stage() {
+        def root = sourceRoot.get().asFile
+        def included = includedPaths.get()
+        def destination = outputDirectory.get().asFile
+        fileSystemOperations.sync {
+            from(root) { include(included) }
+            into(destination)
+            includeEmptyDirs = false
+        }
     }
 }
-android.sourceSets.main.assets.srcDir(file("../../licenses"))
+
+def licenseRoot = file("../../licenses")
+def licenseFiles = ["sign-to-speak/LICENSE", "sign-to-speak/NOTICE", "react-native-template-MIT.txt",
+                    "framework/react-native-LICENSE.txt", "framework/react-native-safe-area-context-LICENSE.txt",
+                    "framework/ndk-libcxx-NOTICE.txt", "framework/ndk-libcxxabi-NOTICE.txt",
+                    "framework/double-conversion-LICENSE.txt", "framework/glog-COPYING.txt",
+                    "framework/fast_float-LICENSE-MIT.txt", "framework/folly-LICENSE.txt",
+                    "framework/hermes-dtoa.c-NOTICE.txt", "framework/hermes-g_fmt.c-NOTICE.txt",
+                    "framework/fresco-ijg-README.txt", "framework/fresco-ijg-ACKNOWLEDGMENT.txt",
+                    "framework/bolts-tasks-LICENSE.txt", "framework/old-facebook-MIT.txt",
+                    "framework/camera-libyuv-LICENSE.txt"]
+// The reviewed receipt is the single list of new bundled JavaScript grant files.
+def bundledJsReceipt = new groovy.json.JsonSlurper().parse(new File(licenseRoot, "bundled-js/reviewed-manifest.json"))
+licenseFiles += "bundled-js/reviewed-manifest.json"
+licenseFiles += bundledJsReceipt.packages.collect { it.asset }.findAll { it.startsWith("bundled-js/") }.unique()
+licenseFiles.each { relative ->
+    def source = new File(licenseRoot, relative)
+    if (!source.isFile() || source.length() == 0) {
+        throw new GradleException("Required nonempty license asset missing: ${source}")
+    }
+}
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def stageReviewedLicenses = tasks.register("stage${variant.name.capitalize()}ReviewedLicenses", StageReviewedLicenses) {
+            sourceRoot.fileValue(licenseRoot)
+            selectedFiles.from(project.fileTree(licenseRoot) { include(licenseFiles) })
+            includedPaths.set(licenseFiles)
+            outputDirectory.set(layout.buildDirectory.dir("generated/reviewed-license-assets/${variant.name}"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(stageReviewedLicenses) { it.outputDirectory }
+    }
+}

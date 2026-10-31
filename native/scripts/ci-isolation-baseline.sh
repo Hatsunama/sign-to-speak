@@ -7,7 +7,7 @@ cd "$(dirname "$0")/../.."
 report="$RUNNER_TEMP/sign-evidence/isolation-baseline"
 mkdir -p "$report"
 patch=native/tests/fixtures/pre-isolation.patch
-printf '%s  %s\n' '3923f83b84b544c7752689695337f7f1bc5b58c022cebc3589ea6c3d79da406d' "$patch" | sha256sum --check
+printf '%s  %s\n' 'dfd5148ef5bd0afe2c86d5ad71e3f334c6579757590ea12cfc1734d6df62545e' "$patch" | sha256sum --check
 files=(native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/{MainActivity,PrivateCameraView}.kt)
 sha256sum "${files[@]}" > "$report/candidate-source.sha256"
 # Baseline must start from the exact checked-out candidate, not additional edits.
@@ -17,7 +17,7 @@ restore() {
   result=$?
   trap - EXIT
   if [[ "$applied" == true ]]; then
-    git apply --reverse "$patch" || exit 92
+    git restore --source=HEAD --worktree -- "${files[@]}" || exit 92
   fi
   sha256sum --check "$report/candidate-source.sha256" || exit 93
   git diff --exit-code HEAD -- "${files[@]}" || exit 94
@@ -27,8 +27,8 @@ restore() {
 trap restore EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
-git apply --check "$patch"
-git apply "$patch"
+git apply --ignore-space-change --check "$patch"
+git apply --ignore-space-change "$patch"
 applied=true
 sha256sum "${files[@]}" > "$report/counterfactual-source.sha256"
 status=0

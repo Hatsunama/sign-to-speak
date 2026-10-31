@@ -1,8 +1,54 @@
 import groovy.json.JsonOutput
+import java.security.MessageDigest
 
 // Explicit physical ARM64 QA. App and instrumentation APKs stay unsigned.
 def phoneQaEnabled = providers.gradleProperty("unsignedPhoneQa").orElse("false").get() == "true"
 if (phoneQaEnabled) {
+    // The instrumentation probe keeps the official tasks-vision coordinate. Its
+    // transitive core is the audited upstream source build with usage telemetry off.
+    def offlineCoreVersion = "1.1.1-offline-50505c8"
+    def offlineCoreRepository = file("../../vendor/mediapipe-offline/maven")
+    def offlineCoreAar = new File(offlineCoreRepository,
+        "com/google/mediapipe/tasks-core/${offlineCoreVersion}/tasks-core-${offlineCoreVersion}.aar")
+    def offlineCoreSha256 = "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2"
+    if (!offlineCoreAar.isFile() || offlineCoreAar.length() != 8325540L) {
+        throw new GradleException("Pinned offline MediaPipe core AAR is missing or has the wrong size: ${offlineCoreAar}")
+    }
+    def digest = MessageDigest.getInstance("SHA-256")
+    offlineCoreAar.withInputStream { stream ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = stream.read(buffer)) != -1) digest.update(buffer, 0, count)
+    }
+    if (digest.digest().encodeHex().toString() != offlineCoreSha256) {
+        throw new GradleException("Pinned offline MediaPipe core AAR SHA-256 mismatch: ${offlineCoreAar}")
+    }
+    repositories {
+        exclusiveContent {
+            forRepository {
+                maven { url = offlineCoreRepository.toURI() }
+            }
+            filter {
+                includeVersion("com.google.mediapipe", "tasks-core", offlineCoreVersion)
+            }
+        }
+    }
+    def offlineCoreConfigurations = ["qaAndroidTestCompileClasspath", "qaAndroidTestRuntimeClasspath"]
+    configurations.configureEach { configuration ->
+        if (configuration.name in offlineCoreConfigurations) {
+            configuration.resolutionStrategy.dependencySubstitution {
+                substitute(module("com.google.mediapipe:tasks-core:1.1.1"))
+                    .using(module("com.google.mediapipe:tasks-core:${offlineCoreVersion}"))
+                    .because("Unsigned ARM64 phone probe uses audited upstream source core without usage telemetry")
+            }
+        }
+    }
+    gradle.projectsEvaluated {
+        def missing = offlineCoreConfigurations.findAll { configurations.findByName(it) == null }
+        if (!missing.isEmpty()) {
+            throw new GradleException("Missing QA instrumentation classpaths for offline MediaPipe core: ${missing}")
+        }
+    }
     def fallback = "android.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes"
     if (gradle.startParameter.projectProperties[fallback] != "false") {
         throw new GradleException("Explicitly disable AGP default-debug signing fallback")
@@ -18,6 +64,12 @@ if (phoneQaEnabled) {
         throw new GradleException("Phone QA requires arm64-v8a and cannot combine with emulator QA")
     }
     android {
+        sourceSets {
+            // AGP strips AAR META-INF notices. Put source copies in the QA test APK.
+            androidTestQa {
+                assets.srcDir file("../../vendor/mediapipe-offline/licenses")
+            }
+        }
         defaultConfig {
             testApplicationId "com.xmilo_at_your_side.sign_to_speak.qa.test"
             testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
@@ -29,6 +81,9 @@ if (phoneQaEnabled) {
         androidTestImplementation("androidx.test:runner:1.7.0")
         androidTestImplementation("androidx.test.ext:junit:1.3.0")
         androidTestImplementation("androidx.test.uiautomator:uiautomator:2.3.0")
+        // Research probe only: these are packaged in the instrumentation APK, not the app.
+        androidTestImplementation("com.google.mediapipe:tasks-vision:1.1.1")
+        androidTestImplementation("com.google.ai.edge.litert:litert:1.4.2")
     }
     def checked = [:]
     androidComponents.finalizeDsl { dsl ->
@@ -73,19 +128,9 @@ if (phoneQaEnabled) {
         if (!checked.dsl || !checked.app || !checked.test) {
             throw new GradleException("Both resolved unsigned phone variants must be checked")
         }
+        project.ext.verifyUnsignedQaTaskFixtures()
         def forbidden = graph.allTasks.findAll { task ->
-            def n = task.name.toLowerCase()
-            def localLintJar = task.path == ":react-native-safe-area-context:prepareLintJarForPublish" &&
-                    task.class.name in ["com.android.build.gradle.internal.tasks.PrepareLintJarForPublish",
-                        "com.android.build.gradle.internal.tasks.PrepareLintJarForPublish_Decorated"]
-            n.contains("validatesigning") || n.contains("keystore") || n.contains("keytool") ||
-                    n ==~ /.*(create|generate).*key.*/ || n.startsWith("sign") ||
-                    n.startsWith("install") || n.startsWith("uninstall") || n.startsWith("connected") ||
-                    (n.contains("publish") && !localLintJar) || n.contains("upload") ||
-                    n in ["assemblerelease", "bundlerelease"] ||
-                    task.class.name.contains("ValidateSigningTask") ||
-                    task.class.name.contains("PublishToMaven") ||
-                    task.class.name.contains("PublishToIvyRepository")
+            project.ext.forbiddenUnsignedQaTask(task.path, task.name, task.class.name)
         }
         println("SIGN_PHONE_UNSIGNED_GRAPH=" + JsonOutput.toJson([
             agp: "8.12.0", variants: checked, defaultDebugFallback: false,

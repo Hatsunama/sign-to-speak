@@ -1,9 +1,5 @@
-<!-- BEGIN:nextjs-agent-rules -->
+# Repository development
 
-# This is NOT the Next.js you know
+The active app is the React Native Android project in `native/`. Read `native/README.md` and the relevant `native/docs/` and `native/scripts/CI.md` guidance before changing or verifying it. Root-level browser prototype files were retired; use Git history for their provenance. Preserve `qa-artifacts/` evidence and all signing credentials.
 
-This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
-
-This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
-
-<!-- END:nextjs-agent-rules -->
+On the owner’s Windows host, use `C:/sign_to_speak/repository` as the active checkout and keep this project’s evidence, models, scratch files and temporary test directories under `C:/sign_to_speak`. The old OneDrive and xMilo paths are retired. Keep existing signing credentials and shared SDK/JDK installations in their protected locations; never move or upload a key to satisfy workspace consolidation. Use hosted CI for heavy builds and preserve the owner’s device/resource coordination rules in `native/docs/COMMERCIAL_READINESS_PLAN.md`.

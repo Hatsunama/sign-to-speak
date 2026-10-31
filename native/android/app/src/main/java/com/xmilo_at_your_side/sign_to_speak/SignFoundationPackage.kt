@@ -31,6 +31,8 @@ class CameraViewManager : SimpleViewManager<PrivateCameraView>() {
     override fun createViewInstance(context: ThemedReactContext) = PrivateCameraView(context)
     @ReactProp(name = "active")
     fun setActive(view: PrivateCameraView, active: Boolean) = view.setActive(active)
+    @ReactProp(name = "lensFacing")
+    fun setLensFacing(view: PrivateCameraView, lensFacing: String?) = view.setLensFacing(lensFacing)
     override fun getExportedCustomDirectEventTypeConstants(): MutableMap<String, Any> =
         mutableMapOf("topStatus" to mapOf("registrationName" to "onStatus"))
     override fun onDropViewInstance(view: PrivateCameraView) {

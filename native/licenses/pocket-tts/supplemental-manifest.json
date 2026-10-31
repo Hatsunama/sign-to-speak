@@ -1,0 +1,81 @@
+{
+  "schema": 1,
+  "packages": {
+    "dasp_frame@0.11.0|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "dasp_frame",
+      "version": "0.11.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "b2a3937f5fe2135702897535c8d4a5553f8b116f76c1529088797f2eee7c5cd6",
+      "notices": {
+        "upstream/LICENSE-MIT": {
+          "path": "dasp_frame-0.11.0/LICENSE-MIT",
+          "sha256": "b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0"
+        }
+      }
+    },
+    "dasp_sample@0.11.0|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "dasp_sample",
+      "version": "0.11.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f",
+      "notices": {
+        "upstream/LICENSE-MIT": {
+          "path": "dasp_sample-0.11.0/LICENSE-MIT",
+          "sha256": "b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0"
+        }
+      }
+    },
+    "pulp-wasm-simd-flag@0.1.1|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "pulp-wasm-simd-flag",
+      "version": "0.1.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "1d8f70e07b9c3962945a74e59ca1c511bba65b6419468acc217c457d93f3c740",
+      "notices": {
+        "upstream/LICENSE": {
+          "path": "pulp-wasm-simd-flag-0.1.1/LICENSE",
+          "sha256": "d64f878c89bd5f1e5ada7e4aad57690b122727cf5229b7b87ea1980c188da1d9"
+        }
+      }
+    },
+    "sentencepiece@0.14.0|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "sentencepiece",
+      "version": "0.14.0",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "199cd424616675812f71a43866e2fb6e4725538dd7cee7d537fea81c0d66c102",
+      "notices": {
+        "upstream/LICENSE-MIT": {
+          "path": "sentencepiece-0.14.0/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+        },
+        "upstream/COPYRIGHT.md": {
+          "path": "sentencepiece-0.14.0/COPYRIGHT.md",
+          "sha256": "44f18d3b54f6bc6b24bb3d2f859364dcbb71928fb8a2fb9f535a143b8e89d95a"
+        }
+      }
+    },
+    "valuable@0.1.1|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "valuable",
+      "version": "0.1.1",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65",
+      "notices": {
+        "upstream/LICENSE-MIT": {
+          "path": "valuable-0.1.1/LICENSE-MIT",
+          "sha256": "ed60d479b8fd1f64e9cbc3de449a16a53ac1b3d1b6aeb9bf9d190a8e93061b44"
+        }
+      }
+    },
+    "xn@0.2.12|registry+https://github.com/rust-lang/crates.io-index": {
+      "name": "xn",
+      "version": "0.2.12",
+      "source": "registry+https://github.com/rust-lang/crates.io-index",
+      "checksum": "bec55897173439907dd60c759df3d4793aa73af979336cf7f6f999532812d59f",
+      "notices": {
+        "upstream/LICENSE-MIT": {
+          "path": "xn-0.2.12/LICENSE-MIT",
+          "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3"
+        }
+      }
+    }
+  }
+}

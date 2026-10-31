@@ -6,9 +6,17 @@ native/android/app/src/main/jni/CMakeLists.txt text eol=lf
 native/android/app/src/main/cpp/** text eol=lf
 native/android/app/src/main/cpp/flite/upstream/** text eol=lf
 native/licenses/flite/** text eol=lf
+native/vendor/pocket-tts-runtime/** text eol=lf
+native/licenses/pocket-tts/** -text
+native/licenses/framework/** -text
+native/licenses/react-native-template-MIT.txt -text
+native/licenses/sign-to-speak/** -text
 
 # Preserve upstream license/source formatting; raw hashes are checked separately.
 native/android/app/src/main/cpp/flite/upstream/** -whitespace
 native/android/app/src/main/cpp/flite/generated/** -whitespace
 native/android/app/src/main/cpp/flite/modifications.patch -whitespace
 native/licenses/flite/THIRD_PARTY_NOTICES.txt -whitespace
+native/licenses/framework/*.txt -whitespace
+
+native/licenses/bundled-js/** -text -whitespace

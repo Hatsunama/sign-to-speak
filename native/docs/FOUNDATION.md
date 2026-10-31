@@ -1,5 +1,7 @@
 # Android foundation plan and verification
 
+> Historical foundation plan: the paragraphs below describe the original checkpoint. The superseded browser prototype was removed from the active tree on 25 October 2026; use Git history for that source. Current implementation and acceptance status are in [RECOGNITION_PLAN.md](RECOGNITION_PLAN.md) and [the blocked verification report](../../qa-artifacts/recognition-followup-20261024/STATUS.md).
+
 Base: `Hatsunama/sign-to-speak`, main commit `e52813a3ccf34cb5e2df40548dfc68e9587e2225` (verified 2026-10-12). The existing Next.js application is preserved in place. This directory is isolated and must not import browser camera, browser speech, or browser model-download code.
 
 ## Scope and honest capability

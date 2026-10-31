@@ -558,7 +558,7 @@ public class ProtectedPcmPlayerTest {
             @Override public void close() { }
         };
         SpeechSession session = new SpeechSession(new SpeechSession.Factory() {
-            @Override public SpeechSession.Request newRequest() { return request; }
+            @Override public SpeechSession.Request newRequest(java.util.function.BooleanSupplier cancelled) { return request; }
             @Override public SpeechSession.Player newPlayer() {
                 return ProtectedPcmPlayerTest.this.player();
             }

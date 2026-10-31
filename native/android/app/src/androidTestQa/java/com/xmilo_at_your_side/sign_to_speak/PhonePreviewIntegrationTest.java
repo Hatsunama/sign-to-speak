@@ -17,7 +17,10 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.camera.core.Camera;
+import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
+import androidx.camera.core.UseCase;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.lifecycle.Lifecycle;
@@ -28,6 +31,7 @@ import androidx.test.uiautomator.Direction;
 import androidx.test.uiautomator.UiDevice;
 import androidx.test.uiautomator.UiObject2;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Callable;
@@ -42,9 +46,12 @@ public final class PhonePreviewIntegrationTest {
     private static final String QA_PACKAGE = "com.xmilo_at_your_side.sign_to_speak.qa";
     private static final String START = "Start local preview";
     private static final String STOP = "Stop camera";
+    private static final String SWITCH_TO_FRONT = "Switch to front camera";
+    private static final String SWITCH_TO_REAR = "Switch to rear camera";
     private static final String LIVE = "Live preview only. Recognition: unsupported.";
     private static final long STREAM_WAIT_MS = 20000;
     private static final long SCROLL_STABLE_MS = 400;
+    private static final int TARGET_SCROLL_SPEED_PX_PER_SEC = 200;
     private static final String QA_LOG = "PhonePreviewQA";
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
@@ -100,6 +107,89 @@ public final class PhonePreviewIntegrationTest {
         await("Launcher resumes Activity", 10000, () -> snapshot().resumed);
         findActionButton(START);
         assertNoAutomaticRestart();
+    }
+
+    @Test(timeout = 210000) public void rearDefaultAndLiveLensFlipsBindTheActualRequestedCamera()
+            throws Exception {
+        assertEquals("Test only the installed QA application", QA_PACKAGE, target.getPackageName());
+        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());
+        assertTrue("Run on an ARM64 physical phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
+        assertFalse("An emulator cannot certify a physical camera", Build.FINGERPRINT.contains("generic")
+                || Build.MODEL.toLowerCase().contains("emulator"));
+        assertEquals("Grant CAMERA before the run; this test never changes permissions",
+                PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
+        driver = new PhoneActivityDriver(instrumentation);
+        activity = driver.launch();
+        assertTrue("Capture privacy must be ready before mounting Home",
+                ((MainApplication) activity.getApplication()).getCapturePrivacyReady());
+        assertCameraOff("Launch");
+
+        CameraSnapshot rear = startAndAwaitStreaming();
+        assertBoundLens("Default Start", rear, CameraSelector.LENS_FACING_BACK);
+
+        CameraSnapshot front = flipAndAwaitStreaming(SWITCH_TO_FRONT, rear,
+                CameraSelector.LENS_FACING_FRONT);
+        CameraSnapshot rearAgain = flipAndAwaitStreaming(SWITCH_TO_REAR, front,
+                CameraSelector.LENS_FACING_BACK);
+
+        tapActionButton(STOP);
+        await("Stop accepted (Start local preview rendered)", 5000,
+                () -> nativeActionRendered(START));
+        assertReleased("Stop after live flips", rearAgain);
+        assertCameraOff("After Stop");
+
+        tapActionButton(SWITCH_TO_FRONT);
+        assertCameraOff("Flip while preview is off");
+        assertNoAutomaticRestart();
+        CameraSnapshot offFlipFront = startAndAwaitStreaming();
+        assertBoundLens("Start after off-preview flip", offFlipFront,
+                CameraSelector.LENS_FACING_FRONT);
+        tapActionButton(STOP);
+        await("Final Stop accepted (Start local preview rendered)", 5000,
+                () -> nativeActionRendered(START));
+        assertReleased("Final Stop", offFlipFront);
+        assertCameraOff("Final Stop");
+    }
+
+    private CameraSnapshot flipAndAwaitStreaming(String action, CameraSnapshot previous,
+            int expectedLens) throws Exception {
+        assertStreaming("Before " + action, previous);
+        tapActionButton(action);
+        await(action + " retires old Preview binding and request", 10000, () -> onMain(() ->
+                !Boolean.TRUE.equals(field(previous.view, "requested"))
+                        && field(previous.view, "preview") == null
+                        && field(previous.view, "provider") == null
+                        && !previous.provider.isBound(previous.preview)));
+        assertEquals("No native cleanup failure after " + action, 0,
+                ((Number) onMain(() -> field(activity, "cameraCleanupFailures"))).intValue());
+        final CameraSnapshot[] streamed = new CameraSnapshot[1];
+        await(action + " binds a new physical STREAMING Preview", STREAM_WAIT_MS, () -> {
+            CameraSnapshot now = snapshot();
+            if (!now.streaming() || now.view == previous.view || now.preview == previous.preview)
+                return false;
+            streamed[0] = now;
+            return true;
+        });
+        assertStreaming("After " + action, streamed[0]);
+        assertBoundLens("After " + action, streamed[0], expectedLens);
+        return streamed[0];
+    }
+
+    private void assertBoundLens(String step, CameraSnapshot expected, int lensFacing) throws Exception {
+        CameraSnapshot current = snapshot(expected.view, expected.preview, expected.provider);
+        assertTrue(step + " requires its owned, bound STREAMING Preview: " + current,
+                current.streaming() && current.view == expected.view
+                        && current.preview == expected.preview);
+        int actual = onMain(() -> {
+            // CameraX exposes the camera bound to this UseCase for library use. Read the
+            // Preview itself, not the React selection or the camera-switch button label.
+            Method getter = UseCase.class.getDeclaredMethod("getCamera");
+            getter.setAccessible(true);
+            Camera camera = (Camera) getter.invoke(expected.preview);
+            assertNotNull(step + ": bound Preview lost its Camera", camera);
+            return camera.getCameraInfo().getLensFacing();
+        });
+        assertEquals(step + ": bound CameraInfo lens facing", lensFacing, actual);
     }
 
     private CameraSnapshot startAndAwaitStreaming() throws Exception {
@@ -263,73 +353,118 @@ public final class PhonePreviewIntegrationTest {
         int movementResets = 0;
         boolean downward = true;
         String last = "label absent";
+        String lastGesture = "none";
         while (SystemClock.elapsedRealtime() < end) {
-            UiObject2 text = device.findObject(By.pkg(QA_PACKAGE).text(label));
-            if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+            // Native geometry is authoritative while the target is offscreen. Accessibility
+            // text/description searches can consume the whole deadline on a clipped button.
+            ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+            UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
+            Rect viewport = scroll == null ? null : scroll.getVisibleBounds();
+            Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
+            boolean nativeVisible = nativeFullyVisible(nativeBounds, viewport, screen);
+            UiObject2 text = null;
+            if (nativeVisible) {
+                text = device.findObject(By.pkg(QA_PACKAGE).text(label));
+                if (text == null) text = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+            }
             UiObject2 button = text;
             while (button != null && !button.isClickable()) button = button.getParent();
-            UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (button != null && scroll != null) {
-                Rect visible = button.getVisibleBounds();
-                Rect viewport = scroll.getVisibleBounds();
-                Rect screen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
-                ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-                last = "clickable=" + button.isClickable() + ",enabled=" + button.isEnabled()
-                        + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
-                        + ",scrollViewport=" + viewport + ",screen=" + screen;
-                if (fullyVisible(button, visible, viewport, screen, nativeBounds)) {
-                    if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
-                    long now = SystemClock.elapsedRealtime();
-                    if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
-                            || !nativeBounds.full.equals(lastFull))) movementResets++;
-                    if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
-                            || !nativeBounds.full.equals(lastFull)) stableSince = now;
-                    lastScrollY = nativeBounds.scrollY;
-                    lastFull = new Rect(nativeBounds.full);
-                    if (now - stableSince >= SCROLL_STABLE_MS) {
-                        if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
-                                + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
-                                + ",fixedLabels=" + fixedUiLabels());
-                        // Re-read the accessibility node and native geometry immediately before the tap.
-                        UiObject2 fresh = device.findObject(By.pkg(QA_PACKAGE).text(label));
-                        if (fresh == null) fresh = device.findObject(By.pkg(QA_PACKAGE).desc(label));
-                        while (fresh != null && !fresh.isClickable()) fresh = fresh.getParent();
-                        ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-                        if (fresh != null && latest != null && latest.scrollY == lastScrollY
-                                && latest.full.equals(lastFull)
-                                && fullyVisible(fresh, fresh.getVisibleBounds(), viewport, screen, latest)) {
-                            Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
-                                    + ",phase=settled,label=" + label + ",firstFullyVisible="
-                                    + firstFullyVisible + ",final=" + latest
-                                    + ",movementResets=" + movementResets);
-                            return fresh;
-                        }
-                        stableSince = -1;
+            Rect visible = button == null ? null : button.getVisibleBounds();
+            boolean ready = button != null && nativeVisible
+                    && fullyVisible(button, visible, viewport, screen, nativeBounds);
+            last = "nativeVisible=" + nativeVisible + ",UIAready=" + ready
+                    + ",clickable=" + (button != null && button.isClickable())
+                    + ",enabled=" + (button != null && button.isEnabled())
+                    + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
+                    + ",scrollViewport=" + viewport + ",screen=" + screen
+                    + ",stableForMs=" + (stableSince < 0 ? "waiting" :
+                    SystemClock.elapsedRealtime() - stableSince)
+                    + ",lastGesture=" + lastGesture;
+            if (ready) {
+                if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
+                long now = SystemClock.elapsedRealtime();
+                if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
+                        || !nativeBounds.full.equals(lastFull))) movementResets++;
+                if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
+                        || !nativeBounds.full.equals(lastFull)) stableSince = now;
+                lastScrollY = nativeBounds.scrollY;
+                lastFull = new Rect(nativeBounds.full);
+                if (now - stableSince >= SCROLL_STABLE_MS) {
+                    if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
+                            + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
+                            + ",fixedLabels=" + fixedUiLabels());
+                    // Re-read accessibility, native geometry and viewport immediately before the tap.
+                    UiObject2 fresh = device.findObject(By.pkg(QA_PACKAGE).text(label));
+                    if (fresh == null) fresh = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+                    while (fresh != null && !fresh.isClickable()) fresh = fresh.getParent();
+                    UiObject2 freshScroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
+                    Rect freshViewport = freshScroll == null ? null : freshScroll.getVisibleBounds();
+                    Rect freshScreen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
+                    ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
+                    if (fresh != null && freshViewport != null && latest != null
+                            && latest.scrollY == lastScrollY && latest.full.equals(lastFull)
+                            && fullyVisible(fresh, fresh.getVisibleBounds(),
+                                    freshViewport, freshScreen, latest)) {
+                        Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
+                                + ",phase=settled,label=" + label + ",firstFullyVisible="
+                                + firstFullyVisible + ",final=" + latest
+                                + ",movementResets=" + movementResets);
+                        return fresh;
                     }
-                    SystemClock.sleep(50);
-                    continue;
+                    stableSince = -1;
+                    last = "fresh UIA/native/viewport check changed; previous=" + last
+                            + ",freshVisible=" + (fresh == null ? null : fresh.getVisibleBounds())
+                            + ",freshNative=" + latest + ",freshViewport=" + freshViewport;
                 }
-            } else {
-                last = "label=" + (text != null) + ",clickableAncestor=" + (button != null)
-                        + ",scroll=" + (scroll != null);
+                SystemClock.sleep(50);
+                continue;
             }
             if (stableSince >= 0) movementResets++;
             stableSince = -1;
             lastFull = null;
-            if (scroll == null) SystemClock.sleep(100);
-            else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+            // Native geometry can settle before UI Automator exposes the label. Keep the
+            // already visible target still while accessibility catches up.
+            if (nativeVisible || scroll == null) {
+                SystemClock.sleep(50);
+                continue;
+            }
+            Direction direction;
+            int distance = 0;
+            if (nativeBounds != null && nativeBounds.full.top < viewport.top) {
+                direction = Direction.UP;
+                distance = viewport.top - nativeBounds.full.top;
+            } else if (nativeBounds != null && nativeBounds.full.bottom > viewport.bottom) {
+                direction = Direction.DOWN;
+                distance = nativeBounds.full.bottom - viewport.bottom;
+            } else {
+                direction = downward ? Direction.DOWN : Direction.UP;
+            }
+            // Ask for enough travel to cover the clipped part and gesture overhead, while
+            // retaining the slow physical scroll that prevents landscape flings.
+            float fraction = Math.max(0.20f, Math.min(0.65f,
+                    (distance + Math.min(120, viewport.height() / 5)) / (float) viewport.height()));
+            boolean moved = scroll.scroll(direction, fraction, TARGET_SCROLL_SPEED_PX_PER_SEC);
+            lastGesture = direction + "(" + fraction + ",moved=" + moved + ",target=" + nativeBounds + ")";
+            if (!moved) downward = direction == Direction.UP;
+            else downward = direction == Direction.DOWN;
         }
-        throw new AssertionError("QA button '" + label + "' never fully visible and scroll-stable; " + last
+        throw new AssertionError("QA button '" + label + "' did not become accessible, fully visible and scroll-stable; " + last
+                + "; movementResets=" + movementResets + "; lastGesture=" + lastGesture
                 + "; fixed QA labels=" + fixedUiLabels() + "; " + snapshot());
     }
 
-    private static boolean fullyVisible(UiObject2 button, Rect visible, Rect viewport, Rect screen,
-            ButtonGeometry nativeBounds) {
-        return button.isEnabled() && nativeBounds != null && nativeBounds.scrollY >= 0
-                && !visible.isEmpty() && visible.equals(nativeBounds.full)
+    private static boolean nativeFullyVisible(ButtonGeometry nativeBounds, Rect viewport, Rect screen) {
+        return nativeBounds != null && nativeBounds.scrollY >= 0 && !nativeBounds.full.isEmpty()
+                && viewport != null && !viewport.isEmpty()
                 && nativeBounds.localVisible.equals(new Rect(0, 0, nativeBounds.full.width(),
                         nativeBounds.full.height()))
                 && viewport.contains(nativeBounds.full) && screen.contains(nativeBounds.full);
+    }
+    private static boolean fullyVisible(UiObject2 button, Rect visible, Rect viewport, Rect screen,
+            ButtonGeometry nativeBounds) {
+        return button.isEnabled() && visible != null && !visible.isEmpty()
+                && nativeFullyVisible(nativeBounds, viewport, screen)
+                && visible.equals(nativeBounds.full);
     }
 
     private void tapActionButton(String label) throws Exception {

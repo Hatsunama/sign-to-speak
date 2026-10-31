@@ -15,7 +15,7 @@ import java.util.function.BooleanSupplier;
 
 /** Plays only app-owned, capture-protected PCM. One instance owns one playback attempt. */
 public final class ProtectedPcmPlayer implements SpeechSession.Player {
-    private static final int SAMPLE_RATE = 16000;
+    private static final int SAMPLE_RATE = 24000;
     private static final int MAX_FRAMES = SAMPLE_RATE * 30;
     private static final int BUFFER_BYTES = 8192;
     private static final int CHUNK_FRAMES = 2048;
@@ -127,6 +127,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
                 }
             }
             long drainStart = SystemClock.elapsedRealtime();
+            long expectedDurationMs = ((long) pcm.length * 1000L + SAMPLE_RATE - 1) / SAMPLE_RATE;
             long lastHead = -1;
             long lastHeadAt = drainStart;
             while (true) {
@@ -139,7 +140,7 @@ public final class ProtectedPcmPlayer implements SpeechSession.Player {
                 if (head >= pcm.length) { trackDrained = true; break; }
                 long now = SystemClock.elapsedRealtime();
                 if (head != lastHead) { lastHead = head; lastHeadAt = now; }
-                if (now - lastHeadAt > STALL_MS || now - drainStart > pcm.length / 16L + STALL_MS)
+                if (now - lastHeadAt > STALL_MS || now - drainStart > expectedDurationMs + STALL_MS)
                     throw new IllegalStateException("Audio output did not drain");
                 SystemClock.sleep(5);
             }

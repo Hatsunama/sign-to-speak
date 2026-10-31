@@ -6,6 +6,8 @@ At exact commit `1472323c62fe21fb69620f36b45aa0eba1d94cf6`, native CI passed 84 
 
 ## Scope and use
 
+Full Python host suites in the Android and Pocket component workflows provision only NumPy 2.3.2 into `$RUNNER_TEMP/sign-python-host-tests` before the suite. The Ubuntu 24.04 CPython 3.12 x64 wheel digest in `native/requirements-host-tests.txt` comes from the [official PyPI release JSON](https://pypi.org/pypi/numpy/2.3.2/json). The two-minute step requires a matching wheel hash, disables dependency resolution and the pip cache, and exports `PYTHONPATH` for subsequent steps. This is host-test preparation only; it does not install the reference audition stack or establish any model or asset license.
+
 `.github/workflows/sign-android.yml` is a development-only workflow triggered manually or by a same-repository PR whose head branch is exactly `fix/android-native-foundation`. Fork PRs and other branches do not run the job. Candidate publication requires coordinating review; opening or updating the approved PR then triggers CI. It runs on the standard `ubuntu-24.04` hosted runner, one job bounded to 30 minutes, without persistent caches. Artifacts expire after three days. The source repository is public; logs and artifacts must contain only repository/build/test data, never user media or keys.
 
 The checkout is the exact PR head SHA (not a synthetic merge commit), or the dispatch `GITHUB_SHA`, verified against `git rev-parse HEAD` and recorded alongside lockfile/wrapper hashes, run ID, runner image version, test reports and APK checksums. Do not describe a different or newer commit as tested. Every change needs a fresh run; rerunning an old workflow does not validate new code.

@@ -15,11 +15,20 @@ import androidx.test.uiautomator.UiDevice;
 import com.facebook.react.ReactHost;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
+import java.io.File;
+import java.io.FilterInputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.lang.reflect.Proxy;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
 import java.util.Arrays;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -27,8 +36,9 @@ import org.junit.runner.RunWith;
 
 /**
  * Physical ARM64 integration journey. Uses the installed QA Activity, its real ReactContext,
- * production LocalSpeechModule, Flite JNI, and protected AudioTrack. Synthetic ASCII only.
- * Reflection reads state under production locks; no factory replacement or product hook.
+ * production LocalSpeechModule, Pocket JNI, and protected AudioTrack. Synthetic reviewed text only.
+ * Reflection reads state under production locks. Five bridge cases use the production factory;
+ * the staging I/O case uses a separate session and a test-owned asset stream gate.
  */
 @RunWith(AndroidJUnit4.class)
 public final class PhoneSpeechIntegrationTest {
@@ -67,27 +77,52 @@ public final class PhoneSpeechIntegrationTest {
         if (driver != null) driver.close();
     }
 
-    @Test public void realFlitePcmProtectedPlaybackAndInputBoundaries() throws Exception {
+    @Test public void realPocketPcmProtectedPlaybackAndInputBoundaries() throws Exception {
         String token = begin();
         assertNotNull("Explicit begin must work on resumed real Activity", token);
-        for (String invalid : new String[]{"", " ", "line\nfeed", "caf\u00e9", repeat('x', 257)}) {
+        for (String invalid : new String[]{"", " ", "line\nfeed", repeat('x', 257)}) {
             assertEquals("INVALID_INPUT", speak(token, invalid).get(5, TimeUnit.SECONDS));
         }
         assertNull("Rejected input must never start a job", currentJob());
 
         CompletableFuture<Object> result = speak(token, LONG_TEXT);
         AudioEvidence evidence = observeRealPlayback(result);
-        assertTrue("Flite returned nonzero PCM", evidence.nonzeroPcm);
+        assertTrue("Pocket returned nonzero PCM", evidence.nonzeroPcm);
         assertTrue("Protected AudioTrack entered PLAYING", evidence.playing);
         assertTrue("AudioTrack playback head advanced", evidence.maxHead > 0);
         assertEquals("COMPLETED", result.get(WAIT_MS, TimeUnit.MILLISECONDS));
-        assertTrue("PCM frame count must be positive", evidence.pcmFrames > 0);
+        assertTrue("24 kHz PCM must be bounded to 30 seconds", evidence.pcmFrames > 0
+                && evidence.pcmFrames <= 720_000);
         assertTrue("Observe playback timing before completion", evidence.firstHeadAt > 0);
-        long remainingMs = Math.max(0, evidence.pcmFrames - evidence.firstHead) / 16;
+        long remainingMs = Math.max(0, evidence.pcmFrames - evidence.firstHead) / 24;
         assertTrue("Completion must wait for real AudioTrack drain",
                 evidence.completionAt - evidence.firstHeadAt + 200 >= remainingMs);
         assertCleaned(evidence.pcm, evidence.player);
         assertNull("Worker releases completed job", currentJob());
+    }
+
+    @Test public void accentedUtf8PlaysAndUnsupportedUnicodeRejectsWithoutSubstitution() throws Exception {
+        String token = begin();
+        assertNotNull("Explicit begin must work on resumed real Activity", token);
+
+        // Each string is valid Unicode within the bridge's length limits. A permissive
+        // tokenizer must not drop its unsupported code point and speak the ASCII prefix.
+        for (String unsupported : new String[]{
+                "Ready \u6771\u4eac.", "Ready \ud83d\ude42.", "Ready \udbff\udfff."}) {
+            assertEquals("Unsupported Unicode must reach Pocket and report INVALID_INPUT: " + unsupported,
+                    "INVALID_INPUT", speak(token, unsupported).get(WAIT_MS, TimeUnit.MILLISECONDS));
+            assertNull("Rejected text must not leave an audio job", currentJob());
+        }
+
+        CompletableFuture<Object> recovered = speak(token, "Caf\u00e9 is ready.");
+        AudioEvidence audio = observeRealPlayback(recovered);
+        assertTrue("Supported accented UTF-8 produces nonzero Pocket PCM", audio.nonzeroPcm);
+        assertTrue("Supported accented UTF-8 reaches protected AudioTrack", audio.playing && audio.maxHead > 0);
+        assertTrue("Pocket PCM stays within the 30 second bound", audio.pcmFrames > 0
+                && audio.pcmFrames <= 720_000);
+        assertEquals("COMPLETED", recovered.get(WAIT_MS, TimeUnit.MILLISECONDS));
+        assertCleaned(audio.pcm, audio.player);
+        assertNull("Recovered worker releases its job", currentJob());
     }
 
     @Test public void cancelStopsOwnedRealTrackBeforeReturning() throws Exception {
@@ -108,6 +143,7 @@ public final class PhoneSpeechIntegrationTest {
                 AudioTrack candidate = (AudioTrack) value(candidatePlayer, "activeTrack");
                 if (candidate == null || candidate.getPlayState() != AudioTrack.PLAYSTATE_PLAYING
                         || (candidate.getPlaybackHeadPosition() & 0xffffffffL) == 0) return false;
+                assertEquals("Pocket playback sample rate", 24_000, candidate.getSampleRate());
                 ownedTrack[0] = candidate;
                 pcm[0] = candidatePcm;
                 player[0] = candidatePlayer;
@@ -191,6 +227,159 @@ public final class PhoneSpeechIntegrationTest {
         assertTrue(recoveredAudio.nonzeroPcm && recoveredAudio.maxHead > 0);
         assertEquals("COMPLETED", recoveredSpeech.get(WAIT_MS, TimeUnit.MILLISECONDS));
         assertCleaned(recoveredAudio.pcm, recoveredAudio.player);
+    }
+
+    @Test public void stopDuringBundledModelReadCancelsBeforeNativeRequest() throws Exception {
+        File qaParent = Files.createTempDirectory(target.getNoBackupFilesDir().getCanonicalFile()
+                .toPath(), "qa-pocket-cancel-").toFile();
+        CountDownLatch readEntered = new CountDownLatch(1);
+        CountDownLatch releaseRead = new CountDownLatch(1);
+        AtomicBoolean firstRead = new AtomicBoolean();
+        AtomicInteger readCalls = new AtomicInteger();
+        AtomicInteger nativeRequests = new AtomicInteger();
+        AtomicInteger syntheses = new AtomicInteger();
+        AtomicInteger players = new AtomicInteger();
+        CompletableFuture<SpeechSession.Result> result = new CompletableFuture<>();
+        PocketModelStore store = new PocketModelStore();
+        PocketModelStore.AssetSource assets = name -> {
+            InputStream bundled = target.getAssets().open("pocket-alba/" + name);
+            if (!name.equals("model.safetensors")) return bundled;
+            return new FilterInputStream(bundled) {
+                @Override public int read(byte[] buffer, int offset, int length) throws IOException {
+                    if (readCalls.incrementAndGet() != 1)
+                        throw new IOException("Cancelled model read continued");
+                    int count = super.read(buffer, offset, length);
+                    if (count > 0 && firstRead.compareAndSet(false, true)) {
+                        readEntered.countDown();
+                        try {
+                            if (!releaseRead.await(10, TimeUnit.SECONDS))
+                                throw new IOException("Timed out holding first bundled model read");
+                        } catch (InterruptedException interrupted) {
+                            Thread.currentThread().interrupt();
+                            throw new IOException("Bundled model read interrupted", interrupted);
+                        }
+                    }
+                    return count;
+                }
+            };
+        };
+        SpeechSession session = new SpeechSession(new SpeechSession.Factory() {
+            @Override public SpeechSession.Request newRequest(java.util.function.BooleanSupplier cancelled) {
+                try {
+                    File root = store.prepare(qaParent, assets, cancelled);
+                    if (cancelled.getAsBoolean()) throw new IOException("Speech request cancelled");
+                    nativeRequests.incrementAndGet();
+                    PocketTtsRequest request = new PocketTtsRequest(root.getAbsolutePath());
+                    return new SpeechSession.Request() {
+                        @Override public short[] synthesize(byte[] utf8) {
+                            syntheses.incrementAndGet();
+                            return request.synthesize(utf8);
+                        }
+                        @Override public void cancel() { request.cancel(); }
+                        @Override public void close() { request.close(); }
+                    };
+                } catch (IOException unavailable) {
+                    throw new IllegalStateException("Local speech unavailable", unavailable);
+                }
+            }
+            @Override public SpeechSession.Player newPlayer() {
+                players.incrementAndGet();
+                return new ProtectedPcmPlayer(target, () -> true, () -> {});
+            }
+        });
+        boolean speechRequested = false;
+        Throwable testFailure = null;
+        try {
+            long token = session.begin(true);
+            assertTrue(token != 0);
+            speechRequested = true;
+            session.speak(token, SpeechSession.encodeText("Cancel model preparation."), result::complete);
+            assertTrue("Real bundled asset read must start", readEntered.await(10, TimeUnit.SECONDS));
+            assertFalse("Preparation must still be in flight", result.isDone());
+            session.stop();
+            releaseRead.countDown();
+            assertEquals("CANCELLED", SpeechSession.Result.CANCELLED,
+                    result.get(5, TimeUnit.SECONDS));
+            assertEquals("Cancellation stops before a second bundled model read", 1, readCalls.get());
+            assertEquals("Cancellation must precede Pocket native creation", 0, nativeRequests.get());
+            assertEquals("No synthesis after cancelled preparation", 0, syntheses.get());
+            assertEquals("No player after cancelled preparation", 0, players.get());
+            assertArrayEquals("Cancelled QA staging parent must be empty", new String[0], qaParent.list());
+
+            // Recovery uses the registered production bridge; this isolated factory only probes staging I/O.
+            String recovered = begin();
+            assertNotNull("Retry requires explicit begin", recovered);
+            CompletableFuture<Object> recoveredSpeech = speak(recovered, "Recovery is explicit.");
+            AudioEvidence audio = observeRealPlayback(recoveredSpeech);
+            assertTrue(audio.nonzeroPcm && audio.maxHead > 0);
+            assertEquals("COMPLETED", recoveredSpeech.get(WAIT_MS, TimeUnit.MILLISECONDS));
+            assertCleaned(audio.pcm, audio.player);
+        } catch (Throwable failure) {
+            testFailure = failure;
+            throw failure;
+        } finally {
+            Throwable cleanupFailure = null;
+            try { session.stop(); }
+            catch (Throwable failure) { cleanupFailure = failure; }
+            releaseRead.countDown();
+            try { session.close(); }
+            catch (Throwable failure) { cleanupFailure = addFailure(cleanupFailure, failure); }
+            boolean workerFinished = !speechRequested;
+            if (speechRequested) {
+                try {
+                    result.get(5, TimeUnit.SECONDS);
+                    workerFinished = true;
+                } catch (Throwable failure) {
+                    workerFinished = result.isDone();
+                    cleanupFailure = addFailure(cleanupFailure, failure);
+                    if (failure instanceof InterruptedException) Thread.currentThread().interrupt();
+                }
+            }
+            if (workerFinished) {
+                try { removeQaModelParent(qaParent); }
+                catch (Throwable failure) { cleanupFailure = addFailure(cleanupFailure, failure); }
+            }
+            if (cleanupFailure != null) {
+                if (testFailure != null) testFailure.addSuppressed(cleanupFailure);
+                else rethrowCleanupFailure(cleanupFailure);
+            }
+        }
+    }
+
+    private static Throwable addFailure(Throwable first, Throwable additional) {
+        if (first == null) return additional;
+        first.addSuppressed(additional);
+        return first;
+    }
+
+    private static void rethrowCleanupFailure(Throwable failure) throws Exception {
+        if (failure instanceof Error) throw (Error) failure;
+        if (failure instanceof Exception) throw (Exception) failure;
+        throw new AssertionError(failure);
+    }
+
+    private static void removeQaModelParent(File parent) throws IOException {
+        // This directory was created by this test. Never traverse the production no-backup model root.
+        File[] children = parent.listFiles();
+        if (children == null) throw new IOException("QA staging parent disappeared");
+        for (File child : children) {
+            String name = child.getName();
+            if (!name.matches("\\.pocket-stage-[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}|alba-18m-[0-9a-f]{24}")
+                    || !Files.isDirectory(child.toPath(), LinkOption.NOFOLLOW_LINKS))
+                throw new IOException("Unexpected QA staging path: " + name);
+            File[] files = child.listFiles();
+            if (files == null) throw new IOException("Cannot inspect QA staging directory");
+            for (File file : files) {
+                String fileName = file.getName();
+                if (!(fileName.equals("model.safetensors") || fileName.equals("tokenizer.model")
+                        || fileName.equals("alba.safetensors"))
+                        || !Files.isRegularFile(file.toPath(), LinkOption.NOFOLLOW_LINKS))
+                    throw new IOException("Unexpected QA staging file: " + fileName);
+            }
+            for (File file : files) Files.delete(file.toPath());
+            Files.delete(child.toPath());
+        }
+        Files.delete(parent.toPath());
     }
 
     private void relaunch() throws Exception {
@@ -303,6 +492,7 @@ public final class PhoneSpeechIntegrationTest {
         synchronized (lock) {
             AudioTrack track = (AudioTrack) value(player, "activeTrack");
             if (track == null) return new TrackSnapshot(false, 0);
+            assertEquals("Pocket playback sample rate", 24_000, track.getSampleRate());
             return new TrackSnapshot(track.getPlayState() == AudioTrack.PLAYSTATE_PLAYING,
                     track.getPlaybackHeadPosition() & 0xffffffffL);
         }

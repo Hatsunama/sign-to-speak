@@ -1,0 +1,91 @@
+{
+  "status": "QA checkpoint; commercial release BLOCKED",
+  "source_sha": "8d4f71abe2272c1f7202a853c47f36759142d1f8",
+  "android_ci_run": 40361137118,
+  "component_ci_run": 40359863180,
+  "component_source_sha": "999b7e2f799ad469ea1f2daed1da72d49702745c",
+  "component_source_unchanged_since_that_run": true,
+  "artifacts": [
+    {
+      "role": "app",
+      "unsigned_sha256": "0678a7add37ec545614802cccc18af058ad5ef3abad3ab1279b0e21ec2b086ec",
+      "signed_sha256": "0c7004169d69ae5c00347aa26592845d87fa83ed77ea838097c11c09b6487e1b",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    },
+    {
+      "role": "test",
+      "unsigned_sha256": "eab9955a9c83f2f3e2e1355dba293b52bf855dd88814ea8a15c0dd4ead7fa72b",
+      "signed_sha256": "050e077156d1f092a9219d0e0bee5c909301175ad5b7f7e2230fac4bd913b87c",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    }
+  ],
+  "signed_payloads_match_unsigned": true,
+  "normal_android_unit_results": {
+    "tests": 154,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "intentional_counterfactual_failures_are_separate": true,
+  "samsung": {
+    "status": "PASS for bounded journeys",
+    "cases": 14,
+    "failed": 0,
+    "started_utc": "2026-10-26T16:59:51.0665469Z",
+    "finished_utc": "2026-10-26T17:05:49.9089439Z",
+    "cold_starts": {
+      "landscape-cold-start.txt": {
+        "LaunchState": "COLD",
+        "TotalTime": "151",
+        "WaitTime": "153"
+      },
+      "portrait-cold-start.txt": {
+        "LaunchState": "COLD",
+        "TotalTime": "158",
+        "WaitTime": "163"
+      },
+      "speech-portrait-cold-start.txt": {
+        "LaunchState": "COLD",
+        "TotalTime": "143",
+        "WaitTime": "144"
+      }
+    },
+    "installed_hashes_match": true,
+    "original_camera_and_rotation_restored": true,
+    "returned_home": true,
+    "active_instrumentation_after_return": false,
+    "kernel_page_size_bytes": 4096
+  },
+  "seeker": {
+    "status": "NOT_RUN for new artifact; unavailable per owner; untouched"
+  },
+  "static_apk_audit": {
+    "model_assets_verified": 3,
+    "cargo_notice_files_verified": 241,
+    "all_app_native_libraries_16k_elf_and_zip_aligned": [
+      "lib/arm64-v8a/libappmodules.so",
+      "lib/arm64-v8a/libc++_shared.so",
+      "lib/arm64-v8a/libfbjni.so",
+      "lib/arm64-v8a/libhermestooling.so",
+      "lib/arm64-v8a/libhermesvm.so",
+      "lib/arm64-v8a/libimage_processing_util_jni.so",
+      "lib/arm64-v8a/libimagepipeline.so",
+      "lib/arm64-v8a/libjsi.so",
+      "lib/arm64-v8a/libnative-filters.so",
+      "lib/arm64-v8a/libnative-imagetranscoder.so",
+      "lib/arm64-v8a/libprivate_pocket_tts.so",
+      "lib/arm64-v8a/libreact_codegen_safeareacontext.so",
+      "lib/arm64-v8a/libreactnative.so",
+      "lib/arm64-v8a/libsign_pocket_tts_runtime.so",
+      "lib/arm64-v8a/libsurface_util_jni.so"
+    ],
+    "manifest_policy_verified": true
+  },
+  "limits": [
+    "Bounded runtime checks do not establish voice naturalness or ASL recognition.",
+    "No 16 KiB page-size runtime execution; Samsung is 4 KiB.",
+    "Full APK framework and NDK notice coverage remains unverified.",
+    "Owner fixed-utterance listening, performance/soak, accessibility and capture/privacy matrix incomplete."
+  ],
+  "local_evidence_root": "C:\\sign_to_speak\\speech-native-integration-20261026\\phone-8d4f71a"
+}

@@ -1,4 +1,12 @@
-# Sign To Speak — Android foundation
+# Sign To Speak — current Android work
+
+The current input/notice checkpoint is `a21faf347247f0bbd9fb44fda8266de8e72e16b6`. [Full Android CI 40465926012](https://github.com/Hatsunama/sign-to-speak/actions/runs/40465926012) passed, including 154 normal Android tests with zero failures/errors/skips. The exact signed app/test pair passed 15 bounded case executions on each of Samsung and Seeker, plus input hash rejection, cleanup/retry and four recorded-video research clips per phone. All identified notice omissions are packaged and checked against the actual 20-package JavaScript inventory and reviewed 95-coordinate Maven graph. Both phones returned Home with permissions/rotation restored and sound unchanged at zero. Bundled local Pocket TTS/Alba, Hatsu, intro and rear/front camera behavior remain unchanged. Production recognition, fingerspelling, translation and microphone captions remain absent. Muted playback proves neither voice quality nor capture exclusion; commercial release remains blocked.
+
+See the [current follow-up report](docs/RECOGNITION_FOLLOWUP_20261026.md), [exact-artifact receipt](../qa-artifacts/recognition-followup-20261027/evidence.json) and [commercial readiness plan](docs/COMMERCIAL_READINESS_PLAN.md). The [Pocket checkpoint](docs/POCKET_SPEECH_CHECKPOINT_20261026.md) preserves earlier cancellation evidence; the [October 25 camera receipt](../qa-artifacts/rear-camera-20261025/evidence.json) belongs to its Flite artifact. Historical results apply only to their named sources. The final documentation commit does not replace the tested app/build source above.
+
+The [October 25 execution checkpoint](docs/READINESS_CHECKPOINT_20261025.md) records workspace preservation, release gates, the repaired operator readiness guard and the unresolved recorded-video input failure. It also links the model admission and natural-voice feasibility records.
+
+## Historical foundation checkpoint
 
 An isolated **React Native Android app**, not a wrapper around the existing web prototype. This milestone implements home, the canonical Hatsu background, a local thank-you page and camera **preview only**. ASL recognition, landmark inference and speech are unavailable. It does not claim interpreter capability or HIPAA certification.
 
@@ -6,10 +14,10 @@ An isolated **React Native Android app**, not a wrapper around the existing web 
 
 - Camera permission is requested only when Start is tapped. No microphone, network, storage or recording permission is declared.
 - The native camera view stops on Activity pause, detach, disposal and explicit Stop. Late camera-provider callbacks are invalidated. Returning to foreground does not restart it.
-- No signing frames, landmarks, transcripts or session history are saved or uploaded. This build has no analyzer/model and creates no app-owned image buffers. It also has no speech engine or system-voice fallback.
-- The Activity sets Android's secure-window flag before content. Audio capture is controlled separately: the manifest opts out and API 29+ requests `ALLOW_CAPTURE_BY_NONE` before React startup. If policy setup/readback fails, the first render shows only an unavailable state and native camera start is denied. API 26–28 remain preview-only with documented platform limits. See [capture protections and the required independent audio-loopback matrix](docs/CAPTURE_PRIVACY.md). No real screen/audio capture acceptance or future TTS protection is claimed.
+- Production signing frames, landmarks, transcripts and session history are not saved or uploaded. The current app has no signing analyzer or recognition model. Bundled Pocket/Alba synthesis creates volatile PCM in the app process and uses verified private model files; no system-voice fallback is used. QA-only recorded-video input/results are separate operator-controlled research files.
+- The Activity sets Android's secure-window flag before content. Audio capture is controlled separately: the manifest opts out and API 29+ requests `ALLOW_CAPTURE_BY_NONE` before React startup; the current PCM sink checks policy and sets protected attributes. If startup policy setup/readback fails, the first render shows only an unavailable state and native camera start is denied. API 26–28 speech is unavailable. See [capture protections and the required independent audio-loopback matrix](docs/CAPTURE_PRIVACY.md). Muted playback does not complete real screen/audio capture acceptance.
 - The canonical Hatsu renderer stores only its existing local visual seed. Its static animation diagnostic is not signing/session content. Neither is transmitted.
-- Future model and speech integration is blocked on licensing, owner-hosted pinned artifacts and offline/privacy validation. A voice's “offline” flag alone is not enough.
+- Further recognition/translation/reply model integration needs per-component artifact/terms, contract, quality and offline/privacy admission. Existing Pocket speech still needs owner listening, performance and capture acceptance. A voice's “offline” flag alone is insufficient.
 
 ## Reproduce host checks
 

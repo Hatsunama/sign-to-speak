@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "scope": "dasp_frame 0.11.0; dasp_sample 0.11.0; valuable 0.1.1",
+  "records": [
+    {
+      "package": "dasp_frame",
+      "version": "0.11.0",
+      "cargo_lock_checksum_sha256": "b2a3937f5fe2135702897535c8d4a5553f8b116f76c1529088797f2eee7c5cd6",
+      "published_crate_url": "https://static.crates.io/crates/dasp_frame/dasp_frame-0.11.0.crate",
+      "published_crate_sha256": "b2a3937f5fe2135702897535c8d4a5553f8b116f76c1529088797f2eee7c5cd6",
+      "repository_from_Cargo_toml_orig": "https://github.com/rustaudio/dasp.git",
+      "vcs_commit_from_published_crate": "221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc",
+      "path_in_vcs": null,
+      "license_expression_from_Cargo_toml_orig": "MIT OR Apache-2.0",
+      "selected_license": "MIT",
+      "source_license_path": "LICENSE-MIT",
+      "source_license_url": "https://raw.githubusercontent.com/rustaudio/dasp/221b81038c528bf3fc364a8ab5cc4b2e52f7dbfc/LICENSE-MIT",
+      "supplemental_license_path": "dasp_frame-0.11.0/LICENSE-MIT",
+      "license_sha256": "b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0",
+      "provenance_note": "Published crate contains no license file. MIT text retrieved from the repository at the exact VCS commit embedded in the published crate; license expression and repository URL verified in Cargo.toml.orig. This establishes source provenance for the text, not legal clearance for redistribution."
+    },
+    {
+      "package": "dasp_sample",
+      "version": "0.11.0",
+      "cargo_lock_checksum_sha256": "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f",
+      "published_crate_url": "https://static.crates.io/crates/dasp_sample/dasp_sample-0.11.0.crate",
+      "published_crate_sha256": "0c87e182de0887fd5361989c677c4e8f5000cd9491d6d563161a8f3a5519fc7f",
+      "repository_from_Cargo_toml_orig": "https://github.com/rustaudio/sample.git",
+      "vcs_commit_from_published_crate": "97c3bb9b2363c0b46ac1633858bf1054fd02a980",
+      "path_in_vcs": null,
+      "license_expression_from_Cargo_toml_orig": "MIT OR Apache-2.0",
+      "selected_license": "MIT",
+      "source_license_path": "LICENSE-MIT",
+      "source_license_url": "https://raw.githubusercontent.com/rustaudio/sample/97c3bb9b2363c0b46ac1633858bf1054fd02a980/LICENSE-MIT",
+      "supplemental_license_path": "dasp_sample-0.11.0/LICENSE-MIT",
+      "license_sha256": "b1d6df41ed3aa96806e74c729444d7c121d90e6660a6aed01d298e03fde475a0",
+      "provenance_note": "Published crate contains no license file. MIT text retrieved from the repository at the exact VCS commit embedded in the published crate; license expression and repository URL verified in Cargo.toml.orig. This establishes source provenance for the text, not legal clearance for redistribution."
+    },
+    {
+      "package": "valuable",
+      "version": "0.1.1",
+      "cargo_lock_checksum_sha256": "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65",
+      "published_crate_url": "https://static.crates.io/crates/valuable/valuable-0.1.1.crate",
+      "published_crate_sha256": "ba73ea9cf16a25df0c8caa16c51acb937d5712a8429db78a3ee29d5dcacd3a65",
+      "repository_from_Cargo_toml_orig": "https://github.com/tokio-rs/valuable",
+      "vcs_commit_from_published_crate": "9efc29b6e58cef28f6566a47aa7e142a55fead77",
+      "path_in_vcs": "valuable",
+      "license_expression_from_Cargo_toml_orig": "MIT",
+      "selected_license": "MIT",
+      "source_license_path": "LICENSE",
+      "source_license_url": "https://raw.githubusercontent.com/tokio-rs/valuable/9efc29b6e58cef28f6566a47aa7e142a55fead77/LICENSE",
+      "supplemental_license_path": "valuable-0.1.1/LICENSE-MIT",
+      "license_sha256": "ed60d479b8fd1f64e9cbc3de449a16a53ac1b3d1b6aeb9bf9d190a8e93061b44",
+      "provenance_note": "Published crate contains no license file. MIT text retrieved from the repository at the exact VCS commit embedded in the published crate; license expression and repository URL verified in Cargo.toml.orig. This establishes source provenance for the text, not legal clearance for redistribution."
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "source": "c228bcde31af69af77f2c909d8f7bcfb46160a38",
+  "ci_run": 40145999489,
+  "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+  "key_exported": false,
+  "key_unchanged": true,
+  "artifacts": [
+    {
+      "role": "app",
+      "unsigned_sha256": "7aaece3ca362d1ed884973f2814e8c71b9151e8d74c582580b472114131f7e6d",
+      "signed_sha256": "da4e69c9837ded8939985ded2b25b356b1c80b050d937623032264d6178def7f",
+      "zip_payloads_identical": true,
+      "zipalign_16k": true
+    },
+    {
+      "role": "test",
+      "unsigned_sha256": "f760ae31e3e09efaa8a31684ee644bb06c6b8573cc2d9d91527494f5f24aacc2",
+      "signed_sha256": "6cfb264f98c14baa128fb6e1212622afb504d85852a4aa75634381e0d860c4bb",
+      "zip_payloads_identical": true,
+      "zipalign_16k": true
+    }
+  ]
+}

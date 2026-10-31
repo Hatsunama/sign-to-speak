@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>com.google.mediapipe</groupId>
+  <artifactId>tasks-core</artifactId>
+  <version>1.1.1-offline-50505c8</version>
+  <packaging>aar</packaging>
+  <name>MediaPipe Tasks Core (offline ARM64 source build)</name>
+  <description>MediaPipe Tasks core from upstream commit 50505c8312c7eacb1bd411cecdc4cc9fd08d53cb, built with usage logging disabled.</description>
+  <url>https://mediapipe.dev/</url>
+  <licenses>
+    <license>
+      <name>The Apache Software License, Version 2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers><developer><name>The MediaPipe Authors</name></developer></developers>
+  <dependencies>
+    <dependency><groupId>com.google.flogger</groupId><artifactId>flogger</artifactId><version>0.6</version><scope>compile</scope></dependency>
+    <dependency><groupId>com.google.flogger</groupId><artifactId>flogger-system-backend</artifactId><version>0.6</version><scope>compile</scope></dependency>
+    <dependency><groupId>com.google.guava</groupId><artifactId>guava</artifactId><version>27.0.1-android</version><scope>compile</scope></dependency>
+    <dependency><groupId>com.google.protobuf</groupId><artifactId>protobuf-javalite</artifactId><version>4.26.1</version><scope>compile</scope></dependency>
+  </dependencies>
+</project>

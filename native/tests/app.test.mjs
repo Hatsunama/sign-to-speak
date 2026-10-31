@@ -7,18 +7,21 @@ import React from 'react';
 import TestRenderer, {act} from 'react-test-renderer';
 import ts from 'typescript';
 import {createSession} from '../src/session.mjs';
+
 const require = createRequire(import.meta.url);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
 const DENIED = 'Camera permission was not granted. You can use the home screen without it.';
 const PAUSED_GRANT = 'Camera is off. Permission was granted; tap Start local preview to begin.';
+
 const source = fs.readFileSync(new URL('../App.tsx', import.meta.url), 'utf8');
 const compiled = ts.transpileModule(source, {compilerOptions: {
   jsx: ts.JsxEmit.ReactJSX, module: ts.ModuleKind.CommonJS, esModuleInterop: true,
 }}).outputText;
 
 // Execute the actual App.tsx and session gate, mocking only React Native boundaries.
-async function renderHome(t, privacy = {ready: true}, speechBridge) {
+
+async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions = {width: 1000, height: 600}) {
   const stateListeners = new Set();
   const backListeners = new Set();
   const permissions = [];
@@ -33,10 +36,10 @@ async function renderHome(t, privacy = {ready: true}, speechBridge) {
       RESULTS: {GRANTED: 'granted', DENIED: 'denied', NEVER_ASK_AGAIN: 'never_ask_again'},
       request: permission => new Promise((resolve, reject) => {permissions.push({permission, resolve, reject});}),
     },
-    Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', View: 'View',
+    Pressable: 'Pressable', ScrollView: 'ScrollView', Text: 'Text', TextInput: 'TextInput', View: 'View',
     requireNativeComponent: name => name,
     StyleSheet: {create: styles => styles, absoluteFill: {}},
-    useWindowDimensions: () => { homeRenders++; return {width: 1000, height: 600}; },
+    useWindowDimensions: () => { homeRenders++; return dimensions; },
   };
   const exports = {};
   vm.runInNewContext(compiled, {exports, require(name) {
@@ -61,7 +64,10 @@ async function renderHome(t, privacy = {ready: true}, speechBridge) {
     await act(() => {target.props.onPress();});
   };
   const cameras = () => app.root.findAllByType('PrivateCameraPreview');
-  const notice = () => app.root.findAllByType('Text').find(node => node.props.accessibilityLiveRegion === 'polite').props.children;
+  const input = () => app.root.findAllByType('TextInput').find(node => node.props.testID === 'typed-speech-input');
+  const edit = async value => { assert.ok(input()); await act(() => input().props.onChangeText(value)); };
+  const speechStatus = () => app.root.findAllByType('Text').find(node => node.props.testID === 'typed-speech-status')?.props.children;
+  const notice = () => app.root.findAllByType('Text').find(node => node.props.accessibilityLiveRegion === 'polite' && !node.props.testID).props.children;
   const grant = value => permissions.at(-1).resolve(value);
   const resolve = async (value, index = permissions.length - 1) => {await act(() => {permissions[index].resolve(value);});};
   const reject = async (index = permissions.length - 1) => {await act(() => {permissions[index].reject(new Error('permission request failed'));});};
@@ -72,7 +78,7 @@ async function renderHome(t, privacy = {ready: true}, speechBridge) {
     return results;
   };
   const status = async (handler, value) => {await act(() => handler({nativeEvent: {status: value}}));};
-  return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, notice, grant, resolve, reject, state, back, status};
+  return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, input, edit, speechStatus, notice, grant, resolve, reject, state, back, status};
 }
 
 test('mounted React Stop, navigation, Back, background and unmount cancel the real native token', async t => {
@@ -83,6 +89,8 @@ test('mounted React Stop, navigation, Back, background and unmount cancel the re
     cancel: token => cancelled.push(token),
   });
   async function start() {
+    await h.edit('HELLO');
+    await h.press('Speak typed text');
     await h.press('Start local preview');
     await h.resolve('granted');
   }
@@ -106,7 +114,6 @@ test('actual React home handles permission cancellation, native stop, local than
   assert.match(text(), /Translation is not available yet/);
   assert.equal(cameras().length, 0);
   assert.equal(app.root.findByType('HatsuBackground').props.active, true);
-
   await press('Start local preview');
   assert.equal(cameras().length, 0);
   await act(() => {
@@ -118,7 +125,6 @@ test('actual React home handles permission cancellation, native stop, local than
   assert.equal(app.root.findByType('HatsuBackground').props.active, false);
   await act(() => {native.AppState.currentState = 'active'; stateListeners.forEach(fn => fn('active'));});
   assert.equal(cameras().length, 0, 'foreground never restarts automatically');
-
   await press('Start local preview');
   await resolve('granted');
   assert.equal(cameras().length, 1);
@@ -130,17 +136,14 @@ test('actual React home handles permission cancellation, native stop, local than
   assert.ok(button('Back to Home'));
   await act(() => {for (const fn of backListeners) assert.equal(fn(), true);});
   assert.match(text(), /Start local preview/);
-
   await press('Start local preview');
   await resolve('granted');
   await act(() => {for (const fn of backListeners) assert.equal(fn(), true);});
   assert.equal(cameras().length, 0, 'Android Back stops preview before leaving');
-
   await press('Start local preview');
   await resolve('denied');
   assert.equal(cameras().length, 0);
   assert.match(text(), /Camera permission was not granted/);
-
   await press('Start local preview');
   await resolve('granted');
   await act(() => cameras()[0].props.onStatus({nativeEvent: {status: 'stopped'}}));
@@ -285,7 +288,6 @@ for (const staleResult of ['denied', 'granted', 'error']) {
     assert.equal(h.notice(), DENIED);
     assert.equal(h.cameras().length, 0);
   });
-
   test(`actual React latest denial survives older late ${staleResult}`, async t => {
     const h = await renderHome(t);
     await h.press('Start local preview');
@@ -400,5 +402,454 @@ for (const [label, capability] of [
     assert.equal(app.app.root.findAllByType('Pressable').length, 0);
     assert.equal(app.permissions.length, 0);
     assert.equal(app.starts.length, 0);
+  });
+}
+
+test('typed speech speaks exact reviewed text without camera permission and retains it for retry', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => {calls.push(['begin']); return 'token';},
+    speak: async (token, value) => {calls.push(['speak', token, value]); return 'COMPLETED';},
+    cancel: token => calls.push(['cancel', token]),
+  });
+  assert.equal(h.input().props.testID, 'typed-speech-input');
+  await h.edit('Hello, world!');
+  await h.press('Speak typed text');
+  assert.deepEqual(calls.slice(0, 2), [['begin'], ['speak', 'token', 'Hello, world!']]);
+  assert.equal(h.permissions.length, 0);
+  assert.equal(h.cameras().length, 0);
+  assert.match(h.speechStatus(), /spoken|finished|complete/i);
+  assert.equal(h.input().props.value, 'Hello, world!');
+  await h.press('Stop speech');
+  assert.deepEqual(calls.at(-1), ['cancel', 'token']);
+  assert.equal(h.input().props.value, 'Hello, world!');
+  await h.press('Clear typed text');
+  assert.equal(h.input().props.value, '');
+});
+
+test('typed speech rejects empty and overlength drafts before native speech without changing text', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {begin: async () => {calls.push('begin'); return 't';}, speak: async () => calls.push('speak')});
+  assert.equal(h.input().props.maxLength, undefined, 'input must not truncate a draft before review');
+  for (const value of ['', '   ', 'A'.repeat(257)]) {
+    await h.edit(value);
+    await h.press('Speak typed text');
+    assert.equal(h.input().props.value, value);
+    assert.match(h.speechStatus(), /256|enter/i);
+  }
+  assert.deepEqual(calls, []);
+});
+
+test('typed speech passes supported Unicode unchanged to native speech and completes', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => {calls.push(['begin']); return 'unicode-token';},
+    speak: async (token, value) => {calls.push(['speak', token, value]); return 'COMPLETED';},
+    cancel: () => {},
+  });
+  const draft = 'Café — please.';
+  await h.edit(draft);
+  await h.press('Speak typed text');
+  assert.deepEqual(calls, [['begin'], ['speak', 'unicode-token', draft]]);
+  assert.match(h.speechStatus(), /spoken|finished|complete/i);
+  assert.equal(h.input().props.value, draft);
+  assert.equal(h.permissions.length, 0);
+  assert.doesNotMatch(h.text(), /printable English ASCII|printable ASCII/i);
+});
+
+test('native unsupported Unicode reports an actionable local English voice limit and keeps the draft', async t => {
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'emoji-token',
+    speak: async (token, value) => {calls.push([token, value]); return 'INVALID_INPUT';},
+    cancel: () => {},
+  });
+  const draft = 'Hello 😀';
+  await h.edit(draft);
+  await h.press('Speak typed text');
+  assert.deepEqual(calls, [['emoji-token', draft]]);
+  assert.equal(h.input().props.value, draft);
+  assert.match(h.speechStatus(), /unsupported|not supported/i);
+  assert.match(h.speechStatus(), /local English voice/i);
+  assert.match(h.speechStatus(), /edit|change|try/i);
+  assert.doesNotMatch(h.speechStatus(), /ASCII/i);
+  assert.equal(h.button('Speak typed text').props.disabled, false);
+});
+
+test('double Speak in one React batch starts only one native utterance', async t => {
+  const calls = [];
+  let finish;
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => {calls.push('begin'); return 't';},
+    speak: () => {calls.push('speak'); return new Promise(resolve => {finish = resolve;});},
+    cancel: () => {},
+  });
+  await h.edit('HELLO');
+  const button = h.button('Speak typed text');
+  await act(() => {button.props.onPress(); button.props.onPress();});
+  assert.deepEqual(calls, ['begin', 'speak']);
+  await act(() => finish('COMPLETED'));
+});
+
+test('pending begin and speech results cannot revive stopped or cleared private draft', async t => {
+  let resolveBegin;
+  let resolveSpeak;
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: () => new Promise(resolve => {resolveBegin = resolve;}),
+    speak: (token, value) => {calls.push([token, value]); return new Promise(resolve => {resolveSpeak = resolve;});},
+    cancel: token => calls.push(['cancel', token]),
+  });
+  await h.edit('PRIVATE');
+  await h.press('Speak typed text');
+  await h.press('Stop speech');
+  await act(() => resolveBegin('late'));
+  assert.deepEqual(calls, [['cancel', 'late']]);
+  assert.equal(h.input().props.value, 'PRIVATE');
+  assert.match(h.speechStatus(), /stopped/i);
+  await h.press('Speak typed text');
+  await act(() => resolveBegin('fresh'));
+  assert.deepEqual(calls.at(-1), ['fresh', 'PRIVATE']);
+  await h.state('background');
+  assert.equal(h.input().props.value, '');
+  await act(() => resolveSpeak('COMPLETED'));
+  assert.equal(h.input().props.value, '');
+  assert.doesNotMatch(h.speechStatus(), /complete|spoken|finished/i);
+  await h.state('active');
+  assert.equal(h.input().props.value, '');
+});
+
+test('Back and route navigation clear typed draft and cancel native speech', async t => {
+  const cancelled = [];
+  const h = await renderHome(t, {ready: true}, {begin: async () => 't', speak: () => new Promise(() => {}), cancel: token => cancelled.push(token)});
+  await h.edit('PRIVATE');
+  await h.press('Speak typed text');
+  assert.deepEqual(await h.back(), [true]);
+  assert.equal(h.input().props.value, '');
+  assert.deepEqual(cancelled, ['t']);
+  await h.edit('AGAIN');
+  await h.press('Hatsu Is Here For You');
+  await h.press('Back to Home');
+  assert.equal(h.input().props.value, '');
+});
+
+test('native speech statuses are understandable and cleanup failure requires fresh app session', async t => {
+  let result = 'BUSY';
+  const h = await renderHome(t, {ready: true}, {begin: async () => 't', speak: async () => result, cancel: () => {}});
+  await h.edit('HELLO');
+  for (const [native, expected] of [
+    ['BUSY', /busy|another/i], ['UNAVAILABLE', /unavailable/i],
+    ['INVALID_INPUT', /input|text/i], ['FAILED', /could not|failed/i],
+    ['CANCELLED', /cancel/i],
+  ]) {
+    result = native;
+    await h.press('Speak typed text');
+    assert.match(h.speechStatus(), expected);
+  }
+  result = 'CLEANUP_FAILED';
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  await h.press('Stop speech');
+  assert.match(h.speechStatus(), /close and reopen/i);
+});
+
+test('editing during playback cancels old result and only a fresh tap speaks edited text', async t => {
+  let resolveSpeech;
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'token',
+    speak: (token, text) => {calls.push(['speak', token, text]); return new Promise(resolve => {resolveSpeech = resolve;});},
+    cancel: token => calls.push(['cancel', token]),
+  });
+  await h.edit('OLD');
+  await h.press('Speak typed text');
+  await h.edit('NEW');
+  await act(() => resolveSpeech('COMPLETED'));
+  assert.equal(h.input().props.value, 'NEW');
+  assert.doesNotMatch(h.speechStatus(), /spoken|complete/i);
+  assert.deepEqual(calls.slice(0, 2), [['speak', 'token', 'OLD'], ['cancel', 'token']]);
+  await h.press('Speak typed text');
+  assert.deepEqual(calls.at(-1), ['speak', 'token', 'NEW']);
+  await h.press('Stop speech');
+});
+
+test('route change and unmount invalidate pending begin without speech or leaked draft', async t => {
+  const pending = [];
+  const calls = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: () => new Promise(resolve => pending.push(resolve)),
+    speak: () => calls.push('speak'),
+    cancel: token => calls.push(['cancel', token]),
+  });
+  await h.edit('SECRET');
+  await h.press('Speak typed text');
+  await h.press('Hatsu Is Here For You');
+  await act(() => pending[0]('late-route'));
+  await h.press('Back to Home');
+  assert.equal(h.input().props.value, '');
+  await h.edit('SECOND');
+  await h.press('Speak typed text');
+  await act(() => h.app.unmount());
+  await act(() => pending[1]('late-unmount'));
+  assert.deepEqual(calls, [['cancel', 'late-route'], ['cancel', 'late-unmount']]);
+});
+
+test('unavailable bridge and rejected native speech report retryable status without camera', async t => {
+  const h = await renderHome(t, {ready: true}, {begin: async () => 't', speak: async () => {throw new Error('native failure');}, cancel: () => {}});
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /could not|failed/i);
+  assert.equal(h.button('Speak typed text').props.disabled, false);
+  assert.equal(h.permissions.length, 0);
+  const noBridge = await renderHome(t, {ready: true}, null);
+  await noBridge.edit('HELLO');
+  await noBridge.press('Speak typed text');
+  assert.match(noBridge.speechStatus(), /unavailable/i);
+  assert.equal(noBridge.button('Speak typed text').props.disabled, false);
+});
+
+test('begin cleanup rejection latches React speech warning and disables Speak', async t => {
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => {throw {code: 'CLEANUP_FAILED', message: 'Native admission cleanup failed'};},
+    cancel() {},
+  });
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  await h.press('Stop speech');
+  assert.match(h.speechStatus(), /close and reopen/i);
+});
+
+test('late begin cleanup rejection latches over a newer speech attempt', async t => {
+  const pending = [];
+  const spoken = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: () => new Promise((resolve, reject) => pending.push({resolve, reject})),
+    speak: async (token, text) => {spoken.push([token, text]); return 'COMPLETED';},
+    cancel() {},
+  });
+  await h.edit('OLD');
+  await h.press('Speak typed text');
+  await h.press('Stop speech');
+  await h.edit('NEW');
+  await h.press('Speak typed text');
+  await act(async () => {pending[1].resolve('new-token'); await Promise.resolve();});
+  assert.deepEqual(spoken, [['new-token', 'NEW']]);
+  await act(async () => {pending[0].reject({code: 'CLEANUP_FAILED', message: 'Native admission cleanup failed'}); await Promise.resolve();});
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  assert.equal(h.input().props.value, 'NEW');
+});
+
+test('ordinary begin rejection remains retryable in React', async t => {
+  let calls = 0;
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => ++calls === 1 ? Promise.reject(new Error('temporarily unavailable')) : 'recovered',
+    speak: async () => 'COMPLETED',
+    cancel() {},
+  });
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /unavailable/i);
+  assert.equal(h.button('Speak typed text').props.disabled, false);
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /spoken/i);
+});
+
+test('retired cleanup failure latches across Stop and newer normal result', async t => {
+  const pending = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => `token-${pending.length + 1}`,
+    speak: () => new Promise(resolve => pending.push(resolve)),
+    cancel() {},
+  });
+  await h.edit('OLD');
+  await h.press('Speak typed text');
+  await h.press('Stop speech');
+  await h.edit('NEW');
+  await h.press('Speak typed text');
+  assert.equal(pending.length, 2);
+  await act(async () => {pending[0]('CLEANUP_FAILED'); await Promise.resolve();});
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  await act(async () => {pending[1]('COMPLETED'); await Promise.resolve();});
+  assert.match(h.speechStatus(), /close and reopen/i);
+  await h.press('Stop speech');
+  assert.match(h.speechStatus(), /close and reopen/i);
+});
+
+test('typed input prevents keyboard suggestions and wide layout preserves intro/camera row', async t => {
+  const h = await renderHome(t, {ready: true}, null, {width: 1000, height: 600});
+  assert.equal(h.input().props.autoComplete, 'off');
+  assert.equal(h.input().props.importantForAutofill, 'no');
+  assert.equal(h.input().props.autoCorrect, false);
+  assert.equal(h.input().props.spellCheck, false);
+  const headers = h.app.root.findAllByType('Text').filter(node => node.props.accessibilityRole === 'header' && ['Your hands. Your words.', 'Live camera', 'Speak typed text'].includes(node.props.children));
+  assert.deepEqual(headers.map(node => node.props.children), ['Your hands. Your words.', 'Live camera', 'Speak typed text']);
+  assert.equal(headers[0].parent.parent, headers[1].parent.parent);
+  assert.notEqual(headers[1].parent.parent, headers[2].parent.parent);
+  assert.doesNotMatch(h.text(), /\uFFFD/);
+});
+
+// Camera lens selection is an explicit UI choice. The mocked native preview
+// reports status only; these assertions exercise the actual App component.
+test('camera defaults to rear and offers an accessible flip before permission', async t => {
+  const h = await renderHome(t);
+  const flip = h.app.root.findAllByType('Pressable').find(node => node.props.testID === 'camera-flip');
+  assert.ok(flip, 'camera flip control is present before Start');
+  assert.equal(flip.props.disabled, false);
+  assert.equal(h.button('Switch to front camera'), flip);
+  assert.equal(h.permissions.length, 0);
+  assert.equal(h.starts.length, 0);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'back', 'first preview explicitly requests the rear camera');
+});
+
+test('flipping before Start selects front without requesting permission or acquiring a camera', async t => {
+  const h = await renderHome(t);
+  await h.press('Switch to front camera');
+  assert.equal(h.permissions.length, 0);
+  assert.equal(h.starts.length, 0);
+  assert.equal(h.cameras().length, 0);
+  assert.ok(h.button('Switch to rear camera'));
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+});
+
+test('live flip changes selected native lens and accepts only the current lens status', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const oldStatus = h.cameras()[0].props.onStatus;
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+  await h.press('Switch to front camera');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  assert.ok(h.button('Switch to rear camera'));
+  assert.equal(h.permissions.length, 1, 'live flip does not acquire permission again');
+  for (const value of ['stopped', 'preview_only', 'rear_camera_unavailable']) {
+    await h.status(oldStatus, value);
+    assert.equal(h.cameras().length, 1, `retired rear ${value} cannot stop front preview`);
+    assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  }
+  await h.status(h.cameras()[0].props.onStatus, 'preview_only');
+  assert.match(h.notice(), /Live preview only/);
+  await h.press('Switch to rear camera');
+  assert.equal(h.cameras().length, 1);
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+});
+
+test('live flip still latches cleanup failure from retired lens', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const oldStatus = h.cameras()[0].props.onStatus;
+  await h.press('Switch to front camera');
+  assert.equal(h.cameras()[0].props.lensFacing, 'front');
+  await h.status(oldStatus, 'camera_cleanup_failed');
+  assert.equal(h.cameras().length, 0);
+  assert.match(h.notice(), /Camera cleanup could not be confirmed/);
+  assert.equal(h.button('Start local preview').props.disabled, true);
+});
+
+test('rapid rear-front-rear flip rejects events from the first rear view', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const firstRear = h.cameras()[0].props.onStatus;
+  await h.press('Switch to front camera');
+  const front = h.cameras()[0].props.onStatus;
+  await h.press('Switch to rear camera');
+  const lastRear = h.cameras()[0].props.onStatus;
+  assert.equal(h.cameras()[0].props.lensFacing, 'back');
+  for (const retired of [firstRear, front]) {
+    await h.status(retired, 'stopped');
+    assert.equal(h.cameras().length, 1);
+    await h.status(retired, 'preview_only');
+    assert.doesNotMatch(h.notice(), /Live preview only/);
+  }
+  await h.status(lastRear, 'preview_only');
+  assert.match(h.notice(), /Live preview only/);
+});
+
+test('live camera flip leaves typed speech in progress', async t => {
+  let finishSpeech;
+  const cancelled = [];
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'speech-token',
+    speak: () => new Promise(resolve => {finishSpeech = resolve;}),
+    cancel: token => cancelled.push(token),
+  });
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /Speaking typed text/);
+  const cancelledBeforeFlip = cancelled.length;
+  await h.press('Switch to front camera');
+  assert.equal(cancelled.length, cancelledBeforeFlip);
+  assert.match(h.speechStatus(), /Speaking typed text/);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  await act(() => finishSpeech('COMPLETED'));
+  assert.match(h.speechStatus(), /Typed text spoken/);
+});
+
+test('flip is disabled during permission request and after camera cleanup fault or background', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+  await h.resolve('granted');
+  const status = h.cameras()[0].props.onStatus;
+  await h.state('background');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+  await h.state('active');
+  await h.status(status, 'camera_cleanup_failed');
+  assert.equal(h.button('Switch to front camera').props.disabled, true);
+});
+
+for (const [lens, unavailable, message] of [
+  ['back', 'rear_camera_unavailable', /rear camera is not available/i],
+  ['front', 'front_camera_unavailable', /front camera is not available/i],
+]) {
+  test(`selected ${lens} camera unavailability is explicit and never falls back`, async t => {
+    const h = await renderHome(t);
+    if (lens === 'front') await h.press('Switch to front camera');
+    await h.press('Start local preview');
+    await h.resolve('granted');
+    assert.equal(h.cameras()[0].props.lensFacing, lens);
+    await h.status(h.cameras()[0].props.onStatus, unavailable);
+    assert.equal(h.cameras().length, 0);
+    assert.match(h.notice(), message);
+    assert.equal(h.permissions.length, 1, 'no implicit retry for another camera');
+    assert.equal(h.starts.length, 1, 'no silent session restart');
+    await h.state('background');
+    await h.state('active');
+    assert.equal(h.cameras().length, 0);
+    assert.equal(h.starts.length, 1);
+  });
+}
+
+for (const action of ['Stop camera', 'Back', 'background']) {
+  test(`selected front camera remains stopped after ${action} and foreground return`, async t => {
+    const h = await renderHome(t);
+    await h.press('Switch to front camera');
+    await h.press('Start local preview');
+    await h.resolve('granted');
+    assert.equal(h.cameras()[0].props.lensFacing, 'front');
+    if (action === 'Stop camera') await h.press('Stop camera');
+    else if (action === 'Back') assert.deepEqual(await h.back(), [true]);
+    else await h.state('background');
+    await h.state('background');
+    await h.state('active');
+    assert.equal(h.cameras().length, 0);
+    assert.equal(h.permissions.length, 1);
+    assert.equal(h.starts.length, 1);
+    assert.ok(h.button('Start local preview'));
   });
 }

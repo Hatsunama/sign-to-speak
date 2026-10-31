@@ -25,6 +25,7 @@ import java.nio.file.Paths;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.TextView;
 import androidx.camera.core.Preview;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
@@ -105,6 +106,7 @@ public final class EmulatorPrivacyLifecycleTest {
         assertRealReactHermesAndHatsu();
         stage("01_launch_real_ui_camera_off");
 
+        selectFrontCameraWhileOff();
         clickUiLabel(START);
         clickPermissionButton("permission_deny_button");
         await("OS camera denial", () -> target.checkSelfPermission(Manifest.permission.CAMERA)
@@ -114,6 +116,7 @@ public final class EmulatorPrivacyLifecycleTest {
         assertNoCurrentCamera();
         stage("02_os_permission_denied");
 
+        selectFrontCameraWhileOff();
         clickUiLabel(START);
         clickPermissionButton(Build.VERSION.SDK_INT >= 30
                 ? "permission_allow_foreground_only_button" : "permission_allow_button");
@@ -128,6 +131,7 @@ public final class EmulatorPrivacyLifecycleTest {
                 device.hasObject(By.pkg(QA_PACKAGE).text("Live preview only. Recognition: unsupported.")));
         if (device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff))) {
             assertNoCurrentCamera();
+            selectFrontCameraWhileOff();
             clickUiLabel(START);
         }
         CameraObservation first = awaitStreamingCamera();
@@ -320,12 +324,43 @@ public final class EmulatorPrivacyLifecycleTest {
     private CameraObservation startAgain() throws Exception {
         findUiLabel(START);
         assertNoCurrentCamera();
+        selectFrontCameraWhileOff();
         clickUiLabel(START);
         CameraObservation result = awaitStreamingCamera();
         assertFalse("Granted permission must not require another OS dialog", hasPermissionDialog());
         return result;
     }
 
+    private void selectFrontCameraWhileOff() throws Exception {
+        assertNoCurrentCamera();
+        assertFalse("Camera selection must not request OS permission", hasPermissionDialog());
+        int permissionBefore = target.checkSelfPermission(Manifest.permission.CAMERA);
+        // Inspect the rendered labels without waiting for the opposite choice to appear.
+        boolean rearSelected = onMain(() -> {
+            List<TextView> labels = findViews(activity.getWindow().getDecorView(), TextView.class);
+            boolean switchToFront = false;
+            boolean switchToRear = false;
+            for (TextView label : labels) {
+                switchToFront |= "Switch to front camera".contentEquals(label.getText());
+                switchToRear |= "Switch to rear camera".contentEquals(label.getText());
+            }
+            assertTrue("Exactly one camera switch label must be rendered", switchToFront != switchToRear);
+            return switchToFront;
+        });
+        if (rearSelected) {
+            clickUiLabel("Switch to front camera");
+            await("Front camera selected in rendered UI", () -> onMain(() -> {
+                for (TextView label : findViews(activity.getWindow().getDecorView(), TextView.class)) {
+                    if ("Switch to rear camera".contentEquals(label.getText())) return true;
+                }
+                return false;
+            }));
+        }
+        assertNoCurrentCamera();
+        assertFalse("Camera selection must not open an OS permission dialog", hasPermissionDialog());
+        assertEquals("Camera selection must preserve permission state", permissionBefore,
+                target.checkSelfPermission(Manifest.permission.CAMERA));
+    }
     private CameraObservation awaitStreamingCamera() throws Exception {
         AtomicReference<CameraObservation> found = new AtomicReference<>();
         await("Real CameraX front preview reaches STREAMING", () -> onMain(() -> {

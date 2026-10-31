@@ -1,0 +1,171 @@
+{
+  "status": "CURRENT_REPAIR_VERIFIED_RELEASE_BLOCKED",
+  "input_repair_source": "ac9d010a15fd568f4e88e83221c0f080e98615b6",
+  "input_repair_ci": 40423335176,
+  "notice_candidate_source": "a21faf347247f0bbd9fb44fda8266de8e72e16b6",
+  "notice_candidate_ci": 40465926012,
+  "notice_candidate_phone_checks": "PASS_BOTH_MUTED_BOUNDED",
+  "upstream_requests": {
+    "translation": "https://huggingface.co/FatimahEmadEldin/ytasl-t5-v1_1-base/discussions/1",
+    "vosk": "https://github.com/alphacep/vosk-api/issues/2072"
+  },
+  "samsung_input_repair": {
+    "synthetic_manifest_bytes": 310,
+    "sha_rejection": "PASS_BEFORE_PUBLICATION",
+    "cleanup_and_retry": "PASS",
+    "research_video_clips": 4,
+    "expected_top1_matches": 4,
+    "validated_accuracy": false,
+    "raw_media_or_landmarks_published": false
+  },
+  "standalone_asr": {
+    "product_integration": false,
+    "microphone_used": false,
+    "dex_sha256": "028722c4d8e42a605a44915254b10c134e6d500bf755b32bb75e89e395cc81ac",
+    "samsung": {
+      "silence_empty": true,
+      "fixed_synthetic_phrase_matched": true,
+      "load_ms": 422,
+      "silence_decode_ms": 135,
+      "speech_decode_ms": 519,
+      "cleanup_pending": false
+    },
+    "seeker": {
+      "silence_empty": true,
+      "fixed_synthetic_phrase_matched": true,
+      "load_ms": 667,
+      "silence_decode_ms": 215,
+      "speech_decode_ms": 830,
+      "cleanup_pending": false
+    },
+    "human_speech_accuracy_measured": false
+  },
+  "constraints": {
+    "production_network_or_microphone_permission_added": false,
+    "keys_generated_or_uploaded": false,
+    "main_updated": false,
+    "sound_settings_changed": false,
+    "new_store_builds": false
+  },
+  "private_receipts_root": "C:/sign_to_speak/final-notices-20261027/phone-a21faf3",
+  "final_pair": [
+    {
+      "role": "app",
+      "unsigned_sha256": "f8578906e3e06736539cd8a9ae5ffd46e19a8006ee7be26beec9e63a0bd500d0",
+      "signed_sha256": "da855c37ee8b6ccdc1c601b3e2369e6e346539ba6d7ea1f29d181978f83b2533",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    },
+    {
+      "role": "test",
+      "unsigned_sha256": "f4cafb56bcfbd3c71d10ad97449224d9f5a461ba113a440b27853d62e13d765d",
+      "signed_sha256": "540ef2c1fabd2e316e305df427721ccd7bce0012dcf0b7c363ed7d1f4f7465aa",
+      "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21"
+    }
+  ],
+  "final_artifact_zips": [
+    {
+      "id": 12717755558,
+      "name": "sign-android-evidence-a21faf347247f0bbd9fb44fda8266de8e72e16b6-1",
+      "digest": "sha256:07a82cf830b73661011aeb2f41a902c698892495f030dc38c669ec3d7c01b0a9"
+    },
+    {
+      "id": 12717505976,
+      "name": "sign-phone-qa-UNSIGNED-arm64-a21faf347247f0bbd9fb44fda8266de8e72e16b6",
+      "digest": "sha256:208e88276c9a92725467b7622bd559d358c64a4de1323601b8326b0060bf519d"
+    }
+  ],
+  "normal_android_results": {
+    "tests": 154,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "full_host_typescript_policy": "PASS",
+  "static_audit": {
+    "source_sha": "a21faf347247f0bbd9fb44fda8266de8e72e16b6",
+    "ci_run": 40465926012,
+    "normal_android_unit_results": {
+      "tests": 154,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "bundle_package_count": 20,
+    "bundle_unresolved_count": 0,
+    "maven_coordinate_count": 95,
+    "signed_payloads_equal_unsigned": true,
+    "packaged_framework_notice_files": 15,
+    "packaged_additional_bundled_js_notice_files": 11,
+    "all_native_elf_and_stored_zip_alignment": "PASS_15",
+    "production_paths_unchanged_from_c4": {
+      "native/App.tsx": "af9e4b7820fb25870edf9e572209a2c0105f571f",
+      "native/src": "24d52b291796b1e865db02ed6e23aa2ff4bc036b",
+      "native/android/app/src/main": "001d2006b525d9919830637808417fc27542d175",
+      "native/android/app/build.gradle": "e9dbf21ac5c286c51a04bd40429b897551d00b70",
+      "native/package-lock.json": "edbcdbb78da29232333ab802c09c583209269efa"
+    },
+    "audio_quality_or_capture_proven": false,
+    "commercial_release": "BLOCKED",
+    "maven_count_method": "unique selected coordinates; conflict arrows and versionless relocation resolved; constraints excluded"
+  },
+  "phone_checks": {
+    "samsung": {
+      "bounded_app_case_executions": 15,
+      "unexpected_failures": 0,
+      "cold_start_verified": true,
+      "installed_pair_matches": true,
+      "valid_transfer": true,
+      "bad_manifest_sha_rejected_before_publication": true,
+      "cleanup_and_retry": true,
+      "research_video_clips": 4,
+      "expected_top1_matches": 4,
+      "validated_recognition_accuracy": false,
+      "raw_media_or_landmarks_published": false,
+      "home_at_end": true,
+      "active_instrumentation_at_end": false,
+      "permission_and_rotation_restored": true,
+      "media_volume_at_end": 0,
+      "pagesize": 4096,
+      "android_api": "36"
+    },
+    "seeker": {
+      "bounded_app_case_executions": 15,
+      "unexpected_failures": 0,
+      "cold_start_verified": true,
+      "installed_pair_matches": true,
+      "valid_transfer": true,
+      "bad_manifest_sha_rejected_before_publication": true,
+      "cleanup_and_retry": true,
+      "research_video_clips": 4,
+      "expected_top1_matches": 4,
+      "validated_recognition_accuracy": false,
+      "raw_media_or_landmarks_published": false,
+      "home_at_end": true,
+      "active_instrumentation_at_end": false,
+      "permission_and_rotation_restored": true,
+      "media_volume_at_end": 0,
+      "pagesize": 4096,
+      "android_api": "36"
+    }
+  },
+  "source_archive_sha256": "d8cbe681004017308f7fd7ccd76fb60daed4116647a5c22dede61228619f0ad5",
+  "artifact_source_is_exact_candidate": true,
+  "unverified": [
+    "production recognition, unknown rejection, fingerspelling, continuous translation and reply-caption conversation",
+    "selected model contracts/provenance and frozen licensed disjoint release benchmarks",
+    "checkpoint-specific 208-feature and generation parity; unanswered upstream request",
+    "Vosk artifact-specific static dependency/source/notices; unanswered upstream request; no app microphone integration",
+    "independent numerical landmark/handedness/cadence parity and recognition accuracy",
+    "owner fixed listening set, naturalness and long-text quality; muted playback is insufficient",
+    "opaque native-initialization cancellation and audible latency, peak PSS, 100-cycle and 30-minute soak",
+    "independent screenshot/recording/playback-loopback, supported-OS/accessibility/failure matrix",
+    "actual full-app 16 KiB runtime; both phones use 4 KiB; prior KVM runtime blocked",
+    "approved vocabulary/domains, populations/regions, devices/OS floor, model provisioning and product claims",
+    "production identities, distinct protected Play/Solana signing, update/recovery and store acceptance"
+  ],
+  "bounded_provenance_limits": {
+    "prebuilt_libyuv_exact_source_commit": "UNVERIFIED",
+    "additional_notice_omission_proven": false,
+    "gap_alone_establishes_legal_release_prohibition": false
+  }
+}

@@ -1,0 +1,402 @@
+{
+  "status": "REQUESTED_CAMERA_FEATURE_VERIFIED_BOTH_PHONES_COMMERCIAL_RELEASE_BLOCKED",
+  "requested_change": "Rear default; explicit front/rear selection before and during preview. One new control matching existing button styling; all other appearance/behavior preserved.",
+  "baseline_source": "919fa3f6c9856096a2ef4b3ed7c95f3a5f298641",
+  "baseline_run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40234744090",
+  "normal_native_baseline": {
+    "tests": 147,
+    "failures": 24,
+    "errors": 0,
+    "skipped": 0
+  },
+  "meaningful_runtime_failures": [
+    {
+      "test": "defaultRearUnavailableNeverFallsBackToFront[28]",
+      "failure_type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: Native camera request must be canceled synchronously",
+      "stack": "java.lang.AssertionError: Native camera request must be canceled synchronously\n\tat org.junit.Assert.fail(Assert.java:89)\n\tat org.junit.Assert.assertTrue(Assert.java:42)\n\tat org.junit.Assert.assertFalse(Assert.java:65)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.assertStopped(NativeBackPrivacyTest.java:1031)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultRearUnavailableNeverFallsBackToFront(NativeBackPrivacyTest.java:787)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n"
+    },
+    {
+      "test": "defaultCameraBindsRearAfterActualProviderAcquisition[28]",
+      "failure_type": "org.mockito.exceptions.verification.junit.ArgumentsAreDifferent",
+      "message": "org.mockito.exceptions.verification.junit.ArgumentsAreDifferent: \nArgument(s) are different! Wanted:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@1c0d7cb\n);\n-> at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\nActual invocations have different arguments:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@6976a11c\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)\nprocessCameraProvider.bindToLifecycle(\n    com.xmilo_at_your_side.sign_to_speak.MainActivity@5a34d62c,\n    androidx.camera.core.CameraSelector@6976a11c,\n    Preview:androidx.camera.core.Preview-a3e4c6c6-3449-474c-a47f-9c365b1c7855\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n",
+      "stack": "Argument(s) are different! Wanted:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@1c0d7cb\n);\n-> at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\nActual invocations have different arguments:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@6976a11c\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)\nprocessCameraProvider.bindToLifecycle(\n    com.xmilo_at_your_side.sign_to_speak.MainActivity@5a34d62c,\n    androidx.camera.core.CameraSelector@6976a11c,\n    Preview:androidx.camera.core.Preview-a3e4c6c6-3449-474c-a47f-9c365b1c7855\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n\tat androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultCameraBindsRearAfterActualProviderAcquisition(NativeBackPrivacyTest.java:696)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n"
+    },
+    {
+      "test": "pendingNewViewCannotBindAfterRetiredViewCleanupFails[28]",
+      "failure_type": "org.mockito.exceptions.verification.TooManyActualInvocations",
+      "message": "org.mockito.exceptions.verification.TooManyActualInvocations: \nprocessCameraProvider.bindToLifecycle(\n    <any androidx.lifecycle.LifecycleOwner>,\n    <any androidx.camera.core.CameraSelector>,\n    <any androidx.camera.core.Preview>\n);\nWanted 1 time:\n-> at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\nBut was 2 times:\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n",
+      "stack": "org.mockito.exceptions.verification.TooManyActualInvocations: \nprocessCameraProvider.bindToLifecycle(\n    <any androidx.lifecycle.LifecycleOwner>,\n    <any androidx.camera.core.CameraSelector>,\n    <any androidx.camera.core.Preview>\n);\nWanted 1 time:\n-> at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\nBut was 2 times:\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n\n\tat androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingNewViewCannotBindAfterRetiredViewCleanupFails(NativeBackPrivacyTest.java:627)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n"
+    },
+    {
+      "test": "defaultRearUnavailableNeverFallsBackToFront",
+      "failure_type": "java.lang.AssertionError",
+      "message": "java.lang.AssertionError: Native camera request must be canceled synchronously",
+      "stack": "java.lang.AssertionError: Native camera request must be canceled synchronously\n\tat org.junit.Assert.fail(Assert.java:89)\n\tat org.junit.Assert.assertTrue(Assert.java:42)\n\tat org.junit.Assert.assertFalse(Assert.java:65)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.assertStopped(NativeBackPrivacyTest.java:1031)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultRearUnavailableNeverFallsBackToFront(NativeBackPrivacyTest.java:787)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n\tSuppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.\n"
+    },
+    {
+      "test": "defaultCameraBindsRearAfterActualProviderAcquisition",
+      "failure_type": "org.mockito.exceptions.verification.junit.ArgumentsAreDifferent",
+      "message": "org.mockito.exceptions.verification.junit.ArgumentsAreDifferent: \nArgument(s) are different! Wanted:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@7e91269b\n);\n-> at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\nActual invocations have different arguments:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@4d045888\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)\nprocessCameraProvider.bindToLifecycle(\n    com.xmilo_at_your_side.sign_to_speak.MainActivity@3aaa7c2,\n    androidx.camera.core.CameraSelector@4d045888,\n    Preview:androidx.camera.core.Preview-93725753-352f-4700-bf76-66d8f2ace2d2\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n",
+      "stack": "Argument(s) are different! Wanted:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@7e91269b\n);\n-> at androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\nActual invocations have different arguments:\nprocessCameraProvider.hasCamera(\n    androidx.camera.core.CameraSelector@4d045888\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:96)\nprocessCameraProvider.bindToLifecycle(\n    com.xmilo_at_your_side.sign_to_speak.MainActivity@3aaa7c2,\n    androidx.camera.core.CameraSelector@4d045888,\n    Preview:androidx.camera.core.Preview-93725753-352f-4700-bf76-66d8f2ace2d2\n);\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n\tat androidx.camera.lifecycle.ProcessCameraProvider.hasCamera(ProcessCameraProvider.kt:687)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.defaultCameraBindsRearAfterActualProviderAcquisition(NativeBackPrivacyTest.java:696)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n\tSuppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.\n"
+    },
+    {
+      "test": "pendingNewViewCannotBindAfterRetiredViewCleanupFails",
+      "failure_type": "org.mockito.exceptions.verification.TooManyActualInvocations",
+      "message": "org.mockito.exceptions.verification.TooManyActualInvocations: \nprocessCameraProvider.bindToLifecycle(\n    <any androidx.lifecycle.LifecycleOwner>,\n    <any androidx.camera.core.CameraSelector>,\n    <any androidx.camera.core.Preview>\n);\nWanted 1 time:\n-> at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\nBut was 2 times:\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n",
+      "stack": "org.mockito.exceptions.verification.TooManyActualInvocations: \nprocessCameraProvider.bindToLifecycle(\n    <any androidx.lifecycle.LifecycleOwner>,\n    <any androidx.camera.core.CameraSelector>,\n    <any androidx.camera.core.Preview>\n);\nWanted 1 time:\n-> at androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\nBut was 2 times:\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n-> at com.xmilo_at_your_side.sign_to_speak.PrivateCameraView.start$lambda$1(PrivateCameraView.kt:104)\n\n\n\tat androidx.camera.lifecycle.ProcessCameraProvider.bindToLifecycle(ProcessCameraProvider.kt:204)\n\tat com.xmilo_at_your_side.sign_to_speak.NativeBackPrivacyTest.pendingNewViewCannotBindAfterRetiredViewCleanupFails(NativeBackPrivacyTest.java:627)\n\tat java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)\n\tat java.base/java.lang.reflect.Method.invoke(Method.java:580)\n\tat org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)\n\tat org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)\n\tat org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:56)\n\tat org.junit.internal.runners.statements.InvokeMethod.evaluate(InvokeMethod.java:17)\n\tat org.junit.internal.runners.statements.RunBefores.evaluate(RunBefores.java:26)\n\tat org.junit.internal.runners.statements.RunAfters.evaluate(RunAfters.java:27)\n\tat org.junit.runners.ParentRunner$3.evaluate(ParentRunner.java:306)\n\tat org.robolectric.RobolectricTestRunner$HelperTestRunner$1.evaluate(RobolectricTestRunner.java:524)\n\tat org.robolectric.internal.SandboxTestRunner.executeInSandbox(SandboxTestRunner.java:494)\n\tat org.robolectric.internal.SandboxTestRunner.access$900(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$7.evaluate(SandboxTestRunner.java:442)\n\tat org.junit.runners.BlockJUnit4ClassRunner$1.evaluate(BlockJUnit4ClassRunner.java:100)\n\tat org.junit.runners.ParentRunner.runLeaf(ParentRunner.java:366)\n\tat org.junit.runners.BlockJUnit4ClassRunner.runChild(BlockJUnit4ClassRunner.java:103)\n\tat org.robolectric.internal.SandboxTestRunner.access$600(SandboxTestRunner.java:67)\n\tat org.robolectric.internal.SandboxTestRunner$6.evaluate(SandboxTestRunner.java:333)\n\tat org.robolectric.internal.SandboxTestRunner$3.evaluate(SandboxTestRunner.java:233)\n\tat org.robolectric.internal.SandboxTestRunner$5.lambda$evaluate$0(SandboxTestRunner.java:317)\n\tat org.robolectric.internal.bytecode.Sandbox.lambda$runOnMainThread$0(Sandbox.java:101)\n\tat java.base/java.util.concurrent.FutureTask.run(FutureTask.java:317)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)\n\tat java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)\n\tat java.base/java.lang.Thread.run(Thread.java:1583)\n\tSuppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.\n"
+    }
+  ],
+  "classification": "Default front is wrong for owner-defined camera use. Missing flip API is absent feature. Pending provider after shared cleanup failure is a separate proven lifecycle defect exposed by replacement-view tracing.",
+  "ui_regression": "Initial9 tests RED before implementation; independent old-source replay12RED/61existingPASS, candidate73PASS.",
+  "impact": "UI flip retires native view revision and preserves independent speech; native setter must invalidate provider lease and release old binding, never silently choose another lens.",
+  "previous_artifact": "e3525b9 passed nine physical cases each on both phones before this camera change. Those results cannot verify the changed artifact.",
+  "references": [
+    "https://developer.android.com/reference/androidx/camera/core/CameraSelector",
+    "https://developer.android.com/reference/androidx/camera/core/CameraInfo#getLensFacing()"
+  ],
+  "required_next": "Camera request completed in the recorded two-phone scope. Recognition, translation, voice quality and release gates remain. Future app/build/test changes require fresh exact-artifact checks. Keep PR draft.",
+  "prop_order_regression": {
+    "source": "b5f1f85bb45833579c1c8ee0ee4ce3ddf35ab2b9",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40235776082",
+    "normal_native": {
+      "tests": 151,
+      "failures": 2,
+      "errors": 0,
+      "skipped": 0
+    },
+    "failures": [
+      {
+        "name": "activeThenFrontLensBeforeAttachmentKeepsQueuedStart[28]",
+        "type": "java.lang.AssertionError",
+        "message": "java.lang.AssertionError: Changing the lens must preserve a detached Start request"
+      },
+      {
+        "name": "activeThenFrontLensBeforeAttachmentKeepsQueuedStart",
+        "type": "java.lang.AssertionError",
+        "message": "java.lang.AssertionError: Changing the lens must preserve a detached Start request"
+      }
+    ],
+    "root_cause": "Lens change stopped a queued detached request and refused to requeue until attached. React props may arrive before attachment.",
+    "fix": "Restore the requested activation through existing setActive(true), preserving queued intent and central guards instead of duplicating restart checks."
+  },
+  "emulator_followup": {
+    "issue": "Existing front-camera privacy lifecycle matrix directly started the newly rear-default app, then waited for front camera availability changes.",
+    "change": "Select front through the rendered UI before each applicable off-state Start, preserving camera-off, permission state, original front availability assertions and stage IDs.",
+    "verification": "Structural connection guard RED to GREEN; fresh emulator workflow passed actual instrumentation compilation and APK admission. Independent APK/hash/task-graph checks passed; runtime NOT_RUN.",
+    "phone_artifact_impact": "Only androidTestEmulatorQa source and its host policy guard changed after 46e7805; application and androidTestQa build inputs are unchanged. Actual phone tests will use exact signed 46e7805 APKs."
+  },
+  "phone_source": "46e78059da8ba59d75cf29a0dc74eb38fc23f9d8",
+  "final_unsigned": {
+    "source": "46e78059da8ba59d75cf29a0dc74eb38fc23f9d8",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40236437136",
+    "android": {
+      "tests": 151,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "deliberate_counterfactual": {
+      "tests": 4,
+      "failures": 4,
+      "errors": 0,
+      "skipped": 0
+    },
+    "unsigned": [
+      {
+        "role": "app",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-46e7805\\unsigned\\qa\\app-qa-unsigned.apk",
+        "unsigned_sha256": "a3fafbbcb32da0d78b94f79636c23ad7551c8342c5ea142ae3b9c2d0367efb59",
+        "changed_payloads_from_e3525b9": [
+          "assets/dexopt/baseline.prof",
+          "assets/dexopt/baseline.profm",
+          "classes.dex",
+          "assets/index.android.bundle",
+          "resources.arsc"
+        ]
+      },
+      {
+        "role": "test",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-46e7805\\unsigned\\androidTest\\qa\\app-qa-androidTest.apk",
+        "unsigned_sha256": "65883af403fd54aefb1415f19babd4bbb10615526b6dbdae91d0672a4565ea2b",
+        "changed_payloads_from_e3525b9": [
+          "classes.dex",
+          "resources.arsc"
+        ]
+      }
+    ],
+    "actual_apk_audits": "passed independently"
+  },
+  "final_signed": {
+    "source": "46e78059da8ba59d75cf29a0dc74eb38fc23f9d8",
+    "certificate_sha256": "2a0d37dc62eebed39bd08a9238c9255e26eb52a00143a02e0c6c473489985a21",
+    "key_unchanged": true,
+    "artifacts": [
+      {
+        "role": "app",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-46e7805\\signed\\app-signed.apk",
+        "unsigned_sha256": "a3fafbbcb32da0d78b94f79636c23ad7551c8342c5ea142ae3b9c2d0367efb59",
+        "signed_sha256": "c8b198e1584692f885bbd6dcd049b23d2a035798387745a095764a7ddbea93dc",
+        "payloads_identical_to_unsigned": true
+      },
+      {
+        "role": "test",
+        "path": "C:\\sign_to_speak\\phone-acceptance-20261025\\final-46e7805\\signed\\test-signed.apk",
+        "unsigned_sha256": "65883af403fd54aefb1415f19babd4bbb10615526b6dbdae91d0672a4565ea2b",
+        "signed_sha256": "ab61d7c3a72b6a4bab54d4e4cca5fe093833375f1cfcc6641e561d4ae41746bf",
+        "payloads_identical_to_unsigned": true
+      }
+    ]
+  },
+  "physical": {
+    "s24": {
+      "installed": [
+        {
+          "role": "app",
+          "sha256": "c8b198e1584692f885bbd6dcd049b23d2a035798387745a095764a7ddbea93dc",
+          "matches_receipt": true
+        },
+        {
+          "role": "test",
+          "sha256": "ab61d7c3a72b6a4bab54d4e4cca5fe093833375f1cfcc6641e561d4ae41746bf",
+          "matches_receipt": true
+        }
+      ],
+      "cold_start_ms": 136,
+      "tests": 12,
+      "failures": 0,
+      "journeys": [
+        {
+          "journey": "preview-portrait",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 69.941,
+          "raw_log": "s24-46e7805/preview-portrait.txt",
+          "sha256": "f6e90afad9717698221289f1385cc8971cefab3fc5c1cba389c46337ba3bc805"
+        },
+        {
+          "journey": "preview-landscape",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 54.277,
+          "raw_log": "s24-46e7805/preview-landscape.txt",
+          "sha256": "23d9e245321d46504b39f8ba7285146fe70d3a1a10f5a0d6acced2a71c0ca782"
+        },
+        {
+          "journey": "preview-landscape-repeat",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 65.615,
+          "raw_log": "s24-46e7805/preview-landscape-repeat.txt",
+          "sha256": "2611e21f44e8ca8609bd0522af5fb8203695748a6ddd20fe676d0ec4ee9f9498"
+        },
+        {
+          "journey": "typed-speech",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 52.457,
+          "raw_log": "s24-46e7805/typed-speech.txt",
+          "sha256": "991a7ad9585ad5fdca9f1b1ad24538408160e57fcbc6a68435d760eafd9dc08c"
+        },
+        {
+          "journey": "native-speech",
+          "tests": 4,
+          "failures": 0,
+          "seconds": 33.53,
+          "raw_log": "s24-46e7805/native-speech.txt",
+          "sha256": "8ba9be0219877bd7c568bcfddce124a2086a6399cf9d92f6812894ae7f4fab10"
+        }
+      ],
+      "original_camera_permission_restored": true,
+      "original_rotation_restored": true,
+      "returned_home": true,
+      "started_utc": "2026-10-25T21:55:31.4397773Z",
+      "finished_utc": "2026-10-25T22:00:24.2806549Z"
+    },
+    "seeker": {
+      "installed": [
+        {
+          "role": "app",
+          "sha256": "c8b198e1584692f885bbd6dcd049b23d2a035798387745a095764a7ddbea93dc",
+          "matches_receipt": true
+        },
+        {
+          "role": "test",
+          "sha256": "ab61d7c3a72b6a4bab54d4e4cca5fe093833375f1cfcc6641e561d4ae41746bf",
+          "matches_receipt": true
+        }
+      ],
+      "cold_start_ms": 371,
+      "tests": 12,
+      "failures": 0,
+      "journeys": [
+        {
+          "journey": "preview-portrait",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 68.078,
+          "raw_log": "seeker-46e7805/preview-portrait.txt",
+          "sha256": "ac0ff0686fb9e5aaac692907fa732790905fee4fce12fbf7e0185abb5b741914"
+        },
+        {
+          "journey": "preview-landscape",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 55.77,
+          "raw_log": "seeker-46e7805/preview-landscape.txt",
+          "sha256": "cfd73d4ede7d145bad1b64a2af7115c4202f0d9d81b6286d9a6b7fd1b304b3b1"
+        },
+        {
+          "journey": "preview-landscape-repeat",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 58.828,
+          "raw_log": "seeker-46e7805/preview-landscape-repeat.txt",
+          "sha256": "60d636ba98e58204dff6fa2188fecc821a533dc6926bbbacbde9179a83b41804"
+        },
+        {
+          "journey": "typed-speech",
+          "tests": 2,
+          "failures": 0,
+          "seconds": 50.231,
+          "raw_log": "seeker-46e7805/typed-speech.txt",
+          "sha256": "d0384e64f8e1422d683853ae5ba069b32536c2799d92b4b41fd50c4cf9c4adf7"
+        },
+        {
+          "journey": "native-speech",
+          "tests": 4,
+          "failures": 0,
+          "seconds": 32.288,
+          "raw_log": "seeker-46e7805/native-speech.txt",
+          "sha256": "2c86cc75ed938dfde0319c4542d9c2c5ea938c0c777cbf4a72b93accdfde4777"
+        }
+      ],
+      "original_camera_permission_restored": true,
+      "original_rotation_restored": true,
+      "returned_home": true,
+      "started_utc": "2026-10-25T22:00:52.501349Z",
+      "finished_utc": "2026-10-25T22:05:31.8059715Z"
+    }
+  },
+  "final_ci": {
+    "emulator_build": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40237504240",
+    "conclusion": "success",
+    "android": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40236437136",
+    "emulator_build_conclusion": "success",
+    "normal_native": {
+      "tests": 151,
+      "errors": 0,
+      "failures": 0,
+      "skipped": 0
+    },
+    "deliberate_counterfactual": "Four expected failures, separately checked",
+    "emulator_runtime": "NOT_RUN; current runner KVM_EXISTING_ACCESS=blocked"
+  },
+  "emulator_artifact": {
+    "source": "74866a6c1cb576aee074fe0ceb01dbea6bc3e997",
+    "run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/40237504240",
+    "unsigned": [
+      {
+        "name": "app-emulatorQa-androidTest.apk",
+        "sha256": "cb93d31e7d7c8063b332b3f7622ba8ae34016542bf9091e6ab6666669750352c"
+      },
+      {
+        "name": "app-emulatorQa-unsigned.apk",
+        "sha256": "c5114b1227c51b4dcb7a7ae5e5e4dedce66d0b028b927a01f01a7600fbeaa123"
+      }
+    ],
+    "runtime": "NOT_RUN"
+  },
+  "generated_profile_consistency": [
+    {
+      "artifact": "final-e3525b9",
+      "dex": "classes.dex",
+      "profile_crc_matches_dex_zip_crc": true,
+      "profile_method_count_matches_dex": true,
+      "metadata_type_count_matches_dex": true,
+      "method_count": 63919,
+      "type_count": 9873,
+      "profile_classes": 202,
+      "metadata_classes": 202,
+      "hot_method_region_bytes": 3676
+    },
+    {
+      "artifact": "final-46e7805",
+      "dex": "classes.dex",
+      "profile_crc_matches_dex_zip_crc": true,
+      "profile_method_count_matches_dex": true,
+      "metadata_type_count_matches_dex": true,
+      "method_count": 63929,
+      "type_count": 9875,
+      "profile_classes": 202,
+      "metadata_classes": 202,
+      "hot_method_region_bytes": 3676
+    }
+  ],
+  "audit_conclusion": "No additional evidenced defect found in inspected related paths. Bounded acceptance does not prove all application correctness or commercial readiness.",
+  "resolved_findings": [
+    {
+      "locations": [
+        "native/App.tsx:204 flipCamera",
+        "native/App.tsx:237 camera view revision",
+        "native/App.tsx:265 camera-flip",
+        "native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt:31 Lens",
+        "native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SignFoundationPackage.kt:34 lensFacing prop"
+      ],
+      "status": "Requested behavior implemented; actual bound CameraInfo verified on both phones",
+      "issue": "Front hardcoded and no flip control for intended rear-facing signer flow",
+      "severity": "medium / requested feature"
+    },
+    {
+      "location": "native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt:136 provider callback",
+      "status": "Proven before repair; final native suite passes",
+      "issue": "Pending replacement bound after retired view cleanup failure",
+      "severity": "high / shared cleanup fault gate"
+    },
+    {
+      "location": "native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt:68 setLensFacing",
+      "status": "Proven before repair; existing activation path now preserves request",
+      "issue": "New setter lost queued Start before attachment",
+      "severity": "medium / introduced correctness regression"
+    },
+    {
+      "location": "native/android/app/src/androidTestEmulatorQa/java/com/xmilo_at_your_side/sign_to_speak/EmulatorPrivacyLifecycleTest.java selectFrontCameraWhileOff",
+      "status": "Explicit front selection connected and compiled; emulator runtime unverified",
+      "issue": "Front-specific emulator test relied on default",
+      "severity": "medium / downstream test contract"
+    }
+  ],
+  "remaining_commercial_blockers": [
+    "Recognition, segmentation, fingerspelling and continuous ASL translation unavailable in customer flow",
+    "Local customer microphone captions absent",
+    "Speech limited to printable ASCII up to 256 characters; API26-28 speech disabled by privacy policy",
+    "Current Flite CMU US SLT voice quality unacceptable to owner; compare engine PCM and phone playback before replacing with improved fully offline voice",
+    "Recorded-video tracking/inference, feature parity, accuracy/rejection and phone performance not established",
+    "Commercial model/data licensing and deployment admission incomplete; private ASL Citizen material stays out of Git/app",
+    "Full capture/privacy/support and full-app16KiB runtime matrix incomplete; emulator runtime not run",
+    "Production identity/signing and store acceptance deferred; future Play AAB and Solana APK need different protected keys"
+  ],
+  "source_alignment": "Main workflow and exact signed phone pair are from46e7805. Later74866a6 changes only emulator-test source, its host policy guard and evidence. Git diff confirms phone app, unit-test, phone-test and build inputs identical. No app/build changes after physical testing.",
+  "related_paths_inspected": [
+    "App permission/start/flip/status flow, Stop, Back, background, thanks navigation and independent speech",
+    "CameraViewManager prop mapping; native attachment and both prop arrival orders",
+    "PrivateCameraView lease/provider/observer ownership, retired views and Activity cleanup latch",
+    "NativeBackPrivacyTest and actual bound-camera PhonePreviewIntegrationTest assertions",
+    "Existing phone navigation helper and full typed/native speech journeys",
+    "Emulator front availability/release lifecycle and fresh Activity reopen",
+    "Actual ARM64 and x86 APK admission, signatures/ZIP payloads, task graph and generated profiles"
+  ],
+  "signing": "Existing development key stayed local on C: and unchanged. No new key, key copy, credential upload, production/store build or release publication.",
+  "appearance_boundary": "Existing styles and canonical renderer source/assets unchanged. Intended visible changes are rear default and one flip control using existing Button. Physical tests establish camera/control/lifecycle behavior, not pixel-perfect visual parity or recognition accuracy.",
+  "unresolved_findings": [
+    {
+      "confidence": "Owner-reported quality; engine-versus-playback cause not measured",
+      "issue": "Speech voice quality unacceptable to owner",
+      "verification": "Recorded-video/typed text pronunciation cases and actual audio on both phones; repeat exact final artifact checks after any engine change",
+      "smallest_next_step": "Compare engine PCM and phone playback/sample rate/prosody, then evaluate improved fully offline voice with cancellation, zeroization, capture policy and licenses preserved",
+      "impact": "Blocks customer-ready speech quality",
+      "location": "native/android/app/src/main/cpp/flite/private_runtime.c:203 register_cmu_us_slt"
+    }
+  ],
+  "post_test_readiness": "Samsung still Home at final read-only query. Seeker disconnected after its completed physical/restoration receipt had confirmed Home and original settings; no app/build changes after testing and no further device action."
+}

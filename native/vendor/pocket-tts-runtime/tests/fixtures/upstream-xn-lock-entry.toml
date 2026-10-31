@@ -1,0 +1,7 @@
+# Extracted from Kyutai pocket-tts a922b912dfa366975294afb568d815b305acde5d
+# rust/Cargo.lock, SHA-256 3f2c5396eaaad4c64258ae724e012fdaa0c7b3e71165bcf0ef2c6b0641d18d27.
+[[package]]
+name = "xn"
+version = "0.2.12"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bec55897173439907dd60c759df3d4793aa73af979336cf7f6f999532812d59f"

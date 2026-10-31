@@ -46,6 +46,9 @@ jobs:
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           mkdir -p "$RUNNER_TEMP/sign-emulator-build"
           git rev-parse HEAD > "$RUNNER_TEMP/sign-emulator-build/tested-sha.txt"
+          sha256sum vendor/pocket-tts-runtime/Cargo.toml vendor/pocket-tts-runtime/Cargo.lock vendor/pocket-tts-runtime/build.rs \
+            scripts/build-pocket-runtime.sh scripts/prepare-pocket-assets.py \
+            > "$RUNNER_TEMP/sign-emulator-build/source-sha256.txt"
           bash scripts/ci-emulator-diagnostics.sh
       - name: Host and unsigned build policy checks
         run: |
@@ -53,12 +56,22 @@ jobs:
           npm ci --ignore-scripts --no-audit --no-fund
           npm test
           npm run typecheck
-          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs
+          node --test scripts/ci-policy.test.mjs scripts/ci-sdk.test.mjs scripts/emulator-build-policy.test.mjs scripts/pocket-build-policy.test.mjs
           python3 scripts/check-emulator-unsigned.test.py
           python3 scripts/check-emulator-task-graph.test.py
           bash scripts/check-native-library-mapping.sh
       - name: Verify official pinned build inputs without accepting terms
         run: bash scripts/ci-sdk.sh
+      - name: Source-build locked x86_64 Pocket runtime and prepare pinned assets
+        timeout-minutes: 25
+        run: |
+          set -euo pipefail
+          timeout 900 bash scripts/build-pocket-runtime.sh x86_64
+          python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
+            --metadata "$RUNNER_TEMP/pocket-x86_64-metadata.json" \
+            --output-dir generated/pocket-assets
       - name: Inspect exact opt-in task graph before any build task executes
         timeout-minutes: 8
         run: |
@@ -84,6 +97,11 @@ jobs:
             :app:verifyUnsignedEmulatorQaIsolation :app:assembleEmulatorQa :app:assembleEmulatorQaAndroidTest
           cd ..
           bash scripts/ci-emulator-unsigned-audit.sh
+          mapfile -t apks < <(find android/app/build/outputs/apk/emulatorQa -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          python3 scripts/check-pocket-apk-elf.py "${apks[0]}" x86_64 \
+            "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            "$RUNNER_TEMP/sign-emulator-build/elf"
       - name: Preserve bounded evidence, including blockers
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

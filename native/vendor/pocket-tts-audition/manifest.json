@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "source": {
+    "repository": "https://github.com/kyutai-labs/pocket-tts",
+    "commit": "a922b912dfa366975294afb568d815b305acde5d",
+    "version": "4.0.1",
+    "config_path": "pocket_tts/config/english_18m_2026-10.yaml",
+    "config_size": 2147,
+    "config_sha256": "3ec91f2f298d3fd283b98093d432f236c30523262f74e7e820a60d9625426700",
+    "archive_sha256": "08dd2e7405609e788a9811f2786cdfc3f8f21f5e083a321108923fcae8f44b06",
+    "file_sha256": {
+      "pyproject.toml": "67ca45abff5bc923e6c713c080c6658f6b240367d362139629bb72e42be5ee5e",
+      "pocket_tts/models/tts_model.py": "e76f622aa734eec9ffd806f136b70a7f028abf0cc7b5fc51e948e853d37e879d",
+      "pocket_tts/utils/config.py": "4fc5f07503b65574f7f5e1ee108b8ffac5cc7494758f8b6d103448b21d49e66e",
+      "pocket_tts/utils/utils.py": "0a04da8d3b808d7ea227a9a11d4f29627e5297a1c0809997d4805e1e866cb8be",
+      "pocket_tts/__init__.py": "d6a4eab97e2f4acb8b6bd5268d55a52e1fdce991e45b0dd536395ad02e2e5777"
+    },
+    "archive_size": 908066
+  },
+  "model": {
+    "repository": "kyutai/pocket-tts-without-voice-cloning",
+    "revision": "a7056f505a4a8ca72d8b5fb1440071d6f1a35739",
+    "language": "english_18m_2026-10",
+    "voice": "alba",
+    "assets": [
+      {
+        "path": "languages/english_18m_2026-10/model.safetensors",
+        "size": 111728528,
+        "sha256": "599329dcea2f2a8d17b575e1c6e11b78822453c9073040d55c26faadf4883188"
+      },
+      {
+        "path": "languages/english_18m_2026-10/tokenizer.model",
+        "size": 59339,
+        "sha256": "d461765ae179566678c93091c5fa6f2984c31bbe990bf1aa62d92c64d91bc3f6"
+      },
+      {
+        "path": "languages/english_18m_2026-10/embeddings/alba.safetensors",
+        "size": 4163992,
+        "sha256": "11554cbe9f3d3a3e10722932df9952bb44928e534f7af3200524659166b5627a"
+      }
+    ]
+  },
+  "attribution": [
+    "Pocket TTS 4.0.1 source code by Kyutai, MIT License: https://github.com/kyutai-labs/pocket-tts/blob/a922b912dfa366975294afb568d815b305acde5d/LICENSE",
+    "Pocket TTS English 18M October 2026 model and tokenizer by Kyutai, CC BY 4.0: https://creativecommons.org/licenses/by/4.0/. Source: https://huggingface.co/kyutai/pocket-tts-without-voice-cloning/tree/a7056f505a4a8ca72d8b5fb1440071d6f1a35739/languages/english_18m_2026-10",
+    "Alba voice embedding is derived from Alba MacKenna's voice recording, CC BY 4.0: https://huggingface.co/kyutai/tts-voices/blob/main/README.md#alba-mackenna",
+    "Changes for this audition: the pinned upstream config is copied locally and its weight and tokenizer URLs are replaced with verified local paths. A local-only path resolver adapter rejects remote and unapproved inputs and deliberately raises FileNotFoundError for an absent cloning sentinel, selecting the official loader's ungated fallback. Model math and synthesis code are not modified. No model weights, tokenizer, or voice embedding are modified. Generated WAVs are evaluation outputs, not source recordings."
+  ]
+}

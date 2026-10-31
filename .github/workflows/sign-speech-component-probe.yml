@@ -1,0 +1,353 @@
+name: Pocket TTS CPU component probe
+
+# Hosted feasibility evidence only. No APK is built or signed.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/sign-speech-component-probe.yml
+      - native/scripts/speech-component-policy.test.mjs
+      - native/scripts/python-host-dependency-policy.test.mjs
+      - native/requirements-host-tests.txt
+      - native/scripts/pocket-license-audit.py
+      - native/scripts/pocket-license-audit.test.py
+      - native/scripts/prepare-pocket-assets.py
+      - native/scripts/prepare-pocket-assets.test.py
+      - native/scripts/pocket-tts-component-probe.py
+      - native/scripts/pocket-tts-component-probe.test.py
+      - native/scripts/pocket-tts-audition.py
+      - native/scripts/pocket-tts-audition.test.py
+      - native/scripts/speech-component-android-policy.test.mjs
+      - native/scripts/speech-native-probe-policy.test.mjs
+      - native/android/app/src/main/cpp/pocket/**
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketTtsRequest.java
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketModelStore.java
+      - native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java
+      - native/tests/java/PocketTtsRequestHostTest.java
+      - native/tests/java/PocketModelStoreTest.java
+      - native/tests/java/SpeechTextContractTest.java
+      - native/tests/java/SpeechSessionTest.java
+      - native/tests/run-java-tests.sh
+      - native/vendor/pocket-tts-runtime/**
+      - native/vendor/pocket-tts-audition/manifest.json
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-speech-component-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    if: >-
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event.repository.private == false &&
+      ((github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/codex/native-recognition-flow-20261024') ||
+       (github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name == 'Hatsunama/sign-to-speak' &&
+        github.event.pull_request.head.ref == 'codex/native-recognition-flow-20261024'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      PYTHONDONTWRITEBYTECODE: '1'
+      HF_HUB_OFFLINE: '1'
+      TRANSFORMERS_OFFLINE: '1'
+      RAYON_NUM_THREADS: '2'
+      CARGO_BUILD_JOBS: '2'
+      RUSTFLAGS: '-C target-cpu=x86-64-v3'
+      EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      POCKET_SOURCE_COMMIT: a922b912dfa366975294afb568d815b305acde5d
+      POCKET_SOURCE_ARCHIVE_SHA256: 08dd2e7405609e788a9811f2786cdfc3f8f21f5e083a321108923fcae8f44b06
+      POCKET_CARGO_LOCK_SHA256: 3f2c5396eaaad4c64258ae724e012fdaa0c7b3e71165bcf0ef2c6b0641d18d27
+    steps:
+      - name: Checkout exact component source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+      - name: Verify source and preinstalled CPU toolchain
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          python3 - <<'PY'
+          from pathlib import Path
+          flags = Path('/proc/cpuinfo').read_text().split()
+          for feature in ('avx2', 'fma', 'bmi1', 'bmi2'):
+              if feature not in flags:
+                  raise SystemExit(f'x86-64-v3 CPU feature unavailable: {feature}')
+          PY
+          for tool in rustc cargo cmake c++ python3; do command -v "$tool"; "$tool" --version | head -1; done
+          : "${JAVA_HOME_17_X64:?Preinstalled JDK 17 is required}"
+          test -x "$JAVA_HOME_17_X64/bin/javac"
+          test -x "$JAVA_HOME_17_X64/bin/java"
+          "$JAVA_HOME_17_X64/bin/javac" -version
+          "$JAVA_HOME_17_X64/bin/java" -version
+          mkdir -p "$RUNNER_TEMP/pocket-component-evidence" "$RUNNER_TEMP/pocket-component-bootstrap"
+      - name: Select pinned Node runtime
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
+        with:
+          node-version: '24.19.0'
+          check-latest: false
+      - name: Provision pinned Python host-test wheel
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          target="$RUNNER_TEMP/sign-python-host-tests"
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir --target "$target" -r native/requirements-host-tests.txt
+          PYTHONPATH="$target" python3 -c 'import numpy; assert numpy.__version__ == "2.3.2"'
+          echo "PYTHONPATH=$target" >> "$GITHUB_ENV"
+      - name: Run complete bounded host checks
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cd native
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm test
+          npm run typecheck
+          node --test scripts/*.test.mjs
+          JAVA_HOME="$JAVA_HOME_17_X64" JAVA_TEST_OUT_PARENT="$RUNNER_TEMP" ./tests/run-java-tests.sh
+          for test_file in scripts/*.test.py; do python3 "$test_file"; done
+          python3 -m unittest discover -s vendor/pocket-tts-runtime/tests -p 'test_*.py'
+      - name: Verify upstream lock seed for first-run bootstrap
+        if: ${{ hashFiles('native/vendor/pocket-tts-runtime/Cargo.lock') == '' }}
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          curl --fail --location --silent --show-error --retry 2 --max-time 90 \
+            "https://codeload.github.com/kyutai-labs/pocket-tts/tar.gz/$POCKET_SOURCE_COMMIT" \
+            -o "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz"
+          test "$(stat -c %s "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz")" -eq 908066
+          printf '%s  %s\n' "$POCKET_SOURCE_ARCHIVE_SHA256" "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" | sha256sum --check --status
+          tar -xOzf "$RUNNER_TEMP/pocket-tts-rust-source.tar.gz" \
+            "pocket-tts-$POCKET_SOURCE_COMMIT/rust/Cargo.lock" > "$RUNNER_TEMP/upstream-Cargo.lock"
+          printf '%s  %s\n' "$POCKET_CARGO_LOCK_SHA256" "$RUNNER_TEMP/upstream-Cargo.lock" | sha256sum --check --status
+      - name: Resolve complete Cargo graph before compiling
+        id: resolve
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cd native/vendor/pocket-tts-runtime
+          if test -f Cargo.lock; then
+            test -s Cargo.lock
+            mode=locked-admission
+          else
+            test -s "$RUNNER_TEMP/upstream-Cargo.lock"
+            cp "$RUNNER_TEMP/upstream-Cargo.lock" Cargo.lock
+            cargo generate-lockfile
+            mode=bootstrap-unadmitted
+          fi
+          # No --target: fetch the entire resolved graph, including platform-specific crates.
+          cargo fetch --locked
+          cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-cargo-metadata.json"
+          test -s "$RUNNER_TEMP/pocket-cargo-metadata.json"
+          if test "$mode" = bootstrap-unadmitted; then
+            cp Cargo.lock "$RUNNER_TEMP/pocket-component-bootstrap/Cargo.lock"
+            python3 - "$RUNNER_TEMP/pocket-component-bootstrap" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          root = pathlib.Path(sys.argv[1])
+          receipt = {'status': 'bootstrap-unadmitted', 'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+                     'upstream_lock_seed_sha256': os.environ['POCKET_CARGO_LOCK_SHA256'],
+                     'resolved_lock_sha256': hashlib.sha256((root / 'Cargo.lock').read_bytes()).hexdigest(),
+                     'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']}
+          (root / 'resolution-receipt.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+            echo 'bootstrap=true' >> "$GITHUB_OUTPUT"
+          fi
+          echo "mode=$mode" >> "$GITHUB_OUTPUT"
+      - name: Collect unadmitted Cargo source notice inventory
+        id: collect_notices
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          candidate="$RUNNER_TEMP/pocket-cargo-notice-candidate"
+          python3 native/scripts/prepare-pocket-assets.py --collect-license-receipt \
+            --metadata "$RUNNER_TEMP/pocket-cargo-metadata.json" --output-dir "$candidate"
+          python3 - "$candidate" <<'PY'
+          import hashlib, json, os, pathlib, sys
+          candidate = pathlib.Path(sys.argv[1])
+          sha = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          receipt = {'status': 'UNADMITTED inventory, not legal clearance',
+                     'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+                     'resolved_lock_sha256': sha(pathlib.Path('native/vendor/pocket-tts-runtime/Cargo.lock')),
+                     'cargo_metadata_sha256': sha(pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-cargo-metadata.json'),
+                     'candidate_receipt_sha256': sha(candidate / 'candidate-cargo-license-files.json')}
+          (candidate / 'candidate-inventory-provenance.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+          echo 'collected=true' >> "$GITHUB_OUTPUT"
+      - name: Compile cdylib and execute component unit tests
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cd native/vendor/pocket-tts-runtime
+          cargo test --release --locked --offline --jobs 2
+          cargo build --release --locked --offline --jobs 2 --lib
+          test -s target/release/libsign_pocket_tts_runtime.so
+          sha256sum target/release/libsign_pocket_tts_runtime.so Cargo.lock
+      - name: Build actual host JNI bridge against compiled runtime
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          runtime="$GITHUB_WORKSPACE/native/vendor/pocket-tts-runtime/target/release/libsign_pocket_tts_runtime.so"
+          build="$RUNNER_TEMP/pocket-component-host-jni"
+          cmake -S native/android/app/src/main/cpp/pocket -B "$build" -DCMAKE_BUILD_TYPE=Release \
+            -DPOCKET_RUNTIME_LIBRARY="$runtime" > "$RUNNER_TEMP/pocket-component-evidence/jni-configure.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-configure.txt"; exit 1;
+            }
+          cmake --build "$build" --config Release --parallel 2 \
+            > "$RUNNER_TEMP/pocket-component-evidence/jni-build.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-build.txt"; exit 1;
+            }
+          test -s "$build/libprivate_pocket_tts.so"
+      - name: Download pinned English 18M and Alba assets
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 native/scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-component-assets"
+      - name: Diagnose tokenizer against verified pinned asset
+        timeout-minutes: 2
+        run: |
+          set -euo pipefail
+          cd native/vendor/pocket-tts-runtime
+          TOKENIZER_MODEL="$RUNNER_TEMP/pocket-component-assets/languages/english_18m_2026-10/tokenizer.model" \
+            cargo test --release --locked --offline --jobs 2 diagnostic_tokenizer_contract -- --ignored --nocapture \
+            > "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt"; exit 1;
+            }
+          cat "$RUNNER_TEMP/pocket-component-evidence/tokenizer-diagnostic.txt"
+      - name: Record component provenance and dependency declarations
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          python3 native/scripts/pocket-license-audit.py \
+            --metadata "$RUNNER_TEMP/pocket-cargo-metadata.json" \
+            --output "$RUNNER_TEMP/pocket-component-evidence/dependency-license-report.json"
+          python3 - <<'PY'
+          import hashlib, json, os, pathlib, subprocess
+          root = pathlib.Path('native/vendor/pocket-tts-runtime')
+          output = pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-component-evidence'
+          digest = lambda path: hashlib.sha256(path.read_bytes()).hexdigest()
+          source = {p.relative_to(root).as_posix(): digest(p) for p in sorted(root.rglob('*'))
+                    if p.is_file() and not p.is_symlink() and 'target' not in p.parts and '__pycache__' not in p.parts}
+          library = root / 'target/release/libsign_pocket_tts_runtime.so'
+          receipt = {'status': 'compiled-component-not-android-admission',
+                     'app_source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+                     'source_files_sha256': source,
+                     'cargo_lock_sha256': digest(root / 'Cargo.lock'),
+                     'component_cdylib_sha256': digest(library),
+                     'host_jni_sha256': digest(pathlib.Path(os.environ['RUNNER_TEMP']) / 'pocket-component-host-jni/libprivate_pocket_tts.so'),
+                     'model_manifest_sha256': digest(pathlib.Path('native/vendor/pocket-tts-audition/manifest.json')),
+                     'tool_versions': {name: subprocess.check_output([name, '--version'], text=True).splitlines()[0]
+                                       for name in ('rustc', 'cargo', 'cmake', 'c++', 'python3')},
+                     'java_version': subprocess.check_output([os.environ['JAVA_HOME_17_X64'] + '/bin/java', '-version'],
+                                                             stderr=subprocess.STDOUT, text=True).splitlines()[0],
+                     'javac_version': subprocess.check_output([os.environ['JAVA_HOME_17_X64'] + '/bin/javac', '-version'],
+                                                              stderr=subprocess.STDOUT, text=True).splitlines()[0],
+                     'rustflags': os.environ['RUSTFLAGS'], 'cargo_jobs': os.environ['CARGO_BUILD_JOBS'],
+                     'runner_image': os.environ.get('ImageVersion', 'unknown'),
+                     'run_id': os.environ['GITHUB_RUN_ID'], 'run_attempt': os.environ['GITHUB_RUN_ATTEMPT']}
+          (output / 'provenance.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          PY
+          cat > "$RUNNER_TEMP/pocket-component-evidence/NOTICES.txt" <<'NOTICE'
+          Pocket TTS source adaptation: Kyutai MIT, pinned commit a922b912dfa366975294afb568d815b305acde5d.
+          xn-ptts fork: MIT OR Apache-2.0, pinned commit 7efa26973f81bba42cf2ace8da2c1eb9b605d54d.
+          English 18M model and tokenizer: Kyutai CC BY 4.0. Alba voice: Alba MacKenna, CC BY 4.0.
+          The dependency report records package declarations; it is not a redistribution clearance.
+          This CPU component probe does not establish Android or release readiness.
+          NOTICE
+      - name: Execute real component in network namespace
+        timeout-minutes: 18
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=10s 17m \
+            sudo unshare --net -- runuser -u "$(id -un)" -- \
+            env RAYON_NUM_THREADS=2 HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 PYTHONDONTWRITEBYTECODE=1 \
+            python3 native/scripts/pocket-tts-component-probe.py \
+              --library native/vendor/pocket-tts-runtime/target/release/libsign_pocket_tts_runtime.so \
+              --asset-dir "$RUNNER_TEMP/pocket-component-assets" \
+              --output-dir "$RUNNER_TEMP/pocket-component-execution"
+          test -s "$RUNNER_TEMP/pocket-component-execution/result.json"
+          python3 - "$RUNNER_TEMP/pocket-component-execution/result.json" <<'PY'
+          import json, pathlib, sys
+          result = json.loads(pathlib.Path(sys.argv[1]).read_text())
+          if result.get('status') != 'native_component_probe_passed' or result.get('runtime') != 'real_C_ABI':
+              raise SystemExit('Real component did not report probe success')
+          PY
+          test "$(find "$RUNNER_TEMP/pocket-component-execution" -maxdepth 1 -name '*.wav' -type f | wc -l)" -eq 5
+          cp "$RUNNER_TEMP/pocket-component-execution/result.json" "$RUNNER_TEMP/pocket-component-evidence/"
+          cp "$RUNNER_TEMP/pocket-component-execution/"*.wav "$RUNNER_TEMP/pocket-component-evidence/"
+          test "$(find "$RUNNER_TEMP/pocket-component-evidence" -mindepth 1 -maxdepth 1 -type f ! -name '*.wav' ! -name '*.json' ! -name '*.txt' | wc -l)" -eq 0
+      - name: Execute actual JNI request host test offline
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          export JAVA_HOME="$JAVA_HOME_17_X64"
+          classes="$RUNNER_TEMP/pocket-component-jni-classes"
+          mkdir -p "$classes"
+          "$JAVA_HOME/bin/javac" -J-Xmx128m -d "$classes" \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/SpeechSession.java \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PocketTtsRequest.java \
+            native/tests/java/PocketTtsRequestHostTest.java
+          timeout --signal=TERM --kill-after=10s 4m \
+            sudo unshare --net -- runuser -u "$(id -un)" -- \
+            env LD_LIBRARY_PATH="$RUNNER_TEMP/pocket-component-host-jni:$GITHUB_WORKSPACE/native/vendor/pocket-tts-runtime/target/release" \
+            HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1 RAYON_NUM_THREADS=2 \
+            "$JAVA_HOME/bin/java" -Xmx128m -Djava.library.path="$RUNNER_TEMP/pocket-component-host-jni" \
+            -cp "$classes" PocketTtsRequestHostTest \
+            "$RUNNER_TEMP/pocket-component-execution/component-assets" \
+            > "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt" 2>&1 || {
+              cat "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt"; exit 1;
+            }
+          cat "$RUNNER_TEMP/pocket-component-evidence/jni-host-test.txt"
+      - name: Upload successful WAVs and sanitized records only
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-component-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-component-evidence/*.wav
+            ${{ runner.temp }}/pocket-component-evidence/*.json
+            ${{ runner.temp }}/pocket-component-evidence/*.txt
+      - name: Upload component diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-component-diagnostics-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: ignore
+          path: |
+            ${{ runner.temp }}/pocket-component-evidence/tokenizer-diagnostic.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-configure.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-build.txt
+            ${{ runner.temp }}/pocket-component-evidence/jni-host-test.txt
+            ${{ runner.temp }}/pocket-component-evidence/dependency-license-report.json
+      - name: Upload bootstrap lock and resolution receipt separately
+        if: ${{ always() && steps.resolve.outputs.bootstrap == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-component-unadmitted-lock-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-component-bootstrap/Cargo.lock
+            ${{ runner.temp }}/pocket-component-bootstrap/resolution-receipt.json
+      - name: Upload unadmitted Cargo notice candidate separately
+        if: ${{ always() && steps.collect_notices.outputs.collected == 'true' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # upstream v4
+        with:
+          name: pocket-tts-unadmitted-cargo-notices-${{ env.EXPECTED_SOURCE_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-cargo-license-files.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices-index.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-inventory-provenance.json
+            ${{ runner.temp }}/pocket-cargo-notice-candidate/candidate-notices/**

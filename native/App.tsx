@@ -1,7 +1,7 @@
 import React, {useCallback, useEffect, useRef, useState} from 'react';
 import {
   AppState, BackHandler, NativeModules, PermissionsAndroid, Pressable, requireNativeComponent,
-  ScrollView, StyleSheet, Text, useWindowDimensions, View,
+  ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View,
   type NativeSyntheticEvent, type ViewProps,
 } from 'react-native';
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import {createLocalSpeech} from './src/local-speech.mjs';
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
+  lensFacing: 'back' | 'front';
   onStatus: (event: NativeSyntheticEvent<{status: string}>) => void;
 }>('PrivateCameraPreview');
 
@@ -18,10 +19,10 @@ function localSpeechBridge() {
   try { return NativeModules.LocalSpeech; } catch { return null; }
 }
 
-function Button({children, onPress, disabled = false}: {
-  children: string; onPress: () => void; disabled?: boolean;
+function Button({children, onPress, disabled = false, testID}: {
+  children: string; onPress: () => void; disabled?: boolean; testID?: string;
 }) {
-  return <Pressable accessibilityRole="button" disabled={disabled} onPress={onPress}
+  return <Pressable accessibilityRole="button" testID={testID} disabled={disabled} onPress={onPress}
     style={({pressed}) => [styles.button, (pressed || disabled) && styles.dimmed]}>
     <Text style={styles.buttonText}>{children}</Text>
   </Pressable>;
@@ -32,23 +33,52 @@ function Home() {
   const [route, setRoute] = useState<'home' | 'thanks'>('home');
   const [foreground, setForeground] = useState(AppState.currentState === 'active');
   const [preview, setPreview] = useState<number | null>(null);
+  const [lensFacing, setLensFacing] = useState<'back' | 'front'>('back');
   const [requesting, setRequesting] = useState(false);
   const [cleanupFailed, setCleanupFailed] = useState(false);
   const [notice, setNotice] = useState('Camera is off.');
+  const [draft, setDraft] = useState('');
+  const [speechStatus, setSpeechStatus] = useState('Type text, review it, then tap Speak typed text.');
+  const [speechBusy, setSpeechBusy] = useState(false);
+  const [speechFault, setSpeechFault] = useState(false);
+  const speechFaultRef = useRef(false);
+  const speechAttempt = useRef(false);
+  const speechEpoch = useRef(0);
   const request = useRef<{canStart: boolean} | null>(null);
+  const cameraViewRevision = useRef(0);
   const mounted = useRef(true);
-  const speech = useRef(createLocalSpeech(localSpeechBridge())).current;
+  const speech = useRef(createLocalSpeech(localSpeechBridge(), () => {
+    if (!mounted.current || speechFaultRef.current) return;
+    speechFaultRef.current = true;
+    speechEpoch.current++;
+    speechAttempt.current = false;
+    speech.stop();
+    setSpeechBusy(false);
+    setSpeechFault(true);
+  })).current;
   const gate = useRef(createSession({
     stopCamera: () => setPreview(null),
     stopSpeech: () => speech.stop(), clearNativeBuffers: () => {},
   })).current;
 
+  const stopSpeech = useCallback((clearDraft: boolean, message: string) => {
+    speechEpoch.current++;
+    speechAttempt.current = false;
+    speech.stop();
+    setSpeechBusy(false);
+    if (clearDraft) setDraft('');
+    setSpeechStatus(speechFaultRef.current
+      ? 'Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.'
+      : message);
+  }, [speech]);
+
   const stop = useCallback(() => {
     request.current = null;
     gate.stop();
+    stopSpeech(false, 'Speech stopped.');
     setRequesting(false);
     setNotice('Camera is off.');
-  }, [gate]);
+  }, [gate, stopSpeech]);
 
   useEffect(() => {
     mounted.current = true;
@@ -60,6 +90,7 @@ function Home() {
         if (request.current) request.current.canStart = false;
         const wasPreviewing = gate.state().phase === 'preview';
         gate.stop();
+        stopSpeech(true, 'Speech stopped. Type text to speak again.');
         setRequesting(false);
         if (wasPreviewing) setNotice('Camera is off.');
       }
@@ -69,17 +100,75 @@ function Home() {
       subscription.remove();
       request.current = null;
       gate.stop();
+      speechEpoch.current++;
+      speechAttempt.current = false;
+      speech.stop();
+      setDraft('');
     };
-  }, [gate]);
+  }, [gate, speech, stopSpeech]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (preview || requesting || request.current) { stop(); return true; }
-      if (route === 'thanks') { setRoute('home'); return true; }
+      if (preview || requesting || request.current) { stop(); setDraft(''); return true; }
+      if (route === 'thanks') { stopSpeech(true, 'Speech stopped.'); setRoute('home'); return true; }
+      if (draft || speechBusy || speechAttempt.current) { stopSpeech(true, 'Speech stopped.'); return true; }
       return false;
     });
     return () => subscription.remove();
-  }, [preview, requesting, route, stop]);
+  }, [preview, requesting, route, draft, speechBusy, stop, stopSpeech]);
+
+  function editDraft(value: string) {
+    if (speechAttempt.current) stopSpeech(false, 'Text changed. Review it and tap Speak typed text again.');
+    else if (!speechFaultRef.current) setSpeechStatus('Review the text, then tap Speak typed text.');
+    setDraft(value);
+  }
+
+  async function speakDraft() {
+    if (speechAttempt.current || speechFaultRef.current || AppState.currentState !== 'active') return;
+    if (!draft.trim()) {
+      setSpeechStatus('Enter text before speaking.');
+      return;
+    }
+    if (draft.length > 256) {
+      setSpeechStatus('Use 1 to 256 characters. Edit the text and try again.');
+      return;
+    }
+    const text = draft;
+    const epoch = ++speechEpoch.current;
+    speechAttempt.current = true;
+    setSpeechBusy(true);
+    setSpeechStatus('Preparing local speech...');
+    try {
+      const token = await speech.start();
+      if (!mounted.current || epoch !== speechEpoch.current) return;
+      if (token === null) {
+        setSpeechStatus('Local speech is unavailable. Try again when the app is active.');
+        return;
+      }
+      setSpeechStatus('Speaking typed text...');
+      const result = await speech.speak(text);
+      if (!mounted.current || epoch !== speechEpoch.current || result === null) return;
+      switch (result) {
+        case 'COMPLETED': setSpeechStatus('Typed text spoken.'); break;
+        case 'CANCELLED': setSpeechStatus('Speech was cancelled.'); break;
+        case 'BUSY': setSpeechStatus('Speech is busy. Try again.'); break;
+        case 'UNAVAILABLE': setSpeechStatus('Local speech is unavailable. Try again when the app is active.'); break;
+        case 'INVALID_INPUT': setSpeechStatus('This text is unsupported by the local English voice. Edit it and try again.'); break;
+        case 'CLEANUP_FAILED':
+          speechFaultRef.current = true;
+          setSpeechFault(true);
+          speech.stop();
+          setSpeechStatus('Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.');
+          break;
+        default: setSpeechStatus('Speech could not be completed. Try again.');
+      }
+    } finally {
+      if (mounted.current && epoch === speechEpoch.current) {
+        speechAttempt.current = false;
+        setSpeechBusy(false);
+      }
+    }
+  }
 
   async function startPreview() {
     if (cleanupFailed || requesting || preview || AppState.currentState !== 'active') return;
@@ -99,7 +188,6 @@ function Home() {
       }
       const previewToken = gate.start({permission: true, foreground: true});
       if (previewToken !== null) {
-        void speech.start();
         setNotice('Starting local preview. Translation is unavailable.');
         setPreview(previewToken);
       }
@@ -113,6 +201,15 @@ function Home() {
     }
   }
 
+  function flipCamera() {
+    if (requesting || request.current || cleanupFailed || AppState.currentState !== 'active') return;
+    cameraViewRevision.current++;
+    setLensFacing(current => current === 'back' ? 'front' : 'back');
+    if (preview) setNotice('Starting local preview. Translation is unavailable.');
+  }
+
+  const renderedCameraViewRevision = cameraViewRevision.current;
+
   return <View style={styles.screen}>
     <HatsuBackground pointerEvents="none" active={foreground} style={StyleSheet.absoluteFill} />
     <SafeAreaView style={styles.safe}>
@@ -122,26 +219,29 @@ function Home() {
           <Text style={styles.body}>Thanks for downloading Sign To Speak and spending time with it. Hope it makes your world a little brighter.</Text>
           <Text style={styles.body}>If you want to support Hatsu please subscribe to the Patreon @Hatsunama</Text>
           <Button onPress={() => setRoute('home')}>Back to Home</Button>
-        </View> : <View style={[styles.columns, width > height && styles.landscape]}>
+        </View> : <View style={styles.columns}>
+          <View style={[styles.columns, width > height && styles.landscape]}>
           <View style={styles.card}>
             <Text style={styles.eyebrow}>SIGN TO SPEAK · ANDROID FOUNDATION</Text>
             <Text accessibilityRole="header" style={styles.title}>Your hands. Your words.</Text>
             <Text style={styles.body}>A private, on-device signing companion in development.</Text>
             <View style={styles.warning}>
               <Text style={styles.warningTitle}>Translation is not available yet</Text>
-              <Text style={styles.body}>This build can show a live camera preview. It does not recognize ASL or speak a translation.</Text>
+              <Text style={styles.body}>This build can show a live camera preview. It does not recognize ASL or speak a translation. You can type text and speak it locally below.</Text>
             </View>
             <Text style={styles.body}>No recording. No saved signing sessions. Camera frames stay on this device.</Text>
-            <Button onPress={() => { stop(); setRoute('thanks'); }}>Hatsu Is Here For You</Button>
+            <Button onPress={() => { stop(); stopSpeech(true, 'Speech stopped.'); setRoute('thanks'); }}>Hatsu Is Here For You</Button>
           </View>
           <View style={styles.card}>
             <Text accessibilityRole="header" style={styles.sectionTitle}>Live camera</Text>
-            {preview ? <CameraPreview active={true} style={styles.preview}
+            {preview ? <CameraPreview key={`${preview}:${renderedCameraViewRevision}`} active={true}
+              lensFacing={lensFacing} style={styles.preview}
               onStatus={({nativeEvent}) => {
                 if (!mounted.current) return;
                 // Cleanup uncertainty is Activity-wide and must latch even for
-                // a retired view. Ordinary events belong only to this preview.
-                if (nativeEvent.status !== 'camera_cleanup_failed' && !gate.isCurrent(preview)) return;
+                // a retired view. Ordinary events belong only to this view.
+                if (nativeEvent.status !== 'camera_cleanup_failed' &&
+                  (!gate.isCurrent(preview) || renderedCameraViewRevision !== cameraViewRevision.current)) return;
                 if (nativeEvent.status === 'preview_only') {
                   setNotice('Live preview only. Recognition: unsupported.');
                 } else {
@@ -149,6 +249,8 @@ function Home() {
                   if (nativeEvent.status === 'camera_cleanup_failed') setCleanupFailed(true);
                   setNotice(nativeEvent.status === 'camera_cleanup_failed'
                     ? 'Camera cleanup could not be confirmed. Fully close and reopen the app before starting again.'
+                    : nativeEvent.status === 'rear_camera_unavailable'
+                      ? 'A rear camera is not available on this device.'
                     : nativeEvent.status === 'front_camera_unavailable'
                       ? 'A front camera is not available on this device.'
                       : 'Camera stopped. Tap Start to try again.');
@@ -160,7 +262,25 @@ function Home() {
             {preview || requesting
               ? <Button onPress={stop}>Stop camera</Button>
               : <Button onPress={startPreview} disabled={cleanupFailed}>Start local preview</Button>}
+            <Button testID="camera-flip" onPress={flipCamera}
+              disabled={requesting || cleanupFailed || !foreground}>
+              {lensFacing === 'back' ? 'Switch to front camera' : 'Switch to rear camera'}
+            </Button>
             <Text style={styles.small}>Leaving this screen or putting the app in the background stops the camera. Starting again is always your choice.</Text>
+          </View>
+          </View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Speak typed text</Text>
+            <Text style={styles.body}>Type and review your own words. This is not ASL recognition or a camera translation.</Text>
+            <TextInput testID="typed-speech-input" accessibilityLabel="Text to speak" value={draft}
+              onChangeText={editDraft} multiline autoCorrect={false} spellCheck={false}
+              autoComplete="off" importantForAutofill="no"
+              style={styles.input} placeholder="Type text here" placeholderTextColor="#A99BB8" />
+            <Text style={styles.small}>Use 1 to 256 characters with the local English voice. Text stays on this screen until you clear it or leave.</Text>
+            <Text testID="typed-speech-status" accessibilityLiveRegion="polite" style={styles.body}>{speechFault ? 'Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.' : speechStatus}</Text>
+            <Button testID="typed-speech-speak" onPress={speakDraft} disabled={speechBusy || speechFault}>Speak typed text</Button>
+            <Button testID="typed-speech-stop" onPress={() => stopSpeech(false, 'Speech stopped.')}>Stop speech</Button>
+            <Button testID="typed-speech-clear" onPress={() => stopSpeech(true, 'Typed text cleared.')}>Clear typed text</Button>
           </View>
         </View>}
       </ScrollView>
@@ -202,6 +322,9 @@ const styles = StyleSheet.create({
   warningTitle: {fontSize: 18, fontWeight: '700', color: '#F0DAFF'},
   button: {minHeight: 52, justifyContent: 'center', padding: 14, backgroundColor: '#D7B7FF', borderRadius: 14},
   buttonText: {fontSize: 17, fontWeight: '700', color: '#231331', textAlign: 'center'},
-  dimmed: {opacity: 0.65}, preview: {height: 280, width: '100%', backgroundColor: '#08090C'},
+  dimmed: {opacity: 0.65},
+  input: {minHeight: 100, padding: 14, color: '#FAF6FF', backgroundColor: '#08090C',
+    borderWidth: 1, borderColor: '#594474', borderRadius: 14, fontSize: 17, textAlignVertical: 'top'},
+  preview: {height: 280, width: '100%', backgroundColor: '#08090C'},
   previewOff: {height: 160, alignItems: 'center', justifyContent: 'center', backgroundColor: '#08090C', borderRadius: 14},
 });
