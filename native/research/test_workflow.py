@@ -38,6 +38,7 @@ def validate(raw):
     assert 'head.repo.full_name == github.repository' in native['if']
     native_commands = '\n'.join(step.get('run', '') for step in native['steps'])
     assert ':app:compileQaAndroidTestKotlin' in native_commands
+    assert native_commands.index(':app:compileDebugUnitTestJavaWithJavac') < native_commands.index('build-pocket-runtime.sh')
     assert ':app:compileEmulatorQaAndroidTestJavaWithJavac' in native_commands
     assert ':app:stageQaReviewedLicenses' in native_commands
     assert 'android.builder.sdkDownload=false' in native_commands

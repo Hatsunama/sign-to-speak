@@ -34,6 +34,23 @@ test('offline source substitution covers app and instrumentation without telemet
   assert.match(qa, /androidTestImplementation\("com\.google\.ai\.edge\.litert:litert:1\.4\.2"\)/);
 });
 
+test('runtime audit separates complete graph evidence from external artifact file resolution', () => {
+  const source = read('android/app/offline-landmark-runtime.gradle');
+  assert.doesNotMatch(source, /inputs\.files\(runtime\)|resolvedConfiguration|resolvedArtifacts/);
+  assert.match(source, /incoming\.resolutionResult/);
+  assert.match(source, /resolution\.allComponents/);
+  assert.match(source, /resolution\.allDependencies/);
+  assert.match(source, /instanceof ProjectComponentIdentifier/);
+  assert.match(source, /instanceof ModuleComponentIdentifier/);
+  assert.match(source, /componentFilter \{ id -> id instanceof ModuleComponentIdentifier \}/);
+  assert.match(source, /attribute\(ArtifactTypeDefinition\.ARTIFACT_TYPE_ATTRIBUTE, "aar"\)/);
+  assert.match(source, /inputs\.files\(externalArtifacts\.files, sdkArtifacts\.files\)/);
+  assert.match(source, /components: graphComponents, dependencies: graphDependencies/);
+  assert.match(source, /artifact_count:/);
+  assert.match(source, /endsWith\("\.aar"\).*endsWith\("\.jar"\)/);
+  assert.doesNotMatch(source, /lenient\s*=?\s*true|withVariantReselection|releaseRuntimeElements/);
+});
+
 test('model and all SDK grant texts have explicit pinned app destinations', () => {
   const receipt = JSON.parse(read('vendor/mediapipe-offline/runtime-admission.json'));
   assert.equal(receipt.model.asset, 'holistic/holistic_landmarker.task');

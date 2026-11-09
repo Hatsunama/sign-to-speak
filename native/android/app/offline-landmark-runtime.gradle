@@ -2,6 +2,10 @@ import groovy.json.JsonOutput
 import groovy.json.JsonSlurper
 import java.security.MessageDigest
 import java.util.zip.ZipFile
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
 
 // Shared by the app and its instrumentation. Never fall back to the published
 // Tasks Core logger factory, and never strip its network permissions to hide it.
@@ -98,17 +102,45 @@ androidComponents {
         variant.sources.assets.addGeneratedSourceDirectory(stageHolisticAssets) { it.outputDirectory }
         def title = variant.name.capitalize()
         def runtime = configurations.named("${variant.name}RuntimeClasspath")
+        // A runtime configuration is a graph, not a single project artifact
+        // type. AGP project variants expose several artifacts (classes, AAR,
+        // metadata, profiles). Filter external modules BEFORE selecting files;
+        // the untyped external view returns original published AAR/JAR files,
+        // not AGP's transformed classes. Both views remain strict/non-lenient.
+        def externalArtifacts = runtime.get().incoming.artifactView {
+            componentFilter { id -> id instanceof ModuleComponentIdentifier }
+        }
+        def sdkArtifacts = runtime.get().incoming.artifactView {
+            componentFilter { id ->
+                id instanceof ModuleComponentIdentifier && id.group == "com.google.mediapipe" &&
+                    id.module in ["tasks-core", "tasks-vision"]
+            }
+            attributes { attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "aar") }
+        }
         def report = layout.buildDirectory.file("reports/offline-landmark/${variant.name}-runtime.json")
         def verify = tasks.register("verify${title}OfflineLandmarkRuntime") {
             group = "verification"
             description = "Audit resolved offline detector artifacts and record the entire runtime Maven inventory."
-            inputs.files(runtime)
+            inputs.files(externalArtifacts.files, sdkArtifacts.files)
             inputs.file(admissionFile)
             outputs.file(report)
             outputs.upToDateWhen { false }
             doLast {
-                def artifacts = runtime.get().resolvedConfiguration.resolvedArtifacts
-                def coordinates = artifacts.collect { it.moduleVersion.id.toString() }.unique().sort()
+                def resolution = runtime.get().incoming.resolutionResult
+                def unresolved = resolution.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
+                if (unresolved) {
+                    throw new GradleException("Unresolved runtime graph dependencies: ${unresolved*.requested}")
+                }
+                def components = resolution.allComponents
+                def moduleCoordinate = { id -> "${id.group}:${id.module}:${id.version}".toString() }
+                // Includes metadata-only modules even when no AAR/JAR is published.
+                def coordinates = components.findAll { it.id instanceof ModuleComponentIdentifier }
+                    .collect { moduleCoordinate(it.id) }.unique().sort()
+                def artifacts = externalArtifacts.artifacts.artifacts
+                if (artifacts.any { !(it.id.componentIdentifier instanceof ModuleComponentIdentifier) ||
+                        !(it.file.name.endsWith(".aar") || it.file.name.endsWith(".jar")) }) {
+                    throw new GradleException("Runtime artifact view contains a project or unreviewed file type")
+                }
                 def expectedCore = "com.google.mediapipe:tasks-core:${offlineCoreVersion}"
                 def expectedVision = "com.google.mediapipe:tasks-vision:1.1.1"
                 if (coordinates.findAll { it.startsWith("com.google.mediapipe:") }.toSet() !=
@@ -121,9 +153,13 @@ androidComponents {
                     (expectedCore): [8325540L, "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2"],
                     (expectedVision): [610482L, "cf6565d27feb96b411bbb2e5cb38b3db37e0e0d3109f30ec0c9a8178055051e6"],
                 ].each { coordinate, expected ->
-                    def matched = artifacts.findAll { it.moduleVersion.id.toString() == coordinate }
+                    def matched = sdkArtifacts.artifacts.artifacts.findAll {
+                        moduleCoordinate(it.id.componentIdentifier) == coordinate
+                    }
+                    def original = artifacts.findAll { moduleCoordinate(it.id.componentIdentifier) == coordinate }
                     if (matched.size() != 1 || matched[0].file.length() != expected[0] ||
-                            digestFile(matched[0].file) != expected[1]) {
+                            digestFile(matched[0].file) != expected[1] || original.size() != 1 ||
+                            original[0].file.length() != expected[0] || digestFile(original[0].file) != expected[1]) {
                         throw new GradleException("Missing or changed admitted SDK artifact: ${coordinate}")
                     }
                     new ZipFile(matched[0].file).withCloseable { archive ->
@@ -134,12 +170,39 @@ androidComponents {
                     }
                 }
                 def selected = artifacts.collect { artifact ->
-                    [coordinate: artifact.moduleVersion.id.toString(), artifact: artifact.file.name,
+                    [coordinate: moduleCoordinate(artifact.id.componentIdentifier), artifact: artifact.file.name,
                      size: artifact.file.length(), sha256: digestFile(artifact.file)]
                 }.sort { a, b -> a.coordinate <=> b.coordinate ?: a.artifact <=> b.artifact }
+                def graphComponents = components.collect { component ->
+                    def id = component.id
+                    def entry = [id: id.displayName, module_version: component.moduleVersion?.toString(),
+                        variants: component.variants.collect { selectedVariant ->
+                            [name: selectedVariant.displayName, attributes: selectedVariant.attributes.keySet()
+                                .sort { it.name }.collectEntries { attribute ->
+                                    [(attribute.name): selectedVariant.attributes.getAttribute(attribute).toString()]
+                                }]
+                        }]
+                    if (id instanceof ModuleComponentIdentifier) {
+                        entry += [kind: "module", coordinate: moduleCoordinate(id),
+                            artifact_count: selected.count { it.coordinate == moduleCoordinate(id) }]
+                    } else if (id instanceof ProjectComponentIdentifier) {
+                        // Project modules stay in evidence without resolving or
+                        // building an arbitrary outgoing artifact of that project.
+                        entry += [kind: "project", project_path: id.projectPath,
+                            artifact_status: "graph-only; project artifacts are built by the app's normal AGP tasks"]
+                    } else {
+                        throw new GradleException("Unreviewed runtime graph component identity: ${id}")
+                    }
+                    entry
+                }.sort { it.id }
+                def graphDependencies = resolution.allDependencies.collect { dependency ->
+                    [from: dependency.from.id.displayName, requested: dependency.requested.displayName,
+                     selected: dependency.selected.id.displayName, constraint: dependency.constraint]
+                }.sort { a, b -> a.from <=> b.from ?: a.requested <=> b.requested ?: a.selected <=> b.selected }
                 report.get().asFile.parentFile.mkdirs()
                 report.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
-                    schema: 1, variant: variant.name, selected_coordinates: coordinates,
+                    schema: 2, variant: variant.name, selected_coordinates: coordinates,
+                    components: graphComponents, dependencies: graphDependencies,
                     artifacts: selected, admitted_detector_abis: ["arm64-v8a"], usage_logging: false])) + "\n"
                 logger.lifecycle("Offline detector SDK pins passed; recorded ${coordinates.size()} selected runtime Maven coordinates")
             }

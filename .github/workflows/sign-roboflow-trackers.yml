@@ -118,6 +118,19 @@ jobs:
           sh tests/run-java-tests.sh
           node --test scripts/*.test.mjs
           for test_file in scripts/*.test.py; do python3 "$test_file"; done
+      - name: Compile changed Android sources and tests before expensive native preparation
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a \
+            -PunsignedPhoneQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:compileDebugUnitTestKotlin :app:compileDebugUnitTestJavaWithJavac \
+            :app:compileQaAndroidTestKotlin :app:compileQaAndroidTestJavaWithJavac \
+            :app:verifyQaOfflineLandmarkRuntime
       - name: Build existing local speech dependency and prepare pinned bundled assets
         timeout-minutes: 15
         run: |
