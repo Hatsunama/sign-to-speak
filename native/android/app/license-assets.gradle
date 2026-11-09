@@ -1,5 +1,7 @@
 // Curate notices for code still in the APK. Historical Flite receipts remain
 // in source control for provenance, but are no longer bundled.
+// The admitted detector's SDK/model notices are separately byte-checked and
+// staged as holistic-licenses/ by offline-landmark-runtime.gradle's producer.
 abstract class StageReviewedLicenses extends DefaultTask {
     @Internal
     abstract org.gradle.api.file.DirectoryProperty getSourceRoot()

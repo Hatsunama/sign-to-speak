@@ -1,9 +1,7 @@
 diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
 +++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/MainActivity.kt
-@@ -19,15 +19,6 @@
- 
-   private fun cancelCameraViews(dispose: Boolean) {
+@@ -21,12 +21,3 @@
      cameraViews.toList().forEach { view ->
 -      try {
 -        if (dispose) view.dispose() else view.cancelFromNativeBack()
@@ -17,16 +15,11 @@ diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_spe
 -      }
 +      if (dispose) view.dispose() else view.cancelFromNativeBack()
      }
-   }
 diff --git a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
 --- a/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
 +++ b/native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/PrivateCameraView.kt
-@@ -239,7 +239,7 @@
-         // Every owned action gets one attempt, even if a preceding action throws.
-         // No global unbind, blind retry, retained exception, or content logging.
+@@ -328,3 +328,3 @@
          fun release(action: () -> Unit) {
 -            try { action() } catch (_: RuntimeException) { failed = true }
 +            action()
          }
-         if (streams != null) release { previewView.previewStreamState.removeObserver(streams) }
-         if (errors != null) release { states?.removeObserver(errors) }

@@ -1,0 +1,27 @@
+Sign To Speak: offline hand-landmark tracking components
+
+MediaPipe Tasks Vision 1.1.1 and Tasks Core: Copyright The MediaPipe Authors.
+Licensed under Apache License 2.0; the complete upstream SDK NOTICE is included
+unchanged as mediapipe-tasks-1.1.1-NOTICE. Its generic telemetry statement describes
+the publisher's SDK. This application uses a source-built Tasks Core from commit
+50505c8312c7eacb1bd411cecdc4cc9fd08d53cb with ENABLE_TASKS_USAGE_LOGGING=0.
+TasksStatsLoggerFactory calls the upstream TasksStatsDummyLogger. DataTransport
+dependencies, permissions and components are not admitted. No SDK classes or
+permission declarations were patched or hidden to obtain this result.
+The official published ARM64 native library is retained unchanged. Other process
+ABIs do not initialize this detector; other application features remain available.
+
+Holistic Landmarker float16 version 1 model bundle: Google / MediaPipe Authors.
+Unmodified model bytes distributed under Apache License 2.0, as identified by
+the model cards linked from Google's Holistic Landmarker documentation.
+https://developers.google.com/edge/mediapipe/solutions/vision/holistic_landmarker
+The separate MODEL-RECEIPT.json identifies the immutable download, hash, size
+and model-card sources. This is landmark tracking, not sign recognition,
+translation, medical interpretation or identity recognition.
+
+Flogger 0.6 and flogger-system-backend 0.6: Google LLC; Apache License 2.0.
+Protobuf Java Lite 4.26.1: Google Inc.; BSD-3-Clause. Their exact upstream
+license texts are included. Other third-party notices remain in the complete
+MediaPipe SDK NOTICE and the application's existing framework notice assets.
+
+Application integration and this notice: Copyright 2026 Sign To Speak contributors.

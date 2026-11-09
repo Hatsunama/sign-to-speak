@@ -1,6 +1,14 @@
 # Release contract and Phase 0 acceptance baseline
 
-Version 0.4, October 27, 2026. Status: evidence baseline and proposed gates. Commercial release is blocked. This contract supplements the [commercial readiness roadmap](COMMERCIAL_READINESS_PLAN.md); scope and thresholds have not been approved by the owner. The October 25 receipts below remain named historical evidence for their exact Flite artifacts.
+Version 0.5, November 9, 2026. Status: evidence baseline and proposed gates. Commercial release is blocked. This contract supplements the [commercial readiness roadmap](COMMERCIAL_READINESS_PLAN.md); scope and thresholds have not been approved by the owner. The October 25 receipts below remain named historical evidence for their exact Flite artifacts.
+
+## Current live-tracking candidate
+
+Native CameraX analysis, offline Holistic hand detection and Kotlin SORT are now
+connected in app source. This is hand tracking only: the UI receives status/counts,
+not recognized text. Cloud tests and unsigned artifact audits are separate from
+physical camera/quality acceptance. See [the full change audit](LIVE_HAND_TRACKING.md).
+The exact historical phone results below do not validate this newer artifact.
 
 ## Intended product and fixed constraints
 
@@ -28,9 +36,9 @@ Committed-source SHA-256 hashes match the CI source-checksums receipt and Git bl
 
 | Component | Current boundary and admission need |
 | --- | --- |
-| Camera | App.tsx, PrivateCameraView.kt and PreviewLease.java own preview, lens choice and cancellation. No production ImageAnalysis, tracker or recognition bridge. Reuse existing ownership. |
+| Camera | App.tsx, PrivateCameraView.kt and PreviewLease.java own preview, lens choice and cancellation. The live candidate adds native ImageAnalysis/Holistic/SORT with status/counts only. No recognition bridge. Real-camera acceptance remains open. |
 | Speech | Bundled Pocket TTS 18M/Alba, SpeechOwner/SpeechSession and ProtectedPcmPlayer supply reviewed Unicode text and protected 24 kHz PCM. Bounded muted playback/rejection/recovery passed on both phones; owner naturalness, long text, resources and independent capture remain open. API 26–28 speech is disabled. Historical Flite source/voice/ASCII restriction and notices do not describe this path. |
-| Tracking SDK | Offline MediaPipe Tasks Core 1.1.1 QA source build from 50505c8312c7eacb1bd411cecdc4cc9fd08d53cb, AAR SHA256 e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2. Actual video/Holistic execution passed on both phones. Production analyzer, independent feature parity and supported ABI/device scope remain unverified; see the vendor inventory and current follow-up. |
+| Tracking SDK | Offline MediaPipe Tasks Core 1.1.1 QA source build from 50505c8312c7eacb1bd411cecdc4cc9fd08d53cb, AAR SHA256 e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2. Actual video/Holistic execution passed on both phones. The new live analyzer uses this offline core with the pinned official Holistic model. Its detector ABI is ARM64; independent feature/quality parity and exact-candidate device acceptance remain unverified. See the vendor inventory and live tracking audit. |
 | Recognition research | The benchmark CLI scores supplied predictions; the opt-in PhoneRecognitionProbeTest additionally executes real RGB → Holistic → pinned TheoViel LiteRT inference on both phones. Four private diagnostic clips matched expected top-1 labels on each phone. Legacy 543/current 553 structure was traced without proving numeric/cadence parity. Weight/data admission, unknown rejection and disjoint release accuracy remain open. Private ASL Citizen inputs/landmarks are excluded from Git/CI/APK and are not a release benchmark. |
 | Missing paths | No customer microphone/ASR or continuous ASL-to-English customer path. Pocket/Alba is packaged in QA with bounded phone evidence but has not exited Phase 2 owner listening and release acceptance. No sentence or reply model is admitted. Each further engine, weight, voice, dataset and native dependency needs origin, hash, redistribution terms and notices. |
 

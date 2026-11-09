@@ -5,20 +5,20 @@ Sign To Speak now includes two explicitly different implementations:
 - `hand_tracking.HolisticHandTracker` uses the **actual `trackers==2.7.0` Python
   package** for offline host reference checks.
 - `RoboflowHandTracker.kt` is an attributed **Kotlin adaptation** in the Android
-  app source. The existing native recorded-video Holistic probe invokes it for
-  every measured frame and records aggregate continuity diagnostics. The Python
+  app source. Both the live CameraX/Holistic consumer and the native recorded-video
+  probe invoke it for measured frames and expose only aggregate diagnostics. The Python
   runtime and its dependencies are not shipped in the APK.
 
 Neither implementation is a hand detector, sign recognizer or ASL translator.
-The native tracker is integrated with the recorded-video pipeline, not the live
-customer camera. Production CameraX still has preview only and lacks an admitted
-landmark detector. No server, permission change or Python-in-APK shim is added.
+The native tracker is connected to live CameraX through a bundled offline
+Holistic detector. See [live runtime admission and change audit](../docs/LIVE_HAND_TRACKING.md).
+No server, permission change or Python-in-APK shim is added.
 The classifier retains exactly the same landmark values and anatomical ordering.
 
 The active Android source is the stacked recognition branch, not the retired
 browser prototype on `main`. The base of this work is
-`01b9c9befab1c19b31c934c28aa6461866836b6b`. Existing UI, camera ownership and speech
-behavior are preserved. New code and notice assets are compiled into the app;
+`01b9c9befab1c19b31c934c28aa6461866836b6b`. Existing layout, camera ownership and reviewed speech
+behavior are preserved; the UI gains honest tracking/unavailable status text. New code and notice assets are compiled into the app;
 no modified APK has been installed or exercised on a device.
 
 ## Kotlin implementation and native pipeline
@@ -41,9 +41,11 @@ from matching geometric IDs.
 The synchronized API has explicit `reset()` and permanent, idempotent `close()`.
 Capture `generation` before scheduling asynchronous work, pass it as
 `expectedGeneration`, and reject a result if the generation changed before
-consumption. Stale work is rejected before state mutation. The current native
+consumption. Stale work is rejected before state mutation. The recorded-video
 caller is synchronous and creates one tracker per clip, closes it in `finally`,
-and clears temporary hand arrays after each update. No input arrays are retained
+and clears temporary hand arrays after each update. The live caller uses the same
+tracker contract with session generations, bounded worker ownership and explicit
+cancellation; it never exports the IDs or coordinates. No input arrays are retained
 or modified by the tracker; state is only bounded geometric hypotheses.
 
 `PhoneRecognitionProbeTest.runClip` now consumes the native tracker between
@@ -54,8 +56,8 @@ automatic speech or classifier acceptance decision is made from tracking.
 
 The Apache-2.0 upstream license and modified-source attribution are retained in
 `native/licenses/roboflow-trackers/` and registered in the app's existing reviewed
-license asset producer. This is source/asset staging coverage, not proof of a
-shipped APK until packaging is separately verified.
+license asset producer. The expanded CI audits the exact unsigned APK's new
+model, native library and notices. Packaging success is not device execution.
 
 ## Why SORT, and what it provides
 
@@ -204,9 +206,10 @@ input ownership, transactional validation and bounded-hypothesis failure/recover
 These are JVM tests, not device/Android runtime evidence.
 
 The CI workflow runs the Python and Kotlin reference checks on the exact head,
-then separately compiles the actual Android app and recorded-video caller and
-stages the new notices. It does not download recognition models, package/install
-APKs, use devices or alter signing. No ASL accuracy, performance improvement or
+then runs host and Android unit checks and builds an unsigned ARM64 app/test
+pair for exact manifest, model, dependency, notice and native-library audits.
+Model downloads occur only in build preparation, never in the app. CI does not
+install APKs, use devices or alter signing. No ASL accuracy, performance improvement or
 release certification is claimed. Tests were written
 before the adapter and initially failed because its module did not exist; that
 is a missing-feature baseline, not a reproduced bug in the old app.

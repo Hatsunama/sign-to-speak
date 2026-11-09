@@ -1,0 +1,152 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.util.zip.ZipFile
+
+// Shared by the app and its instrumentation. Never fall back to the published
+// Tasks Core logger factory, and never strip its network permissions to hide it.
+def offlineCoreVersion = "1.1.1-offline-50505c8"
+def offlineCoreRepository = file("../../vendor/mediapipe-offline/maven")
+def admissionFile = file("../../vendor/mediapipe-offline/runtime-admission.json")
+def admissionReceipt = new JsonSlurper().parse(admissionFile)
+def corePath = "com/google/mediapipe/tasks-core/${offlineCoreVersion}/tasks-core-${offlineCoreVersion}.aar"
+def digestFile = { File source ->
+    def hash = MessageDigest.getInstance("SHA-256")
+    source.withInputStream { stream ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = stream.read(buffer)) != -1) hash.update(buffer, 0, count)
+    }
+    hash.digest().encodeHex().toString()
+}
+def offlineCoreAar = new File(offlineCoreRepository, corePath)
+if (!offlineCoreAar.isFile() || java.nio.file.Files.isSymbolicLink(offlineCoreAar.toPath()) ||
+        offlineCoreAar.length() != 8325540L ||
+        digestFile(offlineCoreAar) != "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2") {
+    throw new GradleException("Pinned offline MediaPipe core AAR is missing or changed")
+}
+repositories {
+    exclusiveContent {
+        forRepository { maven { url = offlineCoreRepository.toURI() } }
+        filter { includeVersion("com.google.mediapipe", "tasks-core", offlineCoreVersion) }
+    }
+}
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.google.mediapipe:tasks-core"))
+            .using(module("com.google.mediapipe:tasks-core:${offlineCoreVersion}"))
+            .because("All live and QA detector paths require audited source-built dummy telemetry logging")
+    }
+    // Do not silently select a second SDK or add optional language/network SDKs.
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "com.google.android.datatransport" ||
+                details.requested.group?.startsWith("com.google.firebase") ||
+                details.requested.group == "com.google.ai.edge.litertlm") {
+            throw new GradleException("Unadmitted online/telemetry dependency: ${details.requested}")
+        }
+    }
+}
+dependencies {
+    implementation("com.google.mediapipe:tasks-vision:1.1.1")
+}
+
+abstract class StageHolisticAssets extends DefaultTask {
+    @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getPreparer()
+    @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getAdmission()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getNotices()
+    @Optional @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getModelFile()
+    @Input abstract Property<Boolean> getOffline()
+    @Input abstract Property<String> getPythonCommand()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+    @javax.inject.Inject abstract ExecOperations getExecOperations()
+
+    @TaskAction void stage() {
+        def args = [pythonCommand.get(), preparer.get().asFile.absolutePath,
+                    "--output-directory", outputDirectory.get().asFile.absolutePath]
+        if (modelFile.isPresent()) args += ["--model-file", modelFile.get().asFile.absolutePath]
+        if (offline.get()) args += "--offline"
+        execOperations.exec { commandLine(args) }
+    }
+}
+
+def stageHolisticAssets = tasks.register("stageHolisticAssets", StageHolisticAssets) {
+    group = "build setup"
+    description = "Stage the pinned official Holistic model and complete notices for the offline app."
+    preparer.fileValue(file("../../scripts/prepare-holistic-assets.py"))
+    admission.fileValue(admissionFile)
+    notices.from(admissionReceipt.notices.collect { file("../../vendor/mediapipe-offline/${it.source}") })
+    def provided = providers.gradleProperty("holisticModelFile")
+    if (provided.isPresent()) modelFile.fileValue(file(provided.get()))
+    offline.set(gradle.startParameter.offline)
+    pythonCommand.set(providers.gradleProperty("pythonCommand").orElse("python3"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/holistic-assets"))
+    // Recheck even existing local model bytes; no network when exact cache exists.
+    outputs.upToDateWhen { false }
+}
+
+// Keep all previously selected app ABIs. Only the detector is ARM64 admitted;
+// Kotlin checks the process ABI before initializing any MediaPipe native class.
+// The exact JNI bytes are already stripped and are part of the artifact audit.
+android.packaging.jniLibs.keepDebugSymbols.add("**/libmediapipe_tasks_jni.so")
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets.addGeneratedSourceDirectory(stageHolisticAssets) { it.outputDirectory }
+        def title = variant.name.capitalize()
+        def runtime = configurations.named("${variant.name}RuntimeClasspath")
+        def report = layout.buildDirectory.file("reports/offline-landmark/${variant.name}-runtime.json")
+        def verify = tasks.register("verify${title}OfflineLandmarkRuntime") {
+            group = "verification"
+            description = "Audit resolved offline detector artifacts and record the entire runtime Maven inventory."
+            inputs.files(runtime)
+            inputs.file(admissionFile)
+            outputs.file(report)
+            outputs.upToDateWhen { false }
+            doLast {
+                def artifacts = runtime.get().resolvedConfiguration.resolvedArtifacts
+                def coordinates = artifacts.collect { it.moduleVersion.id.toString() }.unique().sort()
+                def expectedCore = "com.google.mediapipe:tasks-core:${offlineCoreVersion}"
+                def expectedVision = "com.google.mediapipe:tasks-vision:1.1.1"
+                if (coordinates.findAll { it.startsWith("com.google.mediapipe:") }.toSet() !=
+                        [expectedCore, expectedVision].toSet() ||
+                        coordinates.any { it.contains("datatransport") || it.startsWith("com.google.firebase:") ||
+                            it.startsWith("com.google.ai.edge.litertlm:") }) {
+                    throw new GradleException("Unadmitted MediaPipe runtime dependency graph: ${coordinates}")
+                }
+                [
+                    (expectedCore): [8325540L, "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2"],
+                    (expectedVision): [610482L, "cf6565d27feb96b411bbb2e5cb38b3db37e0e0d3109f30ec0c9a8178055051e6"],
+                ].each { coordinate, expected ->
+                    def matched = artifacts.findAll { it.moduleVersion.id.toString() == coordinate }
+                    if (matched.size() != 1 || matched[0].file.length() != expected[0] ||
+                            digestFile(matched[0].file) != expected[1]) {
+                        throw new GradleException("Missing or changed admitted SDK artifact: ${coordinate}")
+                    }
+                    new ZipFile(matched[0].file).withCloseable { archive ->
+                        def manifest = archive.getInputStream(archive.getEntry("AndroidManifest.xml")).getText("UTF-8")
+                        if (manifest =~ /uses-permission|<application|<service|<receiver|<provider/) {
+                            throw new GradleException("Unexpected SDK manifest permission/component: ${coordinate}")
+                        }
+                    }
+                }
+                def selected = artifacts.collect { artifact ->
+                    [coordinate: artifact.moduleVersion.id.toString(), artifact: artifact.file.name,
+                     size: artifact.file.length(), sha256: digestFile(artifact.file)]
+                }.sort { a, b -> a.coordinate <=> b.coordinate ?: a.artifact <=> b.artifact }
+                report.get().asFile.parentFile.mkdirs()
+                report.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                    schema: 1, variant: variant.name, selected_coordinates: coordinates,
+                    artifacts: selected, admitted_detector_abis: ["arm64-v8a"], usage_logging: false])) + "\n"
+                logger.lifecycle("Offline detector SDK pins passed; recorded ${coordinates.size()} selected runtime Maven coordinates")
+            }
+        }
+        tasks.named("check").configure { dependsOn(verify) }
+        tasks.matching { it.name in ["merge${title}Assets", "package${title}", "assemble${title}"] }.configureEach {
+            dependsOn(verify)
+        }
+    }
+}

@@ -1,17 +1,12 @@
-name: Sign Roboflow tracking research checks
+name: Sign offline live tracking checks
 
-# Synthetic parity and Android source compilation only. No devices, models or user data.
+# Cloud-only parity, Android tests and unsigned artifact audits. No devices or user data.
 on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
-      - native/research/**
-      - native/tests/kotlin/**
-      - native/android/app/src/main/java/**
-      - native/android/app/src/androidTestQa/java/**
-      - native/android/app/license-assets.gradle
-      - native/licenses/roboflow-trackers/**
+      - native/**
       - .github/workflows/sign-roboflow-trackers.yml
 
 permissions:
@@ -73,6 +68,10 @@ jobs:
           unzip -q "$archive" -d "$RUNNER_TEMP/sign-kotlin"
           python native/research/native_tracking_parity.py \
             --kotlinc "$RUNNER_TEMP/sign-kotlin/kotlinc/bin/kotlinc"
+          "$RUNNER_TEMP/sign-kotlin/kotlinc/bin/kotlinc" \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/CameraRgbaPixels.kt \
+            native/tests/kotlin/CameraRgbaPixelsHostTest.kt -include-runtime -d "$RUNNER_TEMP/camera-pixels.jar"
+          java -jar "$RUNNER_TEMP/camera-pixels.jar"
   native_compile:
     needs: research
     if: >-
@@ -80,7 +79,7 @@ jobs:
       (github.event.pull_request.head.repo.full_name == github.repository &&
        github.head_ref == 'codex/integrate-roboflow-trackers')
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 30
     defaults:
       run:
         shell: bash
@@ -107,7 +106,29 @@ jobs:
           echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
           npm ci --ignore-scripts --no-audit --no-fund
           bash scripts/ci-sdk.sh
-      - name: Compile actual Android app and recorded-video caller, stage notices
+      - name: Run complete host and tooling regression suites
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir \
+            --target "$RUNNER_TEMP/sign-python-host-tests" -r requirements-host-tests.txt
+          export PYTHONPATH="$RUNNER_TEMP/sign-python-host-tests"
+          npm test
+          npm run typecheck
+          sh tests/run-java-tests.sh
+          node --test scripts/*.test.mjs
+          for test_file in scripts/*.test.py; do python3 "$test_file"; done
+      - name: Build existing local speech dependency and prepare pinned bundled assets
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          timeout 900 bash scripts/build-pocket-runtime.sh arm64-v8a
+          python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
+            --metadata "$RUNNER_TEMP/pocket-arm64-v8a-metadata.json" \
+            --output-dir generated/pocket-assets
+      - name: Run Android tests, verify runtime and build unsigned QA app/test pair
         timeout-minutes: 14
         run: |
           set -euo pipefail
@@ -117,6 +138,44 @@ jobs:
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a \
             -PunsignedPhoneQa=true \
             -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
-            :app:compileQaKotlin :app:compileQaAndroidTestKotlin :app:stageQaReviewedLicenses
+            :app:testDebugUnitTest :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions \
+            :app:verifyQaOfflineLandmarkRuntime :app:verifyUnsignedPhoneQaIsolation \
+            :app:compileQaAndroidTestKotlin :app:stageQaReviewedLicenses \
+            :app:assembleQa :app:assembleQaAndroidTest
           cmp ../licenses/roboflow-trackers/LICENSE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/LICENSE
           cmp ../licenses/roboflow-trackers/NOTICE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/NOTICE
+      - name: Audit actual unsigned APKs, live model, notices and native libraries
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          bash scripts/ci-phone-qa-audit.sh
+          mapfile -t apks < <(find android/app/build/outputs/apk/qa -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          python3 scripts/check-live-tracking-apk.py "$RUNNER_TEMP/sign-evidence/phone-qa/manifest.xml" "${apks[0]}" --abi arm64-v8a
+          python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
+            "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            "$RUNNER_TEMP/sign-evidence/qa-elf"
+          sha256sum "${apks[0]}"
+      - name: Compile affected x86_64 emulator instrumentation without execution
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
+            -PunsignedEmulatorQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:compileEmulatorQaAndroidTestJavaWithJavac :app:verifyEmulatorQaOfflineLandmarkRuntime
+      - name: Retain bounded source and test evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-live-tracking-evidence-${{ env.TESTED_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            native/android/app/build/test-results/
+            native/android/app/build/reports/offline-landmark/
+            native/android/app/build/outputs/logs/manifest-merger-*-report.txt
+            ${{ runner.temp }}/sign-evidence/

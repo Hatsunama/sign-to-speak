@@ -31,16 +31,29 @@ def validate(raw):
     assert 'python -m unittest discover -s native/research' in commands
     assert sum('uses' in step for step in steps) == 1
     assert 'native_tracking_parity.py' in commands and 'sha256sum --check' in commands
+    assert 'CameraRgbaPixelsHostTest.kt' in commands and 'java -jar' in commands
     native = doc['jobs']['native_compile']
-    assert native['needs'] == 'research' and int(native['timeout-minutes']) <= 20
+    assert native['needs'] == 'research' and int(native['timeout-minutes']) <= 30
     assert native['runs-on'] == 'ubuntu-24.04'
     assert 'head.repo.full_name == github.repository' in native['if']
     native_commands = '\n'.join(step.get('run', '') for step in native['steps'])
     assert ':app:compileQaAndroidTestKotlin' in native_commands
+    assert ':app:compileEmulatorQaAndroidTestJavaWithJavac' in native_commands
     assert ':app:stageQaReviewedLicenses' in native_commands
     assert 'android.builder.sdkDownload=false' in native_commands
     assert 'useDefaultDebugSigningConfigForProfileableBuildtypes=false' in native_commands
-    assert not re.search(r'assemble|bundleRelease|connectedAndroidTest|--licenses|keytool', native_commands)
+    assert ':app:testDebugUnitTest' in native_commands
+    assert ':app:verifyQaOfflineLandmarkRuntime' in native_commands
+    assert ':app:assembleQa :app:assembleQaAndroidTest' in native_commands
+    assert 'check-live-tracking-apk.py' in native_commands
+    assert 'ci-phone-qa-audit.sh' in native_commands
+    assert 'check-pocket-apk-elf.py' in native_commands
+    assert not re.search(r'assemble(?:Debug|Release)|bundleRelease|connectedAndroidTest|--licenses|keytool', native_commands)
+    assert 'npm test' in native_commands and 'npm run typecheck' in native_commands
+    assert 'scripts/*.test.py' in native_commands and 'scripts/*.test.mjs' in native_commands
+    uploads = [step for step in native['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')]
+    assert len(uploads) == 1 and uploads[0]['with']['retention-days'] == '3'
+    assert '.apk' not in uploads[0]['with']['path']
     for step in native['steps']:
         if 'uses' in step:
             assert re.fullmatch(r'[\w-]+/[\w-]+@[a-f0-9]{40}', step['uses'])

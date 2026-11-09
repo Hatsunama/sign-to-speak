@@ -12,7 +12,9 @@ const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('H
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
   lensFacing: 'back' | 'front';
-  onStatus: (event: NativeSyntheticEvent<{status: string}>) => void;
+  onStatus: (event: NativeSyntheticEvent<{
+    status: string; measuredHands?: number; confirmedHands?: number; continuousHands?: number;
+  }>) => void;
 }>('PrivateCameraPreview');
 
 function localSpeechBridge() {
@@ -227,7 +229,7 @@ function Home() {
             <Text style={styles.body}>A private, on-device signing companion in development.</Text>
             <View style={styles.warning}>
               <Text style={styles.warningTitle}>Translation is not available yet</Text>
-              <Text style={styles.body}>This build can show a live camera preview. It does not recognize ASL or speak a translation. You can type text and speak it locally below.</Text>
+              <Text style={styles.body}>Local hand tracking is experimental and available on supported devices. It does not recognize ASL or speak a translation. You can type text and speak it locally below.</Text>
             </View>
             <Text style={styles.body}>No recording. No saved signing sessions. Camera frames stay on this device.</Text>
             <Button onPress={() => { stop(); stopSpeech(true, 'Speech stopped.'); setRoute('thanks'); }}>Hatsu Is Here For You</Button>
@@ -244,6 +246,18 @@ function Home() {
                   (!gate.isCurrent(preview) || renderedCameraViewRevision !== cameraViewRevision.current)) return;
                 if (nativeEvent.status === 'preview_only') {
                   setNotice('Live preview only. Recognition: unsupported.');
+                } else if (nativeEvent.status === 'tracking_starting') {
+                  setNotice('Starting local hand tracking. Recognition: unsupported.');
+                } else if (nativeEvent.status === 'tracking_unavailable') {
+                  setNotice('Local hand tracking is unavailable. Live preview only. Recognition: unsupported.');
+                } else if (nativeEvent.status === 'tracking_active') {
+                  // Only bounded, current-frame aggregate counts cross the bridge.
+                  // A tracking result must never change reviewed text or trigger speech.
+                  const count = nativeEvent.measuredHands;
+                  const validCount = Number.isInteger(count) && count! >= 0 && count! <= 2;
+                  setNotice(validCount
+                    ? `Local hand tracking: ${count} ${count === 1 ? 'hand' : 'hands'} detected. Recognition: unsupported.`
+                    : 'Local hand tracking active. Recognition: unsupported.');
                 } else {
                   stop();
                   if (nativeEvent.status === 'camera_cleanup_failed') setCleanupFailed(true);

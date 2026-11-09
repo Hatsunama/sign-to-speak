@@ -853,3 +853,77 @@ for (const action of ['Stop camera', 'Back', 'background']) {
     assert.ok(h.button('Start local preview'));
   });
 }
+
+test('live tracking statuses keep preview and reviewed text without automatic speech', async t => {
+  let speaks = 0;
+  const h = await renderHome(t, {ready: true}, {
+    begin: async () => 'token', speak: async () => {speaks++; return 'COMPLETED';}, cancel() {},
+  });
+  await h.edit('My reviewed text');
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const handler = h.cameras()[0].props.onStatus;
+  for (const [status, measuredHands, expected] of [
+    ['tracking_starting', undefined, /Starting local hand tracking/],
+    ['tracking_active', 0, /0 hands detected/],
+    ['tracking_active', 1, /1 hand detected/],
+    ['tracking_active', 2, /2 hands detected/],
+    ['tracking_unavailable', undefined, /unavailable. Live preview only/],
+  ]) {
+    await act(() => handler({nativeEvent: {status, measuredHands}}));
+    assert.equal(h.cameras().length, 1, `${status} retains preview`);
+    assert.match(h.notice(), expected);
+    assert.match(h.notice(), /Recognition: unsupported/);
+    assert.equal(h.input().props.value, 'My reviewed text');
+    assert.equal(speaks, 0);
+  }
+  for (const measuredHands of [-1, 3, 1.5, '2', NaN, Infinity, undefined]) {
+    await act(() => handler({nativeEvent: {status: 'tracking_active', measuredHands}}));
+    assert.equal(h.notice(), 'Local hand tracking active. Recognition: unsupported.');
+  }
+});
+
+test('late tracking results cannot resurrect a stopped, backgrounded or replaced lens session', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const firstRear = h.cameras()[0].props.onStatus;
+  await h.press('Switch to front camera');
+  for (const status of ['tracking_starting', 'tracking_active', 'tracking_unavailable']) {
+    await h.status(firstRear, status);
+    assert.equal(h.notice(), 'Starting local preview. Translation is unavailable.');
+  }
+  const front = h.cameras()[0].props.onStatus;
+  await h.press('Stop camera');
+  for (const handler of [firstRear, front]) {
+    await h.status(handler, 'tracking_active');
+    assert.equal(h.notice(), 'Camera is off.');
+    assert.equal(h.cameras().length, 0);
+  }
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const current = h.cameras()[0].props.onStatus;
+  await h.state('background');
+  await h.status(current, 'tracking_active');
+  await h.state('active');
+  assert.equal(h.cameras().length, 0);
+  assert.equal(h.notice(), 'Camera is off.');
+});
+
+test('tracking failure is recoverable but camera cleanup failure remains latched', async t => {
+  const h = await renderHome(t);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  const handler = h.cameras()[0].props.onStatus;
+  await h.status(handler, 'tracking_unavailable');
+  assert.equal(h.cameras().length, 1);
+  await h.press('Stop camera');
+  assert.equal(h.button('Start local preview').props.disabled, false);
+  await h.press('Start local preview');
+  await h.resolve('granted');
+  await h.status(handler, 'camera_cleanup_failed');
+  assert.equal(h.cameras().length, 0);
+  assert.equal(h.button('Start local preview').props.disabled, true);
+  await h.status(handler, 'tracking_active');
+  assert.match(h.notice(), /cleanup could not be confirmed/);
+});
