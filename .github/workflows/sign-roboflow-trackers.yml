@@ -31,7 +31,7 @@ jobs:
       CI: 'true'
       PYTHONDONTWRITEBYTECODE: '1'
       PIP_DISABLE_PIP_VERSION_CHECK: '1'
-      MPLCONFIGDIR: ${{ runner.temp }}/sign-trackers-matplotlib
+      TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - name: Checkout exact candidate head commit
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
@@ -42,6 +42,8 @@ jobs:
         timeout-minutes: 5
         run: |
           set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          echo "MPLCONFIGDIR=$RUNNER_TEMP/sign-trackers-matplotlib" >> "$GITHUB_ENV"
           python3.12 -m venv "$RUNNER_TEMP/sign-trackers"
           "$RUNNER_TEMP/sign-trackers/bin/python" -m pip install \
             --index-url https://pypi.org/simple --only-binary=:all: \
