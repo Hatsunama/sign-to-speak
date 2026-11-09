@@ -207,6 +207,10 @@ class PhoneRecognitionProbeTest {
         var handFrames = 0
         var faceFrames = 0
         var poseFrames = 0
+        val handTracker = RoboflowHandTracker()
+        var measuredHands = 0
+        var confirmedHands = 0
+        var continuousHands = 0
         try {
             try {
                 retriever.setDataSource(file.absolutePath)
@@ -236,6 +240,20 @@ class PhoneRecognitionProbeTest {
                             if (result.leftHandLandmarks().isNotEmpty() || result.rightHandLandmarks().isNotEmpty()) handFrames++
                             if (result.faceLandmarks().isNotEmpty()) faceFrames++
                             if (result.poseLandmarks().isNotEmpty()) poseFrames++
+                            val left = trackingHand(result.leftHandLandmarks())
+                            val right = trackingHand(result.rightHandLandmarks())
+                            try {
+                                // Native/offline Kotlin adaptation. Association never rewrites
+                                // the anatomical slots or the classifier's landmark features.
+                                val tracked = handTracker.update(left, right, timestampMs.toDouble(),
+                                    bitmap.width, bitmap.height)
+                                measuredHands += tracked.size
+                                confirmedHands += tracked.count { it.trackerId != null }
+                                continuousHands += tracked.count { it.continuous }
+                            } finally {
+                                left?.fill(0f)
+                                right?.fill(0f)
+                            }
                             appendFeatures(features, result)
                             frameSeen++
                         } finally {
@@ -252,6 +270,14 @@ class PhoneRecognitionProbeTest {
                 .put("clip_id", id).put("clip_sha256", sha).put("expected_source", expectedSource).put("expected", expected)
                 .put("frames", frameSeen).put("hand_frames", handFrames)
                 .put("face_frames", faceFrames).put("pose_frames", poseFrames)
+                .put("hand_tracking", JSONObject()
+                    .put("implementation", "roboflow-sort-kotlin-adaptation-v1")
+                    .put("upstream_version", "2.7.0")
+                    .put("measured_hands", measuredHands)
+                    .put("confirmed_hands", confirmedHands)
+                    .put("continuous_hands", continuousHands)
+                    .put("generation_resets", handTracker.generation)
+                    .put("classifier_features_unchanged", true))
             if (handFrames == 0) {
                 return json.put("status", "abstain_no_hands")
                     .put("elapsed_ms", SystemClock.elapsedRealtime() - started)
@@ -280,8 +306,19 @@ class PhoneRecognitionProbeTest {
                 .put("top5", histogram)
                 .put("elapsed_ms", SystemClock.elapsedRealtime() - started)
         } finally {
-            features.clear()
-            while (features.hasRemaining()) features.put(0.toByte())
+            try { handTracker.close() } finally {
+                features.clear()
+                while (features.hasRemaining()) features.put(0.toByte())
+            }
+        }
+    }
+
+    private fun trackingHand(points: List<NormalizedLandmark>): FloatArray? {
+        if (points.isEmpty()) return null
+        require(points.size == 21) { "Tracking requires exactly 21 hand landmarks" }
+        return FloatArray(63) { index ->
+            val point = points[index / 3]
+            when (index % 3) { 0 -> point.x(); 1 -> point.y(); else -> point.z() }
         }
     }
 

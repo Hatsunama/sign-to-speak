@@ -12,7 +12,7 @@ def validate(raw):
     doc = yaml.load(raw, Loader=yaml.BaseLoader)
     assert doc['permissions'] == {'contents': 'read'}
     assert set(doc['on']) == {'pull_request', 'workflow_dispatch'}
-    assert set(doc['jobs']) == {'research'}
+    assert set(doc['jobs']) == {'research', 'native_compile'}
     job = doc['jobs']['research']
     assert job['runs-on'] == 'ubuntu-24.04'
     assert int(job['timeout-minutes']) <= 10
@@ -30,6 +30,20 @@ def validate(raw):
     assert 'git rev-parse HEAD' in commands and '$TESTED_SHA' in commands
     assert 'python -m unittest discover -s native/research' in commands
     assert sum('uses' in step for step in steps) == 1
+    assert 'native_tracking_parity.py' in commands and 'sha256sum --check' in commands
+    native = doc['jobs']['native_compile']
+    assert native['needs'] == 'research' and int(native['timeout-minutes']) <= 20
+    assert native['runs-on'] == 'ubuntu-24.04'
+    assert 'head.repo.full_name == github.repository' in native['if']
+    native_commands = '\n'.join(step.get('run', '') for step in native['steps'])
+    assert ':app:compileQaAndroidTestKotlin' in native_commands
+    assert ':app:stageQaReviewedLicenses' in native_commands
+    assert 'android.builder.sdkDownload=false' in native_commands
+    assert 'useDefaultDebugSigningConfigForProfileableBuildtypes=false' in native_commands
+    assert not re.search(r'assemble|bundleRelease|connectedAndroidTest|--licenses|keytool', native_commands)
+    for step in native['steps']:
+        if 'uses' in step:
+            assert re.fullmatch(r'[\w-]+/[\w-]+@[a-f0-9]{40}', step['uses'])
 
 
 class WorkflowTests(unittest.TestCase):

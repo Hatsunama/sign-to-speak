@@ -30,14 +30,15 @@ The earlier private desktop tracking attempt required at least 700 MiB free RAM 
 
 The [October 26 input-handoff and model research follow-up](RECOGNITION_FOLLOWUP_20261026.md) separates the reproduced Android storage failure, its QA-only repair, the actual Android ASR decoder experiment and unresolved continuous-model input provenance.
 
-## Roboflow tracking research adapter
+## Roboflow tracking integration
 
-The [host-only Roboflow SORT integration](../research/ROBOFLOW_TRACKING.md) consumes
-synthetic or separately authorized hand-landmark fixtures using this 543-point
-contract. It uses the actual pinned Python library for geometric association and
-continuity diagnostics. It is not wired to the phone probe or production CameraX,
-does not export production landmarks, and supplies no recognition/accuracy claim.
-The existing Android/runtime and feature-parity gates below remain unchanged.
+The [tracking integration](../research/ROBOFLOW_TRACKING.md) includes an attributed
+Kotlin SORT adaptation in app source and uses the actual pinned Roboflow Python
+package as its host reference. The native recorded-video Holistic probe now
+consumes the Kotlin tracker and emits only aggregate continuity diagnostics;
+classifier feature values/order remain unchanged. Live CameraX still has no
+admitted landmark detector or tracking consumer. The existing Android/runtime,
+feature-parity, device and quality gates below remain open.
 
 ## Model selection evidence
 

@@ -1,7 +1,8 @@
 # Tracking research dependencies
 
-This is an optional **host-only** Python environment. None of these packages,
-wheels or notices are bundled in the Android APK. The app's native, volatile
+This is an optional **host-only** Python environment. None of these Python packages or
+wheels are bundled in the Android APK. The separately labeled Kotlin adaptation
+retains its own Roboflow license and attribution in the app license assets. The app's native, volatile
 frame/landmark boundary and lack of network permission are unchanged. Installing
 the environment uses the network; the synthetic adapter tests require no network,
 accounts, API keys, paid services, models, recordings or user devices.
@@ -33,8 +34,9 @@ python3.12 -m venv /tmp/sign-trackers
 ```
 
 The separate `sign-roboflow-trackers.yml` workflow runs these checks on the
-reviewed same-repository integration PR branch or manual dispatch. It does not
-build Android, contact devices, fetch models or upload artifacts. Updating a pin
+reviewed same-repository integration PR branch or manual dispatch. It also compiles the native Kotlin
+adaptation against synthetic reference cases and compiles Android source, but
+does not package/install APKs, contact devices, fetch models or upload artifacts. Updating a pin
 requires regenerating the selected wheel hashes and rerunning the real-library
 tests and `pip check` in a fresh environment.
 

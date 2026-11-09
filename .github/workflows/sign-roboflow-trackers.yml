@@ -1,12 +1,17 @@
 name: Sign Roboflow tracking research checks
 
-# Synthetic, host-only checks. No Android builds, devices, models or user data.
+# Synthetic parity and Android source compilation only. No devices, models or user data.
 on:
   workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
       - native/research/**
+      - native/tests/kotlin/**
+      - native/android/app/src/main/java/**
+      - native/android/app/src/androidTestQa/java/**
+      - native/android/app/license-assets.gradle
+      - native/licenses/roboflow-trackers/**
       - .github/workflows/sign-roboflow-trackers.yml
 
 permissions:
@@ -56,3 +61,62 @@ jobs:
         run: |
           set -euo pipefail
           python -m unittest discover -s native/research -p 'test_*.py' -v
+      - name: Compile native adaptation and compare real-library reference
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/kotlin-compiler.zip"
+          curl --fail --location --retry 2 --max-time 90 \
+            https://github.com/JetBrains/kotlin/releases/download/v2.1.20/kotlin-compiler-2.1.20.zip \
+            --output "$archive"
+          echo "a118197b0de55ffab2bc8d5cd03a5e39033cfb53383d6931bc761dec0784891a  $archive" | sha256sum --check
+          unzip -q "$archive" -d "$RUNNER_TEMP/sign-kotlin"
+          python native/research/native_tracking_parity.py \
+            --kotlinc "$RUNNER_TEMP/sign-kotlin/kotlinc/bin/kotlinc"
+  native_compile:
+    needs: research
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'codex/integrate-roboflow-trackers')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    env:
+      CI: 'true'
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+      TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+      - name: Prepare existing native toolchain without new license acceptance
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          npm ci --ignore-scripts --no-audit --no-fund
+          bash scripts/ci-sdk.sh
+      - name: Compile actual Android app and recorded-video caller, stage notices
+        timeout-minutes: 14
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a \
+            -PunsignedPhoneQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:compileQaKotlin :app:compileQaAndroidTestKotlin :app:stageQaReviewedLicenses
+          cmp ../licenses/roboflow-trackers/LICENSE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/LICENSE
+          cmp ../licenses/roboflow-trackers/NOTICE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/NOTICE

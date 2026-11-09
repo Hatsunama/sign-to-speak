@@ -20,3 +20,5 @@ native/licenses/flite/THIRD_PARTY_NOTICES.txt -whitespace
 native/licenses/framework/*.txt -whitespace
 
 native/licenses/bundled-js/** -text -whitespace
+
+native/licenses/roboflow-trackers/** -text -whitespace
