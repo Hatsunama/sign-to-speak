@@ -20,3 +20,9 @@ native/licenses/flite/THIRD_PARTY_NOTICES.txt -whitespace
 native/licenses/framework/*.txt -whitespace
 
 native/licenses/bundled-js/** -text -whitespace
+
+native/licenses/roboflow-trackers/** -text -whitespace
+
+# Preserve byte-pinned SDK/model licenses and admission data.
+native/vendor/mediapipe-offline/licenses/** -text -whitespace
+native/vendor/mediapipe-offline/runtime-admission.json text eol=lf

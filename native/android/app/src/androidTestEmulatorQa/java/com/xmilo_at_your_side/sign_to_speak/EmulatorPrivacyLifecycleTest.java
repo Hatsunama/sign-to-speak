@@ -63,6 +63,8 @@ public final class EmulatorPrivacyLifecycleTest {
     private static final String QA_PACKAGE = "com.xmilo_at_your_side.sign_to_speak.qa";
     private static final String START = "Start local preview";
     private static final String STOP = "Stop camera";
+    private static final String TRACKING_UNAVAILABLE =
+            "Local hand tracking is unavailable. Live preview only. Recognition: unsupported.";
     private static final long TIMEOUT_MS = 25000;
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
     private final Context target = instrumentation.getTargetContext();
@@ -126,17 +128,19 @@ public final class EmulatorPrivacyLifecycleTest {
         // The real OS permission dialog may pause the Activity. That pause revokes
         // start eligibility by design; explicitly start again only for that exact UI state.
         String grantedButOff = "Camera is off. Permission was granted; tap Start local preview to begin.";
-        await("Grant resolves to streaming or the explicit-start privacy notice", () ->
+        // The UI outcome does not establish streaming; awaitStreamingCamera below
+        // independently checks the owned lease, bound Preview and STREAMING state.
+        await("Grant resolves to unavailable tracking or the explicit-start privacy notice", () ->
                 device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff)) ||
-                device.hasObject(By.pkg(QA_PACKAGE).text("Live preview only. Recognition: unsupported.")));
+                device.hasObject(By.pkg(QA_PACKAGE).text(TRACKING_UNAVAILABLE)));
         if (device.hasObject(By.pkg(QA_PACKAGE).text(grantedButOff))) {
             assertNoCurrentCamera();
             selectFrontCameraWhileOff();
             clickUiLabel(START);
         }
         CameraObservation first = awaitStreamingCamera();
-        findUiLabel("Live preview only. Recognition: unsupported.");
         stage("03_emulated_front_camera_streaming");
+        stage("03a_x86_64_tracking_unavailable_no_detector_runtime_claim");
 
         clickWhileStreaming(STOP, first);
         assertReleased(first);
@@ -381,6 +385,11 @@ public final class EmulatorPrivacyLifecycleTest {
             return ready;
         }));
         await("OS marks the emulated front camera in use", () -> availability.anyFrontUnavailable());
+        // The admitted offline detector contains ARM64 JNI only. This x86_64
+        // matrix must expose the unsupported runtime honestly, without claiming
+        // live landmark detection from preview-only emulator evidence.
+        findUiLabel(TRACKING_UNAVAILABLE);
+        assertStillStreaming(found.get());
         return found.get();
     }
 

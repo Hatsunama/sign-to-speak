@@ -156,6 +156,18 @@ class MergedPermissionPolicy {
                 document.getElementsByTagName("permission-group").length != 0) {
             throw new GradleException("Unexpected custom permission authority or flags")
         }
+        ["service", "receiver", "provider", "activity", "activity-alias"].each { tag ->
+            def components = document.getElementsByTagName(tag)
+            for (int i = 0; i < components.length; ++i) {
+                def name = components.item(i).getAttributeNS(ANDROID_NS, "name")
+                if (name.startsWith("com.google.mediapipe.") ||
+                        name.startsWith("com.google.android.datatransport.") ||
+                        name.startsWith("com.google.firebase.") ||
+                        name.toLowerCase(Locale.ROOT).contains("transport")) {
+                    throw new GradleException("Unadmitted detector telemetry component: ${name}")
+                }
+            }
+        }
     }
 }
 
@@ -230,6 +242,14 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
                         "<${tag} android:name=\"android.permission.${permission}\" /></manifest>")
                 }
             }
+            ["service", "receiver", "provider", "activity", "activity-alias"].each { tag ->
+                ["com.google.android.datatransport.runtime.TransportBackendDiscovery",
+                 "com.google.mediapipe.tasks.Telemetry", "com.google.firebase.Metrics",
+                 "other.package.DataTransport"].each { name ->
+                    rejected["telemetry-${tag}-${name}"] = valid.replace("</manifest>",
+                        "<${tag} android:name=\"${name}\" /></manifest>")
+                }
+            }
             rejected.each { label, xml ->
                 boolean failed = false
                 try { verify(xml) } catch (GradleException expected) { failed = true }
@@ -245,6 +265,7 @@ ext.emulatorQaBuildInputs = [bundledVariants: reactDebuggableVariants,
     mergedManifest: SingleArtifact.MERGED_MANIFEST.INSTANCE]
 apply from: "unsigned-qa-task-guard.gradle"
 apply from: "emulator-qa.gradle"
+apply from: "offline-landmark-runtime.gradle"
 apply from: "phone-qa.gradle"
 
 androidComponents {

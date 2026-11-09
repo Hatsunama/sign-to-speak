@@ -36,11 +36,12 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-/** Real QA React UI and CameraX on a physical phone. Never reads camera frames. */
+/** Real QA React UI and CameraX on a physical phone. The test never reads camera frames. */
 @RunWith(AndroidJUnit4.class)
 public final class PhonePreviewIntegrationTest {
     private static final String QA_PACKAGE = "com.xmilo_at_your_side.sign_to_speak.qa";
@@ -48,7 +49,9 @@ public final class PhonePreviewIntegrationTest {
     private static final String STOP = "Stop camera";
     private static final String SWITCH_TO_FRONT = "Switch to front camera";
     private static final String SWITCH_TO_REAR = "Switch to rear camera";
-    private static final String LIVE = "Live preview only. Recognition: unsupported.";
+    // Status text is a UI assertion, never evidence that CameraX is streaming or
+    // that a detector is accurate. A startup notice must not satisfy this check.
+    private static final Pattern LIVE_NOTICE = Pattern.compile("^(?:Live preview only\\. Recognition: unsupported\\.|Local hand tracking is unavailable\\. Live preview only\\. Recognition: unsupported\\.|Local hand tracking active\\. Recognition: unsupported\\.|Local hand tracking: (?:0 hands|1 hand|2 hands) detected\\. Recognition: unsupported\\.)$");
     private static final long STREAM_WAIT_MS = 20000;
     private static final long SCROLL_STABLE_MS = 400;
     private static final int TARGET_SCROLL_SPEED_PX_PER_SEC = 200;
@@ -172,6 +175,8 @@ public final class PhonePreviewIntegrationTest {
         });
         assertStreaming("After " + action, streamed[0]);
         assertBoundLens("After " + action, streamed[0], expectedLens);
+        findLiveNotice();
+        assertStreaming("After scrolling to switched-camera notice", streamed[0]);
         return streamed[0];
     }
 
@@ -216,7 +221,7 @@ public final class PhonePreviewIntegrationTest {
             throw new AssertionError(timeout.getMessage()
                     + "; last mounted camera before unmount=" + lastMounted[0], timeout);
         }
-        findLabel(LIVE);
+        findLiveNotice();
         assertStreaming("After scrolling to live notice", streamed[0]);
         return streamed[0];
     }
@@ -495,7 +500,7 @@ public final class PhonePreviewIntegrationTest {
                 + ",nativeRenderedStop=" + nativeActionRendered(STOP)
                 + ",UIAvisibleStart=" + device.hasObject(By.pkg(QA_PACKAGE).text(START))
                 + ",UIAvisibleStop=" + device.hasObject(By.pkg(QA_PACKAGE).text(STOP))
-                + ",UIAvisibleLive=" + device.hasObject(By.pkg(QA_PACKAGE).text(LIVE)) + "}";
+                + ",UIAvisibleLive=" + device.hasObject(By.pkg(QA_PACKAGE).text(LIVE_NOTICE)) + "}";
     }
 
     private String uiLabels() {
@@ -554,18 +559,17 @@ public final class PhonePreviewIntegrationTest {
         }
     }
 
-    private UiObject2 findLabel(String label) throws Exception {
+    private UiObject2 findLiveNotice() throws Exception {
         long end = SystemClock.elapsedRealtime() + 15000;
         boolean downward = true;
         while (SystemClock.elapsedRealtime() < end) {
-            UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(label));
-            if (node == null) node = device.findObject(By.pkg(QA_PACKAGE).desc(label));
+            UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(LIVE_NOTICE));
             if (node != null) return node;
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
             if (scroll == null) SystemClock.sleep(100);
             else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
         }
-        throw new AssertionError("QA UI missing '" + label + "'; " + snapshot());
+        throw new AssertionError("QA UI missing a settled preview/tracking notice; " + snapshot());
     }
 
     private static Object field(Object owner, String name) throws Exception {

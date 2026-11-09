@@ -1,5 +1,12 @@
 # Native screen and playback capture privacy
 
+The current [live hand-tracking candidate](LIVE_HAND_TRACKING.md) adds native
+CameraX/Holistic/SORT processing in volatile memory. Only aggregate status and
+hand counts reach the UI; frames, landmarks and IDs are not exported. Native
+pause/Back/lens cancellation invalidates pending results before React events.
+Existing capture protections and the required exact-artifact real capture matrix
+remain unchanged; historical tests do not certify the new camera processor.
+
 ## Scope and current output boundary
 
 The current Android QA app has camera preview and typed, bundled Pocket TTS/Alba speech. Synthesis and protected 24 kHz PCM playback run in the app process and UID; they do not use an Android TTS engine service. Production ASL recognition, continuous translation and microphone reply captions remain absent. See the [current exact-artifact evidence and remaining acceptance](RECOGNITION_FOLLOWUP_20261026.md). The historical foundation checkpoints below predate speech and apply only to their named artifacts.

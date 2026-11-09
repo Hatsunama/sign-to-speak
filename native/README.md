@@ -6,6 +6,18 @@ See the [current follow-up report](docs/RECOGNITION_FOLLOWUP_20261026.md), [exac
 
 The [October 25 execution checkpoint](docs/READINESS_CHECKPOINT_20261025.md) records workspace preservation, release gates, the repaired operator readiness guard and the unresolved recorded-video input failure. It also links the model admission and natural-voice feasibility records.
 
+## Live hand-tracking candidate
+
+The current PR adds native CameraX frame analysis using the bundled official
+MediaPipe Holistic detector and the attributed Kotlin Roboflow SORT adaptation.
+The live UI reports only local tracking status and hand counts. It does not
+recognize signs, populate reviewed text or speak automatically. The admitted
+native detector ABI is ARM64; unsupported devices retain preview and show that
+tracking is unavailable. See [the live tracking audit and verification limits](docs/LIVE_HAND_TRACKING.md).
+
+The historical phone results above do not certify this newer candidate. No user
+device or private recording was used for its cloud-only implementation/checks.
+
 ## Historical foundation checkpoint
 
 An isolated **React Native Android app**, not a wrapper around the existing web prototype. This milestone implements home, the canonical Hatsu background, a local thank-you page and camera **preview only**. ASL recognition, landmark inference and speech are unavailable. It does not claim interpreter capability or HIPAA certification.
@@ -14,7 +26,7 @@ An isolated **React Native Android app**, not a wrapper around the existing web 
 
 - Camera permission is requested only when Start is tapped. No microphone, network, storage or recording permission is declared.
 - The native camera view stops on Activity pause, detach, disposal and explicit Stop. Late camera-provider callbacks are invalidated. Returning to foreground does not restart it.
-- Production signing frames, landmarks, transcripts and session history are not saved or uploaded. The current app has no signing analyzer or recognition model. Bundled Pocket/Alba synthesis creates volatile PCM in the app process and uses verified private model files; no system-voice fallback is used. QA-only recorded-video input/results are separate operator-controlled research files.
+- Production signing frames, landmarks, transcripts and session history are not saved or uploaded. Live frames are analyzed only in native volatile memory; no sign-recognition model is connected. The SDK may retain bounded internal tracking state until its session is closed. Bundled Pocket/Alba synthesis creates volatile PCM in the app process and uses verified private model files; no system-voice fallback is used. QA-only recorded-video input/results are separate operator-controlled research files.
 - The Activity sets Android's secure-window flag before content. Audio capture is controlled separately: the manifest opts out and API 29+ requests `ALLOW_CAPTURE_BY_NONE` before React startup; the current PCM sink checks policy and sets protected attributes. If startup policy setup/readback fails, the first render shows only an unavailable state and native camera start is denied. API 26–28 speech is unavailable. See [capture protections and the required independent audio-loopback matrix](docs/CAPTURE_PRIVACY.md). Muted playback does not complete real screen/audio capture acceptance.
 - The canonical Hatsu renderer stores only its existing local visual seed. Its static animation diagnostic is not signing/session content. Neither is transmitted.
 - Further recognition/translation/reply model integration needs per-component artifact/terms, contract, quality and offline/privacy admission. Existing Pocket speech still needs owner listening, performance and capture acceptance. A voice's “offline” flag alone is insufficient.

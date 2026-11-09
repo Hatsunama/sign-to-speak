@@ -1,0 +1,252 @@
+import groovy.json.JsonOutput
+import groovy.json.JsonSlurper
+import java.security.MessageDigest
+import java.util.zip.ZipFile
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.artifacts.result.UnresolvedDependencyResult
+import org.gradle.api.artifacts.type.ArtifactTypeDefinition
+
+// Shared by the app and its instrumentation. Never fall back to the published
+// Tasks Core logger factory, and never strip its network permissions to hide it.
+def offlineCoreVersion = "1.1.1-offline-50505c8"
+def offlineCoreRepository = file("../../vendor/mediapipe-offline/maven")
+def admissionFile = file("../../vendor/mediapipe-offline/runtime-admission.json")
+def admissionReceipt = new JsonSlurper().parse(admissionFile)
+def corePath = "com/google/mediapipe/tasks-core/${offlineCoreVersion}/tasks-core-${offlineCoreVersion}.aar"
+def digestFile = { File source ->
+    def hash = MessageDigest.getInstance("SHA-256")
+    source.withInputStream { stream ->
+        byte[] buffer = new byte[65536]
+        int count
+        while ((count = stream.read(buffer)) != -1) hash.update(buffer, 0, count)
+    }
+    hash.digest().encodeHex().toString()
+}
+def offlineCoreAar = new File(offlineCoreRepository, corePath)
+if (!offlineCoreAar.isFile() || java.nio.file.Files.isSymbolicLink(offlineCoreAar.toPath()) ||
+        offlineCoreAar.length() != 8325540L ||
+        digestFile(offlineCoreAar) != "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2") {
+    throw new GradleException("Pinned offline MediaPipe core AAR is missing or changed")
+}
+repositories {
+    exclusiveContent {
+        forRepository { maven { url = offlineCoreRepository.toURI() } }
+        filter { includeVersion("com.google.mediapipe", "tasks-core", offlineCoreVersion) }
+    }
+}
+configurations.configureEach {
+    resolutionStrategy.dependencySubstitution {
+        substitute(module("com.google.mediapipe:tasks-core"))
+            .using(module("com.google.mediapipe:tasks-core:${offlineCoreVersion}"))
+            .because("All live and QA detector paths require audited source-built dummy telemetry logging")
+    }
+    // Do not silently select a second SDK or add optional language/network SDKs.
+    resolutionStrategy.eachDependency { details ->
+        if (details.requested.group == "com.google.android.datatransport" ||
+                details.requested.group?.startsWith("com.google.firebase") ||
+                details.requested.group == "com.google.ai.edge.litertlm") {
+            throw new GradleException("Unadmitted online/telemetry dependency: ${details.requested}")
+        }
+    }
+}
+dependencies {
+    implementation("com.google.mediapipe:tasks-vision:1.1.1")
+}
+
+abstract class StageHolisticAssets extends DefaultTask {
+    @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getPreparer()
+    @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getAdmission()
+    @InputFiles @PathSensitive(PathSensitivity.RELATIVE)
+    abstract ConfigurableFileCollection getNotices()
+    @Optional @InputFile @PathSensitive(PathSensitivity.NONE)
+    abstract RegularFileProperty getModelFile()
+    @Input abstract Property<Boolean> getOffline()
+    @Input abstract Property<String> getPythonCommand()
+    @OutputDirectory abstract DirectoryProperty getOutputDirectory()
+    @javax.inject.Inject abstract ExecOperations getExecOperations()
+
+    @TaskAction void stage() {
+        def args = [pythonCommand.get(), preparer.get().asFile.absolutePath,
+                    "--output-directory", outputDirectory.get().asFile.absolutePath]
+        if (modelFile.isPresent()) args += ["--model-file", modelFile.get().asFile.absolutePath]
+        if (offline.get()) args += "--offline"
+        execOperations.exec { commandLine(args) }
+    }
+}
+
+def stageHolisticAssets = tasks.register("stageHolisticAssets", StageHolisticAssets) {
+    group = "build setup"
+    description = "Stage the pinned official Holistic model and complete notices for the offline app."
+    preparer.fileValue(file("../../scripts/prepare-holistic-assets.py"))
+    admission.fileValue(admissionFile)
+    notices.from(admissionReceipt.notices.collect { file("../../vendor/mediapipe-offline/${it.source}") })
+    def provided = providers.gradleProperty("holisticModelFile")
+    if (provided.isPresent()) modelFile.fileValue(file(provided.get()))
+    offline.set(gradle.startParameter.offline)
+    pythonCommand.set(providers.gradleProperty("pythonCommand").orElse("python3"))
+    outputDirectory.set(layout.buildDirectory.dir("generated/holistic-assets"))
+    // Recheck even existing local model bytes; no network when exact cache exists.
+    outputs.upToDateWhen { false }
+}
+
+// Keep all previously selected app ABIs. Only the detector is ARM64 admitted;
+// Kotlin checks the process ABI before initializing any MediaPipe native class.
+// The exact JNI bytes are already stripped and are part of the artifact audit.
+android.packaging.jniLibs.keepDebugSymbols.add("**/libmediapipe_tasks_jni.so")
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets.addGeneratedSourceDirectory(stageHolisticAssets) { it.outputDirectory }
+        def title = variant.name.capitalize()
+        def runtime = configurations.named("${variant.name}RuntimeClasspath")
+        // A runtime configuration is a graph, not a single project artifact
+        // type. AGP project variants expose several artifacts (classes, AAR,
+        // metadata, profiles). Filter external modules BEFORE selecting files;
+        // the untyped external view returns original published AAR/JAR files,
+        // not AGP's transformed classes. Both views remain strict/non-lenient.
+        def externalArtifacts = runtime.get().incoming.artifactView {
+            componentFilter { id -> id instanceof ModuleComponentIdentifier }
+        }
+        def sdkArtifacts = runtime.get().incoming.artifactView {
+            componentFilter { id ->
+                id instanceof ModuleComponentIdentifier && id.group == "com.google.mediapipe" &&
+                    id.module in ["tasks-core", "tasks-vision"]
+            }
+            attributes { attribute(ArtifactTypeDefinition.ARTIFACT_TYPE_ATTRIBUTE, "aar") }
+        }
+        def report = layout.buildDirectory.file("reports/offline-landmark/${variant.name}-runtime.json")
+        def verify = tasks.register("verify${title}OfflineLandmarkRuntime") {
+            group = "verification"
+            description = "Audit resolved offline detector artifacts and record the entire runtime Maven inventory."
+            inputs.files(externalArtifacts.files, sdkArtifacts.files)
+            inputs.file(admissionFile)
+            outputs.file(report)
+            outputs.upToDateWhen { false }
+            doLast {
+                def resolution = runtime.get().incoming.resolutionResult
+                def unresolved = resolution.allDependencies.findAll { it instanceof UnresolvedDependencyResult }
+                if (unresolved) {
+                    throw new GradleException("Unresolved runtime graph dependencies: ${unresolved*.requested}")
+                }
+                def components = resolution.allComponents
+                def moduleCoordinate = { id -> "${id.group}:${id.module}:${id.version}".toString() }
+                // Includes metadata-only modules even when no AAR/JAR is published.
+                def coordinates = components.findAll { it.id instanceof ModuleComponentIdentifier }
+                    .collect { moduleCoordinate(it.id) }.unique().sort()
+                def artifacts = externalArtifacts.artifacts.artifacts
+                if (artifacts.any { !(it.id.componentIdentifier instanceof ModuleComponentIdentifier) ||
+                        !(it.file.name.endsWith(".aar") || it.file.name.endsWith(".jar")) }) {
+                    throw new GradleException("Runtime artifact view contains a project or unreviewed file type")
+                }
+                def expectedCore = "com.google.mediapipe:tasks-core:${offlineCoreVersion}"
+                def expectedVision = "com.google.mediapipe:tasks-vision:1.1.1"
+                if (coordinates.findAll { it.startsWith("com.google.mediapipe:") }.toSet() !=
+                        [expectedCore, expectedVision].toSet() ||
+                        coordinates.any { it.contains("datatransport") || it.startsWith("com.google.firebase:") ||
+                            it.startsWith("com.google.ai.edge.litertlm:") }) {
+                    throw new GradleException("Unadmitted MediaPipe runtime dependency graph: ${coordinates}")
+                }
+                // Require a reviewed grant/hash for every module introduced by
+                // the detector. Removing only the root detector edge preserves
+                // existing framework/shared dependencies in the comparison.
+                def rootId = resolution.rootComponent.get().id
+                def withoutDetector = [rootId].toSet()
+                while (true) {
+                    def next = new LinkedHashSet(withoutDetector)
+                    resolution.allDependencies.each { dependency ->
+                        def selectedId = dependency.selected.id
+                        def detectorRootEdge = dependency.from.id == rootId &&
+                            selectedId instanceof ModuleComponentIdentifier &&
+                            selectedId.group == "com.google.mediapipe"
+                        if (withoutDetector.contains(dependency.from.id) && !detectorRootEdge) {
+                            next.add(selectedId)
+                        }
+                    }
+                    if (next == withoutDetector) break
+                    withoutDetector = next
+                }
+                def introduced = components.findAll {
+                    it.id instanceof ModuleComponentIdentifier && !withoutDetector.contains(it.id)
+                }.collect { moduleCoordinate(it.id) }.toSet()
+                def licenseRoutes = admissionReceipt.runtime_license_routes
+                if (!(licenseRoutes instanceof List) || !licenseRoutes ||
+                        licenseRoutes*.coordinate.toSet().size() != licenseRoutes.size() ||
+                        licenseRoutes.any { !(it.scope in ["detector-only", "shared-resolution-change"]) } ||
+                        introduced != licenseRoutes.findAll { it.scope == "detector-only" }*.coordinate.toSet()) {
+                    throw new GradleException("Detector dependency additions differ from reviewed license routes: ${introduced}")
+                }
+                licenseRoutes.each { route ->
+                    def matched = artifacts.findAll { moduleCoordinate(it.id.componentIdentifier) == route.coordinate }
+                    if (matched.size() != 1 || digestFile(matched[0].file) != route.artifact_sha256 ||
+                            !admissionReceipt.notices.any { it.asset == route.asset }) {
+                        throw new GradleException("Missing or changed detector dependency artifact/license route: ${route.coordinate}")
+                    }
+                }
+                [
+                    (expectedCore): [8325540L, "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2"],
+                    (expectedVision): [610482L, "cf6565d27feb96b411bbb2e5cb38b3db37e0e0d3109f30ec0c9a8178055051e6"],
+                ].each { coordinate, expected ->
+                    def matched = sdkArtifacts.artifacts.artifacts.findAll {
+                        moduleCoordinate(it.id.componentIdentifier) == coordinate
+                    }
+                    def original = artifacts.findAll { moduleCoordinate(it.id.componentIdentifier) == coordinate }
+                    if (matched.size() != 1 || matched[0].file.length() != expected[0] ||
+                            digestFile(matched[0].file) != expected[1] || original.size() != 1 ||
+                            original[0].file.length() != expected[0] || digestFile(original[0].file) != expected[1]) {
+                        throw new GradleException("Missing or changed admitted SDK artifact: ${coordinate}")
+                    }
+                    new ZipFile(matched[0].file).withCloseable { archive ->
+                        def manifest = archive.getInputStream(archive.getEntry("AndroidManifest.xml")).getText("UTF-8")
+                        if (manifest =~ /uses-permission|<application|<service|<receiver|<provider/) {
+                            throw new GradleException("Unexpected SDK manifest permission/component: ${coordinate}")
+                        }
+                    }
+                }
+                def selected = artifacts.collect { artifact ->
+                    [coordinate: moduleCoordinate(artifact.id.componentIdentifier), artifact: artifact.file.name,
+                     size: artifact.file.length(), sha256: digestFile(artifact.file)]
+                }.sort { a, b -> a.coordinate <=> b.coordinate ?: a.artifact <=> b.artifact }
+                def graphComponents = components.collect { component ->
+                    def id = component.id
+                    def entry = [id: id.displayName, module_version: component.moduleVersion?.toString(),
+                        variants: component.variants.collect { selectedVariant ->
+                            [name: selectedVariant.displayName, attributes: selectedVariant.attributes.keySet()
+                                .sort { it.name }.collectEntries { attribute ->
+                                    [(attribute.name): selectedVariant.attributes.getAttribute(attribute).toString()]
+                                }]
+                        }]
+                    if (id instanceof ModuleComponentIdentifier) {
+                        entry += [kind: "module", coordinate: moduleCoordinate(id),
+                            artifact_count: selected.count { it.coordinate == moduleCoordinate(id) }]
+                    } else if (id instanceof ProjectComponentIdentifier) {
+                        // Project modules stay in evidence without resolving or
+                        // building an arbitrary outgoing artifact of that project.
+                        entry += [kind: "project", project_path: id.projectPath,
+                            artifact_status: "graph-only; project artifacts are built by the app's normal AGP tasks"]
+                    } else {
+                        throw new GradleException("Unreviewed runtime graph component identity: ${id}")
+                    }
+                    entry
+                }.sort { it.id }
+                def graphDependencies = resolution.allDependencies.collect { dependency ->
+                    [from: dependency.from.id.displayName, requested: dependency.requested.displayName,
+                     selected: dependency.selected.id.displayName, constraint: dependency.constraint]
+                }.sort { a, b -> a.from <=> b.from ?: a.requested <=> b.requested ?: a.selected <=> b.selected }
+                report.get().asFile.parentFile.mkdirs()
+                report.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
+                    schema: 2, variant: variant.name, selected_coordinates: coordinates,
+                    components: graphComponents, dependencies: graphDependencies,
+                    verified_license_routes: licenseRoutes,
+                    artifacts: selected, admitted_detector_abis: ["arm64-v8a"], usage_logging: false])) + "\n"
+                logger.lifecycle("Offline detector SDK pins passed; recorded ${coordinates.size()} selected runtime Maven coordinates")
+            }
+        }
+        tasks.named("check").configure { dependsOn(verify) }
+        tasks.matching { it.name in ["merge${title}Assets", "package${title}", "assemble${title}"] }.configureEach {
+            dependsOn(verify)
+        }
+    }
+}

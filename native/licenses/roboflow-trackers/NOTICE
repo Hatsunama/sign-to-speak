@@ -1,0 +1,18 @@
+Roboflow Trackers
+Copyright (c) 2026 Roboflow. All Rights Reserved.
+Licensed under the Apache License, Version 2.0. See LICENSE in this directory.
+
+Sign To Speak includes a modified Kotlin adaptation of the SORT/XYXY tracking
+implementation from Roboflow Trackers 2.7.0, source commit
+3d1532372b46bae1e31a7f4aa3d7350482dadfb6:
+https://github.com/roboflow/trackers/tree/3d1532372b46bae1e31a7f4aa3d7350482dadfb6
+
+Modified for Sign To Speak on 2026-11-09: Kotlin/JVM implementation, four
+independent scalar Kalman filters, bounded two-detection assignment, at most
+64 retained hypotheses, validated hand-landmark input, timestamp/generation
+lifetime, cancellation and anatomical-slot continuity diagnostics.
+
+This is a Kotlin adaptation, not the Python package running on Android.
+NumPy, SciPy, Supervision and the other Python host dependencies are not bundled
+in the application. The adaptation does not perform hand detection, sign
+recognition or translation and is not endorsed by Roboflow.

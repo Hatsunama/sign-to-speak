@@ -27,6 +27,17 @@ import com.facebook.react.views.view.ReactViewGroup;
 import android.widget.FrameLayout;
 import androidx.camera.core.CameraSelector;
 import androidx.camera.core.Preview;
+import androidx.camera.core.ImageAnalysis;
+import androidx.camera.core.ImageProxy;
+import androidx.camera.core.ImageInfo;
+import android.graphics.PixelFormat;
+import android.graphics.Rect;
+import android.hardware.display.DisplayManager;
+import android.view.Surface;
+import java.nio.ByteBuffer;
+import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import androidx.camera.lifecycle.ProcessCameraProvider;
 import androidx.camera.view.PreviewView;
 import androidx.lifecycle.Lifecycle;
@@ -75,6 +86,8 @@ public class NativeBackPrivacyTest {
     private MutableLiveData<CameraState> cameraStates;
     private final List<String> statuses = new ArrayList<>();
     private MockedStatic<UIManagerHelper> uiManager;
+    private LiveHandTrackingWorker injectedTrackingWorker;
+    private final List<Boolean> statusCoalescing = new ArrayList<>();
 
 
     @Before public void setUp() throws Exception {
@@ -91,7 +104,9 @@ public class NativeBackPrivacyTest {
         when(reactContext.getCurrentActivity()).thenReturn(activity);
         root = new FrameLayout(activity);
         activity.setContentView(root);
-        view = new PrivateCameraView(new ThemedReactContext(reactContext, new ContextWrapper(activity), "BackRegression", 1));
+        view = new PrivateCameraView(new ThemedReactContext(reactContext, new ContextWrapper(activity), "BackRegression", 1),
+            LiveHandTrackingWorker.Companion.getProcess(), () -> false,
+            () -> { throw new AssertionError("Preview fixture must not construct a detector"); });
         root.addView(view, new FrameLayout.LayoutParams(320, 240));
         Shadows.shadowOf(Looper.getMainLooper()).idle();
         assertTrue("Fixture must attach the actual native view", view.isAttachedToWindow());
@@ -115,6 +130,7 @@ public class NativeBackPrivacyTest {
             Field value = event.getClass().getDeclaredField("value");
             value.setAccessible(true);
             statuses.add((String) value.get(event));
+            statusCoalescing.add(((com.facebook.react.uimanager.events.Event<?>) event).canCoalesce());
             return null;
         }).when(dispatcher).dispatchEvent(any());
         future = SettableFuture.create();
@@ -134,6 +150,13 @@ public class NativeBackPrivacyTest {
         if (controller != null) controller.pause().stop().destroy();
         if (delegates != null) delegates.close();
         if (uiManager != null) uiManager.close();
+        if (injectedTrackingWorker != null) {
+            try {
+                for (Method method : LiveHandTrackingWorker.class.getDeclaredMethods()) {
+                    if (method.getName().startsWith("shutdownForTest")) method.invoke(injectedTrackingWorker);
+                }
+            } catch (Exception failure) { throw new AssertionError(failure); }
+        }
     }
 
     @Test public void latePreviewTextureGetsLaidOutWithoutAnotherFabricLayout() throws Exception {
@@ -675,6 +698,248 @@ public class NativeBackPrivacyTest {
         assertFalse(statuses.contains("stopped"));
     }
 
+    @Test public void trackingBindsLatestRgbaAnalysisAndStopsBothOwnedUseCases() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenReturn(new DetectedHands(null, null));
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        ImageAnalysis frames = (ImageAnalysis) field("analysis");
+        Preview owned = ownedPreview();
+        assertNotNull(frames);
+        assertEquals(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST, frames.getBackpressureStrategy());
+        assertEquals(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888, frames.getOutputImageFormat());
+        verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_BACK_CAMERA, owned, frames);
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> analyzer.analyze(trackingFrame(0)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals("tracking_active", statuses.get(statuses.size() - 1));
+        assertTrue(statusCoalescing.get(statusCoalescing.size() - 1));
+        view.setActive(false);
+        assertFalse(analyzer.isActive());
+        verify(provider).unbind(frames);
+        verify(provider).unbind(owned);
+        assertNull(field("analysis"));
+        assertNull(field("rotationDisplayManager"));
+        runTracking(() -> {});
+        verify(detector).close();
+    }
+
+    @Test public void detectorFailureUnbindsOnlyAnalysisAndKeepsPreview() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenThrow(new IllegalStateException("Synthetic inference failure"));
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        ImageAnalysis frames = (ImageAnalysis) field("analysis");
+        Preview owned = ownedPreview();
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> analyzer.analyze(trackingFrame(0)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
+        assertNull(field("analysis"));
+        assertSame(owned, field("preview"));
+        verify(provider).unbind(frames);
+        verify(provider, never()).unbind(owned);
+    }
+
+    @Test public void displayRotationUpdatesIncludeHalfTurnAndIgnoreOtherDisplays() throws Exception {
+        replaceWithTrackingView(mock(LiveHandDetector.class));
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        ImageAnalysis frames = (ImageAnalysis) field("analysis");
+        DisplayManager.DisplayListener listener = (DisplayManager.DisplayListener) field("rotationListener");
+        int ownDisplay = view.getDisplay().getDisplayId();
+        for (int rotation : new int[] {Surface.ROTATION_0, Surface.ROTATION_180, Surface.ROTATION_90, Surface.ROTATION_270}) {
+            Shadows.shadowOf(view.getDisplay()).setRotation(rotation);
+            listener.onDisplayChanged(ownDisplay);
+            assertEquals(rotation, frames.getTargetRotation());
+            assertEquals(rotation, ownedPreview().getTargetRotation());
+        }
+        Shadows.shadowOf(view.getDisplay()).setRotation(Surface.ROTATION_0);
+        listener.onDisplayChanged(ownDisplay + 123);
+        assertEquals(Surface.ROTATION_270, frames.getTargetRotation());
+        view.setActive(false);
+        listener.onDisplayChanged(ownDisplay);
+        assertEquals(Surface.ROTATION_270, frames.getTargetRotation());
+    }
+
+    @Test public void asyncCloseFailureAfterDisposeLatchesActivityAndCancelsNewView() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenReturn(new DetectedHands(null, null));
+        doThrow(new IllegalStateException("Synthetic native close failure")).when(detector).close();
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> analyzer.analyze(trackingFrame(0)));
+        CountDownLatch entered = new CountDownLatch(1);
+        CountDownLatch release = new CountDownLatch(1);
+        injectedTrackingWorker.execute(() -> {
+            entered.countDown();
+            try { assertTrue(release.await(5, TimeUnit.SECONDS)); }
+            catch (InterruptedException failure) { throw new AssertionError(failure); }
+        });
+        assertTrue(entered.await(5, TimeUnit.SECONDS));
+        try {
+            view.dispose();
+            root.removeView(view);
+            LiveHandDetector nextDetector = mock(LiveHandDetector.class);
+            view = trackingView(nextDetector);
+            root.addView(view, new FrameLayout.LayoutParams(320, 240));
+            view.setActive(true);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertNotNull(field("analysis"));
+            release.countDown();
+            runTracking(() -> {});
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertTrue(cleanupFailures() > 0);
+            assertFalse((Boolean) field("requested"));
+            assertNull(field("analysis"));
+            assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+            verifyNoInteractions(nextDetector);
+            view.setActive(true);
+            assertFalse((Boolean) field("requested"));
+        } finally { release.countDown(); }
+    }
+
+    @Test public void oldActivityLateCloseFailureStopsNewActivityBeforeAnyAnalysisFrame() throws Exception {
+        LiveHandDetector oldDetector = mock(LiveHandDetector.class);
+        CountDownLatch inferenceEntered = new CountDownLatch(1);
+        CountDownLatch releaseInference = new CountDownLatch(1);
+        when(oldDetector.detect(any(), anyLong())).thenAnswer(invocation -> {
+            inferenceEntered.countDown();
+            assertTrue(releaseInference.await(5, TimeUnit.SECONDS));
+            return new DetectedHands(null, null);
+        });
+        doThrow(new IllegalStateException("Synthetic retired Activity close failure")).when(oldDetector).close();
+        replaceWithTrackingView(oldDetector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        LiveHandTrackingAnalyzer oldAnalyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        injectedTrackingWorker.execute(() -> oldAnalyzer.analyze(trackingFrame(0)));
+        assertTrue(inferenceEntered.await(5, TimeUnit.SECONDS));
+        ActivityController<MainActivity> newController = null;
+        PrivateCameraView newView = null;
+        try {
+            view.dispose();
+            root.removeView(view);
+            newController = Robolectric.buildActivity(MainActivity.class).setup().visible();
+            MainActivity newActivity = newController.get();
+            assertNotSame(activity, newActivity);
+            ReactApplicationContext newReact = mock(ReactApplicationContext.class);
+            when(newReact.getCurrentActivity()).thenReturn(newActivity);
+            when(newReact.hasActiveCatalystInstance()).thenReturn(true);
+            FrameLayout newRoot = new FrameLayout(newActivity);
+            newActivity.setContentView(newRoot);
+            LiveHandDetector nextDetector = mock(LiveHandDetector.class);
+            newView = new PrivateCameraView(
+                new ThemedReactContext(newReact, new ContextWrapper(newActivity), "RecreatedTracking", 7),
+                injectedTrackingWorker, () -> true, () -> nextDetector);
+            newView.setId(107);
+            newRoot.addView(newView, new FrameLayout.LayoutParams(320, 240));
+            newView.setActive(true);
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            Preview nextPreview = (Preview) field(newView, "preview");
+            ImageAnalysis nextAnalysis = (ImageAnalysis) field(newView, "analysis");
+            assertNotNull("New Activity must already own a camera before old close fails", nextPreview);
+            assertNotNull(nextAnalysis);
+            assertTrue((Boolean) field(newView, "requested"));
+            verifyNoInteractions(nextDetector);
+            releaseInference.countDown();
+            runTracking(() -> {});
+            // Only native main-loop work runs. No JS reaction or new camera frame.
+            Shadows.shadowOf(Looper.getMainLooper()).idle();
+            assertFalse((Boolean) field(newView, "requested"));
+            assertNull(field(newView, "analysis"));
+            assertNull(field(newView, "preview"));
+            verify(provider).unbind(nextAnalysis);
+            verify(provider).unbind(nextPreview);
+            verifyNoInteractions(nextDetector);
+            Field faults = MainActivity.class.getDeclaredField("cameraCleanupFailures");
+            faults.setAccessible(true);
+            assertTrue("New Activity also owns an authoritative native fault latch", faults.getInt(newActivity) > 0);
+            newView.setActive(true);
+            assertFalse((Boolean) field(newView, "requested"));
+            assertEquals("camera_cleanup_failed", statuses.get(statuses.size() - 1));
+        } finally {
+            releaseInference.countDown();
+            if (newView != null) newView.dispose();
+            if (newController != null) newController.pause().stop().destroy();
+        }
+    }
+
+    @Test public void trackingEventsConflateAndOnlyLatestCountsReachBridge() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenAnswer(invocation -> new DetectedHands(null, null));
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        for (int index = 0; index < 100; index++) {
+            final long timestamp = index * 33_000_000L;
+            runTracking(() -> analyzer.analyze(trackingFrame(timestamp)));
+        }
+        assertFalse(statuses.contains("tracking_active"));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals(1, statuses.stream().filter("tracking_active"::equals).count());
+        assertTrue(statusCoalescing.get(statusCoalescing.size() - 1));
+        runTracking(() -> analyzer.analyze(trackingFrame(4_000_000_000L)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals(1, statuses.stream().filter("tracking_active"::equals).count());
+    }
+
+    private void replaceWithTrackingView(LiveHandDetector detector) throws Exception {
+        view.dispose();
+        root.removeView(view);
+        injectedTrackingWorker = new LiveHandTrackingWorker();
+        view = trackingView(detector);
+        root.addView(view, new FrameLayout.LayoutParams(320, 240));
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Camera camera = mock(Camera.class);
+        CameraInfo info = mock(CameraInfo.class);
+        when(camera.getCameraInfo()).thenReturn(info);
+        when(info.getCameraState()).thenReturn(cameraStates);
+        when(provider.bindToLifecycle(any(androidx.lifecycle.LifecycleOwner.class), any(CameraSelector.class),
+            any(Preview.class), any(ImageAnalysis.class))).thenReturn(camera);
+    }
+
+    private PrivateCameraView trackingView(LiveHandDetector detector) {
+        PrivateCameraView next = new PrivateCameraView(
+            new ThemedReactContext(reactContext, new ContextWrapper(activity), "Tracking", 5),
+            injectedTrackingWorker, () -> true, () -> detector);
+        next.setId(105);
+        return next;
+    }
+
+    private ImageProxy trackingFrame(long timestamp) {
+        ImageProxy image = mock(ImageProxy.class);
+        ImageInfo info = mock(ImageInfo.class);
+        ImageProxy.PlaneProxy plane = mock(ImageProxy.PlaneProxy.class);
+        when(image.getFormat()).thenReturn(PixelFormat.RGBA_8888);
+        when(image.getWidth()).thenReturn(2);
+        when(image.getHeight()).thenReturn(2);
+        when(image.getCropRect()).thenReturn(new Rect(0, 0, 2, 2));
+        when(image.getImageInfo()).thenReturn(info);
+        when(info.getTimestamp()).thenReturn(timestamp);
+        when(info.getRotationDegrees()).thenReturn(0);
+        when(image.getPlanes()).thenReturn(new ImageProxy.PlaneProxy[] {plane});
+        when(plane.getPixelStride()).thenReturn(4);
+        when(plane.getRowStride()).thenReturn(8);
+        when(plane.getBuffer()).thenReturn(ByteBuffer.wrap(new byte[16]));
+        return image;
+    }
+
+    private void runTracking(Runnable action) {
+        injectedTrackingWorker.executeAndAwaitForTest(action);
+    }
+
     @SuppressWarnings("unchecked")
     private MutableLiveData<PreviewView.StreamState> streamStates() throws Exception {
         return (MutableLiveData<PreviewView.StreamState>) previewView().getPreviewStreamState();
@@ -686,7 +951,8 @@ public class NativeBackPrivacyTest {
         assertFalse("Bind success and View.VISIBLE do not prove streaming", statuses.contains("preview_only"));
         assertTrue(cameraStates.hasObservers());
         streamStates().setValue(PreviewView.StreamState.STREAMING);
-        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+        assertTrue(statuses.contains("preview_only"));
+        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
     }
 
     @Test public void defaultCameraBindsRearAfterActualProviderAcquisition() throws Exception {
@@ -936,7 +1202,8 @@ public class NativeBackPrivacyTest {
         assertTrue(requested());
         assertTrue("Old callbacks cannot publish or stop a new session", statuses.isEmpty());
         streamStates().setValue(PreviewView.StreamState.STREAMING);
-        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+        assertTrue(statuses.contains("preview_only"));
+        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
         view.dispose();
         assertFalse(cameraStates.hasObservers());
         assertFalse(streamStates().hasObservers());
@@ -955,7 +1222,8 @@ public class NativeBackPrivacyTest {
         streamStates().setValue(PreviewView.StreamState.IDLE);
         assertTrue("Initial idle for the new binding may wait", requested());
         streamStates().setValue(PreviewView.StreamState.STREAMING);
-        assertEquals("preview_only", statuses.get(statuses.size() - 1));
+        assertTrue(statuses.contains("preview_only"));
+        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
     }
 
     @Test public void cameraErrorCleanupFailureHasPriorityAndIsCountedOnce() throws Exception {

@@ -12,7 +12,7 @@ Evaluation uses existing annotated signing videos. Recruiting Deaf testers is no
 
 ## Current implementation boundaries
 
-- CameraX still provides preview only. No analyzer, tracker or sign recognizer is connected to the customer UI.
+- CameraX now binds native ImageAnalysis beside Preview for local Holistic hand detection and the Kotlin SORT adaptation. Only status and bounded hand counts reach the customer UI. No sign recognizer or translator is connected. See [live tracking contracts and remaining validation](LIVE_HAND_TRACKING.md).
 - Typed text review, Speak, Stop and Clear use bundled local Pocket TTS/Alba. Flite production code has been retired. This is manual text-to-speech, not recognition or translation. The [final candidate checkpoint](RECOGNITION_FOLLOWUP_20261026.md) records bounded muted playback on Samsung and Seeker. The [earlier Pocket checkpoint](POCKET_SPEECH_CHECKPOINT_20261026.md) and older two-phone Flite receipt apply to their named artifacts. Voice quality and full release acceptance remain separate gates.
 - Speech accepts nonblank reviewed Unicode text within 256 UTF-16 code units and 512 strict UTF-8 bytes; malformed encodings and control characters are rejected. Native synthesis bounds generated audio. Acceptance at this boundary does not prove pronunciation or multilingual support. No silent truncation or spelling substitution is permitted.
 - Speech and camera stop on Back, leaving the screen or backgrounding. Draft text is cleared on leaving/backgrounding; it is not saved or logged. Cleanup failures latch and require reopening rather than silently retrying.
@@ -30,6 +30,17 @@ The earlier private desktop tracking attempt required at least 700 MiB free RAM 
 
 The [October 26 input-handoff and model research follow-up](RECOGNITION_FOLLOWUP_20261026.md) separates the reproduced Android storage failure, its QA-only repair, the actual Android ASR decoder experiment and unresolved continuous-model input provenance.
 
+## Roboflow tracking integration
+
+The [tracking integration](../research/ROBOFLOW_TRACKING.md) includes an attributed
+Kotlin SORT adaptation in app source and uses the actual pinned Roboflow Python
+package as its host reference. The native recorded-video Holistic probe now
+consumes the Kotlin tracker and emits only aggregate continuity diagnostics;
+classifier feature values/order remain unchanged. Live CameraX now consumes the offline Holistic detector and Kotlin tracker.
+Its hand-only measurement contract does not establish the separate 543-point
+classifier feature contract. Real-camera/device, full feature-parity and quality
+gates below remain open.
+
 ## Model selection evidence
 
 The first isolated-sign candidate is pinned to TheoViel/kaggle_islr commit `148ccb9b35b321149ac716ed69966dd8e7efeb09`, file `output/ens_576-80_768-25_norm-soup_model.tflite`, 36,870,396 bytes, SHA256 `25531b695e07b21467ef91bea5164c96e36ff86a1fff84182613f39ac4724bed`.
@@ -42,7 +53,7 @@ The Kaggle dataset was designed for isolated educational signs. Its dataset card
 
 The inspected Kaggle preprocessing expects the legacy Holistic layout: 468 face, 21 left-hand, 33 pose and 21 right-hand points. Current Holistic Tasks provides 553 total points. The first-468 face selection and group order have structural support from the pinned preprocessing and MediaPipe's appended iris topology; no index-order defect was established. Numerical feature parity, normalized z, anatomical handedness, preview mirroring, aspect ratio, missing detections and cadence still need paired reference evidence. Hand-only output cannot stand in for missing face/body inputs. Never fill missing features with plausible zeros without matching the trained contract.
 
-Add ImageAnalysis to the existing CameraX owner only after the selected tracker/model contract is established. Release every ImageProxy, bound queued work and temporal history, and invalidate all pending results on session replacement or cancellation. MediaPipe LIVE_STREAM can discard submitted frames while busy; multi-task joins must not wait forever for a callback from every submitted frame. Frames and landmarks stay native and in memory; React Native receives text/status only. No automatic speech from uncertain model output.
+ImageAnalysis now uses the documented 21-point-per-hand detector/tracker contract for geometric tracking only. Do not connect a sign classifier until its separate full feature/model contract is established. Release every ImageProxy, bound queued work and temporal history, and invalidate all pending results on session replacement or cancellation. MediaPipe LIVE_STREAM can discard submitted frames while busy; multi-task joins must not wait forever for a callback from every submitted frame. Frames and landmarks stay native and in memory; React Native receives text/status only. No automatic speech from uncertain model output.
 
 ## Offline SDK admission gate
 

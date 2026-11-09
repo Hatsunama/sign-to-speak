@@ -128,3 +128,15 @@ test('Android stages the reviewed actual bundle JavaScript grant inventory', () 
   assert.equal(new Set(receipt.packages.filter(row => row.asset.startsWith('bundled-js/')).map(row => row.asset)).size, 11);
   assert.match(read('../.gitattributes').toString(), /native\/licenses\/bundled-js\/\*\* -text -whitespace/);
 });
+
+test('Android stages the attributed Roboflow Kotlin adaptation license', () => {
+  const mapping = read('android/app/license-assets.gradle').toString();
+  for (const name of ['LICENSE', 'NOTICE']) assert.ok(mapping.includes(`roboflow-trackers/${name}`));
+  assert.equal(createHash('sha256').update(read('licenses/roboflow-trackers/LICENSE')).digest('hex'),
+    'c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4');
+  const notice = read('licenses/roboflow-trackers/NOTICE').toString();
+  assert.match(notice, /Copyright \(c\) 2026 Roboflow/);
+  assert.match(notice, /Kotlin adaptation, not the Python package/);
+  assert.match(notice, /3d1532372b46bae1e31a7f4aa3d7350482dadfb6/);
+  assert.match(read('../.gitattributes').toString(), /native\/licenses\/roboflow-trackers\/\*\* -text/);
+});

@@ -14,7 +14,7 @@ class MainActivity : ReactActivity() {
   private val cameraViews = java.util.Collections.newSetFromMap(
       java.util.WeakHashMap<PrivateCameraView, Boolean>())
 
-  internal var cameraCleanupFailures = 0
+  @Volatile internal var cameraCleanupFailures = 0
     private set
 
   private fun cancelCameraViews(dispose: Boolean) {
@@ -32,7 +32,17 @@ class MainActivity : ReactActivity() {
     }
   }
 
-  internal fun recordCameraCleanupFailure() { cameraCleanupFailures++ }
+  @Synchronized internal fun recordCameraCleanupFailure() { cameraCleanupFailures++ }
+
+  internal fun cancelAfterTrackingCleanupFailure() {
+    // Worker already latched the fault. This method is posted to the main thread,
+    // and also catches views created while the old graph was still closing.
+    cameraViews.toList().forEach { view ->
+      try { view.cancelAfterTrackingCleanupFailure() } catch (_: RuntimeException) {
+        recordCameraCleanupFailure()
+      }
+    }
+  }
 
   internal fun registerCameraView(view: PrivateCameraView) { cameraViews.add(view) }
   internal fun unregisterCameraView(view: PrivateCameraView) { cameraViews.remove(view) }
@@ -53,6 +63,7 @@ class MainActivity : ReactActivity() {
 
   override fun onPause() {
     // Native cancellation precedes React events and Activity state transitions.
+    cancelCameraViews(dispose = false)
     speechOwner.pause()
     super.onPause()
   }

@@ -1,0 +1,194 @@
+name: Sign offline live tracking checks
+
+# Cloud-only parity, Android tests and unsigned artifact audits. No devices or user data.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - native/**
+      - .github/workflows/sign-roboflow-trackers.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-roboflow-trackers-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'codex/integrate-roboflow-trackers')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - name: Checkout exact candidate head commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install locked host-only wheels
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          echo "MPLCONFIGDIR=$RUNNER_TEMP/sign-trackers-matplotlib" >> "$GITHUB_ENV"
+          python3.12 -m venv "$RUNNER_TEMP/sign-trackers"
+          "$RUNNER_TEMP/sign-trackers/bin/python" -m pip install \
+            --index-url https://pypi.org/simple --only-binary=:all: \
+            --require-hashes --no-cache-dir \
+            -r native/research/requirements-trackers-linux-py312.txt
+          "$RUNNER_TEMP/sign-trackers/bin/python" -m pip check
+          echo "$RUNNER_TEMP/sign-trackers/bin" >> "$GITHUB_PATH"
+      - name: Test real tracker adapter with synthetic fixtures
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s native/research -p 'test_*.py' -v
+      - name: Compile native adaptation and compare real-library reference
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          archive="$RUNNER_TEMP/kotlin-compiler.zip"
+          curl --fail --location --retry 2 --max-time 90 \
+            https://github.com/JetBrains/kotlin/releases/download/v2.1.20/kotlin-compiler-2.1.20.zip \
+            --output "$archive"
+          echo "a118197b0de55ffab2bc8d5cd03a5e39033cfb53383d6931bc761dec0784891a  $archive" | sha256sum --check
+          unzip -q "$archive" -d "$RUNNER_TEMP/sign-kotlin"
+          python native/research/native_tracking_parity.py \
+            --kotlinc "$RUNNER_TEMP/sign-kotlin/kotlinc/bin/kotlinc"
+          "$RUNNER_TEMP/sign-kotlin/kotlinc/bin/kotlinc" \
+            native/android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/CameraRgbaPixels.kt \
+            native/tests/kotlin/CameraRgbaPixelsHostTest.kt -include-runtime -d "$RUNNER_TEMP/camera-pixels.jar"
+          java -jar "$RUNNER_TEMP/camera-pixels.jar"
+  native_compile:
+    needs: research
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'codex/integrate-roboflow-trackers')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+        working-directory: native
+    env:
+      CI: 'true'
+      GRADLE_OPTS: -Dorg.gradle.daemon=false
+      TESTED_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24.19.0'
+      - name: Prepare existing native toolchain without new license acceptance
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$TESTED_SHA"
+          test -x "$JAVA_HOME_21_X64/bin/java"
+          echo "JAVA_HOME=$JAVA_HOME_21_X64" >> "$GITHUB_ENV"
+          echo "$JAVA_HOME_21_X64/bin" >> "$GITHUB_PATH"
+          npm ci --ignore-scripts --no-audit --no-fund
+          bash scripts/ci-sdk.sh
+      - name: Run complete host and tooling regression suites
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python3 -m pip install --disable-pip-version-check --require-hashes --only-binary=:all: --no-deps --no-cache-dir \
+            --target "$RUNNER_TEMP/sign-python-host-tests" -r requirements-host-tests.txt
+          export PYTHONPATH="$RUNNER_TEMP/sign-python-host-tests"
+          npm test
+          npm run typecheck
+          sh tests/run-java-tests.sh
+          node --test scripts/*.test.mjs
+          for test_file in scripts/*.test.py; do python3 "$test_file"; done
+      - name: Compile changed Android sources and tests before expensive native preparation
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a \
+            -PunsignedPhoneQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:compileDebugUnitTestKotlin :app:compileDebugUnitTestJavaWithJavac \
+            :app:compileQaAndroidTestKotlin :app:compileQaAndroidTestJavaWithJavac \
+            :app:verifyQaOfflineLandmarkRuntime
+      - name: Build existing local speech dependency and prepare pinned bundled assets
+        timeout-minutes: 15
+        run: |
+          set -euo pipefail
+          timeout 900 bash scripts/build-pocket-runtime.sh arm64-v8a
+          python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
+          python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
+            --metadata "$RUNNER_TEMP/pocket-arm64-v8a-metadata.json" \
+            --output-dir generated/pocket-assets
+      - name: Run Android tests, verify runtime and build unsigned QA app/test pair
+        timeout-minutes: 14
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a \
+            -PunsignedPhoneQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:testDebugUnitTest :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions \
+            :app:verifyQaOfflineLandmarkRuntime :app:verifyUnsignedPhoneQaIsolation \
+            :app:compileQaAndroidTestKotlin :app:stageQaReviewedLicenses \
+            :app:assembleQa :app:assembleQaAndroidTest
+          cmp ../licenses/roboflow-trackers/LICENSE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/LICENSE
+          cmp ../licenses/roboflow-trackers/NOTICE app/build/generated/reviewed-license-assets/qa/roboflow-trackers/NOTICE
+      - name: Audit actual unsigned APKs, live model, notices and native libraries
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          bash scripts/ci-phone-qa-audit.sh
+          mapfile -t apks < <(find android/app/build/outputs/apk/qa -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          python3 scripts/check-live-tracking-apk.py "$RUNNER_TEMP/sign-evidence/phone-qa/manifest.xml" "${apks[0]}" --abi arm64-v8a
+          python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
+            "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            "$RUNNER_TEMP/sign-evidence/qa-elf"
+          sha256sum "${apks[0]}"
+      - name: Compile affected x86_64 emulator instrumentation without execution
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          cd android
+          ./gradlew --no-daemon --max-workers=2 --console=plain \
+            '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m' \
+            -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
+            -PunsignedEmulatorQa=true \
+            -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
+            :app:compileEmulatorQaAndroidTestJavaWithJavac :app:verifyEmulatorQaOfflineLandmarkRuntime
+      - name: Retain bounded source and test evidence only
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-live-tracking-evidence-${{ env.TESTED_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: warn
+          path: |
+            native/android/app/build/test-results/
+            native/android/app/build/reports/offline-landmark/
+            native/android/app/build/outputs/logs/manifest-merger-*-report.txt
+            ${{ runner.temp }}/sign-evidence/
