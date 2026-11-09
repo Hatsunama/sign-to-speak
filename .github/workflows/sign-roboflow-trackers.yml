@@ -1,0 +1,56 @@
+name: Sign Roboflow tracking research checks
+
+# Synthetic, host-only checks. No Android builds, devices, models or user data.
+on:
+  workflow_dispatch:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - native/research/**
+      - .github/workflows/sign-roboflow-trackers.yml
+
+permissions:
+  contents: read
+
+concurrency:
+  group: sign-roboflow-trackers-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  research:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'codex/integrate-roboflow-trackers')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI: 'true'
+      PYTHONDONTWRITEBYTECODE: '1'
+      PIP_DISABLE_PIP_VERSION_CHECK: '1'
+      MPLCONFIGDIR: ${{ runner.temp }}/sign-trackers-matplotlib
+    steps:
+      - name: Checkout exact candidate head commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # upstream v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+      - name: Install locked host-only wheels
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          python3.12 -m venv "$RUNNER_TEMP/sign-trackers"
+          "$RUNNER_TEMP/sign-trackers/bin/python" -m pip install \
+            --index-url https://pypi.org/simple --only-binary=:all: \
+            --require-hashes --no-cache-dir \
+            -r native/research/requirements-trackers-linux-py312.txt
+          "$RUNNER_TEMP/sign-trackers/bin/python" -m pip check
+          echo "$RUNNER_TEMP/sign-trackers/bin" >> "$GITHUB_PATH"
+      - name: Test real tracker adapter with synthetic fixtures
+        timeout-minutes: 3
+        run: |
+          set -euo pipefail
+          python -m unittest discover -s native/research -p 'test_*.py' -v

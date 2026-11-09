@@ -30,6 +30,15 @@ The earlier private desktop tracking attempt required at least 700 MiB free RAM 
 
 The [October 26 input-handoff and model research follow-up](RECOGNITION_FOLLOWUP_20261026.md) separates the reproduced Android storage failure, its QA-only repair, the actual Android ASR decoder experiment and unresolved continuous-model input provenance.
 
+## Roboflow tracking research adapter
+
+The [host-only Roboflow SORT integration](../research/ROBOFLOW_TRACKING.md) consumes
+synthetic or separately authorized hand-landmark fixtures using this 543-point
+contract. It uses the actual pinned Python library for geometric association and
+continuity diagnostics. It is not wired to the phone probe or production CameraX,
+does not export production landmarks, and supplies no recognition/accuracy claim.
+The existing Android/runtime and feature-parity gates below remain unchanged.
+
 ## Model selection evidence
 
 The first isolated-sign candidate is pinned to TheoViel/kaggle_islr commit `148ccb9b35b321149ac716ed69966dd8e7efeb09`, file `output/ens_576-80_768-25_norm-soup_model.tflite`, 36,870,396 bytes, SHA256 `25531b695e07b21467ef91bea5164c96e36ff86a1fff84182613f39ac4724bed`.
