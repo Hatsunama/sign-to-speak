@@ -240,9 +240,11 @@ class PhoneRecognitionProbeTest {
                             if (result.leftHandLandmarks().isNotEmpty() || result.rightHandLandmarks().isNotEmpty()) handFrames++
                             if (result.faceLandmarks().isNotEmpty()) faceFrames++
                             if (result.poseLandmarks().isNotEmpty()) poseFrames++
-                            val left = trackingHand(result.leftHandLandmarks())
-                            val right = trackingHand(result.rightHandLandmarks())
+                            var left: FloatArray? = null
+                            var right: FloatArray? = null
                             try {
+                                left = trackingHand(result.leftHandLandmarks())
+                                right = trackingHand(result.rightHandLandmarks())
                                 // Native/offline Kotlin adaptation. Association never rewrites
                                 // the anatomical slots or the classifier's landmark features.
                                 val tracked = handTracker.update(left, right, timestampMs.toDouble(),

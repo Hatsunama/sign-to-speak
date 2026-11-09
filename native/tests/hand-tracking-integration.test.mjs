@@ -9,6 +9,7 @@ test('native recorded-video path consumes local tracking with per-clip cleanup',
   assert.match(probe, /val handTracker = RoboflowHandTracker\(\)/);
   assert.match(probe, /handTracker\.update\(left, right, timestampMs\.toDouble\(\),/);
   assert.match(probe, /handTracker\.close\(\)/);
+  assert.match(probe, /var left: FloatArray\? = null\s+var right: FloatArray\? = null\s+try \{\s+left = trackingHand\(result\.leftHandLandmarks\(\)\)\s+right = trackingHand\(result\.rightHandLandmarks\(\)\)/);
   assert.match(probe, /left\?\.fill\(0f\)/);
   assert.match(probe, /right\?\.fill\(0f\)/);
   assert.match(probe, /appendFeatures\(features, result\)/);
