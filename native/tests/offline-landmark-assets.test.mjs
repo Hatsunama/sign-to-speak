@@ -65,5 +65,31 @@ test('model and all SDK grant texts have explicit pinned app destinations', () =
     assert.equal(createHash('sha256').update(bytes).digest('hex'), row.sha256);
     assert.ok(row.asset.startsWith('holistic-licenses/'));
   }
-  assert.equal(receipt.notices.length, 5);
+  assert.equal(receipt.notices.length, 6);
+});
+
+test('newly resolved checker compatibility annotations carry the exact MIT license route', () => {
+  const receipt = JSON.parse(read('vendor/mediapipe-offline/runtime-admission.json'));
+  const asset = 'holistic-licenses/checker-framework-2.5.3-LICENSE.txt';
+  const notice = receipt.notices.find(row => row.asset === asset);
+  assert.ok(notice, 'The new annotation dependency must have a packaged grant');
+  assert.equal(notice.size, 22320);
+  assert.equal(notice.sha256, '37ac781fd633d592519cc231473b9a25ebd84c3bbe829abb8f588d3355edc63c');
+  const grant = read(`vendor/mediapipe-offline/${notice.source}`);
+  assert.match(grant, /The annotations are licensed under the MIT License/);
+  assert.match(grant, /MIT License:\s+Permission is hereby granted/);
+  const routes = receipt.runtime_license_routes;
+  assert.equal(routes.length, 12); // Eleven additions plus Guava's empty conflict-avoidance replacement.
+  assert.equal(new Set(routes.map(row => row.coordinate)).size, routes.length);
+  const checker = routes.find(row => row.coordinate === 'org.checkerframework:checker-compat-qual:2.5.3');
+  assert.equal(checker.license, 'MIT');
+  assert.equal(checker.asset, asset);
+  assert.equal(checker.artifact_sha256, 'd76b9afea61c7c082908023f0cbc1427fab9abd2df915c8b8a3e7a509bccbc6d');
+  assert.equal(routes.filter(row => row.scope === 'detector-only').length, 11);
+  const runtime = read('android/app/offline-landmark-runtime.gradle');
+  assert.match(runtime, /resolution\.rootComponent\.get\(\)\.id/);
+  assert.match(runtime, /introduced != licenseRoutes\.findAll \{ it\.scope == "detector-only" \}/);
+  assert.match(runtime, /digestFile\(matched\[0\]\.file\) != route\.artifact_sha256/);
+  assert.match(runtime, /!admissionReceipt\.notices\.any \{ it\.asset == route\.asset \}/);
+  assert.match(runtime, /verified_license_routes: licenseRoutes/);
 });

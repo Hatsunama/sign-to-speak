@@ -102,12 +102,128 @@
     {
       "asset": "holistic-licenses/ATTRIBUTION.txt",
       "source": "licenses/runtime-licenses/ATTRIBUTION.txt",
-      "size": 1765,
-      "sha256": "b23c1e708845a136dffd9207b6f3848aeff91a4665fa6209069a48d5fe7b49ae"
+      "size": 2121,
+      "sha256": "d57350a840d9a90ec71b0549553fe3ad3157e941ef653a1fc2b7ef093063d62b"
+    },
+    {
+      "asset": "holistic-licenses/checker-framework-2.5.3-LICENSE.txt",
+      "source": "licenses/runtime-licenses/checker-framework-2.5.3-LICENSE.txt",
+      "size": 22320,
+      "sha256": "37ac781fd633d592519cc231473b9a25ebd84c3bbe829abb8f588d3355edc63c"
     }
   ],
   "additional_notice_sources": {
     "protobuf-v26.1-LICENSE": "https://github.com/protocolbuffers/protobuf/blob/v26.1/LICENSE",
-    "flogger-0.6-LICENSE": "https://github.com/google/flogger/blob/flogger-0.6/LICENSE"
+    "flogger-0.6-LICENSE": "https://github.com/google/flogger/blob/flogger-0.6/LICENSE",
+    "checker-framework-2.5.3-LICENSE.txt": "https://github.com/typetools/checker-framework/blob/4113cc2b669f4bec7a6775c74f1f3db16b18f807/LICENSE.txt"
+  },
+  "runtime_license_routes": [
+    {
+      "coordinate": "com.google.errorprone:error_prone_annotations:2.2.0",
+      "artifact_sha256": "6ebd22ca1b9d8ec06d41de8d64e0596981d9607b42035f9ed374f9de271a481a",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Error Prone",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.flogger:flogger-system-backend:0.6",
+      "artifact_sha256": "af7f9f049c79f67941e1e47637b20634594788398aa0aabcddbc7af0af3df5b1",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/flogger-0.6-LICENSE",
+      "route": "Complete tagged Flogger LICENSE",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.flogger:flogger:0.6",
+      "artifact_sha256": "3145669db60c7b1d63b4e1f7137ea1a5de6ea91c516a68e8cfdd25794d81b7c4",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/flogger-0.6-LICENSE",
+      "route": "Complete tagged Flogger LICENSE",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.guava:failureaccess:1.0.1",
+      "artifact_sha256": "a171ee4c734dd2da837e4b16be9df4661afab72a41adaf31eb84dfdaf936ca26",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Guava JDK7; module inherits guava-parent 26.0-android Apache-2.0 grant",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.guava:guava:27.0.1-android",
+      "artifact_sha256": "caf0955aed29a1e6d149f85cfb625a89161b5cf88e0e246552b7ffa358204e28",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Guava JDK7; module inherits guava-parent 27.0.1-android Apache-2.0 grant",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.j2objc:j2objc-annotations:1.1",
+      "artifact_sha256": "2994a7eb78f2710bd3d3bfb639b2c94e219cedac0d4d084d516e78c16dddecf6",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "J2ObjC",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.mediapipe:tasks-core:1.1.1-offline-50505c8",
+      "artifact_sha256": "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Complete original SDK NOTICE and separate Apache-2.0-LICENSE",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.mediapipe:tasks-vision:1.1.1",
+      "artifact_sha256": "cf6565d27feb96b411bbb2e5cb38b3db37e0e0d3109f30ec0c9a8178055051e6",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Complete original SDK NOTICE and separate Apache-2.0-LICENSE",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.protobuf:protobuf-javalite:4.26.1",
+      "artifact_sha256": "ae83d2b063988c4565462845269472ddc817117506b6e467a2c3222c96636829",
+      "license": "BSD-3-Clause",
+      "asset": "holistic-licenses/protobuf-v26.1-LICENSE",
+      "route": "Complete tagged Protobuf LICENSE",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "org.checkerframework:checker-compat-qual:2.5.3",
+      "artifact_sha256": "d76b9afea61c7c082908023f0cbc1427fab9abd2df915c8b8a3e7a509bccbc6d",
+      "license": "MIT",
+      "asset": "holistic-licenses/checker-framework-2.5.3-LICENSE.txt",
+      "route": "Explicit annotation MIT grant, full upstream LICENSE retained",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "org.codehaus.mojo:animal-sniffer-annotations:1.17",
+      "artifact_sha256": "92654f493ecfec52082e76354f0ebf87648dc3d5cec2e3c3cdb947c016747a53",
+      "license": "MIT",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Animal Sniffer; copyright 2008 Kohsuke Kawaguchi and codehaus.org",
+      "scope": "detector-only"
+    },
+    {
+      "coordinate": "com.google.guava:listenablefuture:9999.0-empty-to-avoid-conflict-with-guava",
+      "artifact_sha256": "b372a037d4230aa57fbeffdef30fd6123f9c0c2db85d0aced00c91b974f33f99",
+      "license": "Apache-2.0",
+      "asset": "holistic-licenses/mediapipe-tasks-1.1.1-NOTICE",
+      "route": "Empty conflict-avoidance artifact; actual ListenableFuture code is in the admitted Guava JAR",
+      "scope": "shared-resolution-change"
+    }
+  ],
+  "runtime_license_review": {
+    "source_commit": "21154b744544508009dbbafa07547555758103b6",
+    "workflow_run": "https://github.com/Hatsunama/sign-to-speak/actions/runs/42720053166",
+    "selected_external_coordinates": 106,
+    "introduced_reachable_modules": 11,
+    "method": "Compare complete graph reachability with and without the direct app-to-MediaPipe edge. This identifies new reachable modules, not a reconstructed historical lock. Also review the selected listenablefuture replacement.",
+    "metadata_only_modules": 6,
+    "artifact_rows": 103,
+    "distinct_external_artifacts": 100,
+    "scope": "QA and emulatorQa graphs match. Pins and licenses reviewed; this does not establish physical camera behavior or release acceptance."
   }
 }

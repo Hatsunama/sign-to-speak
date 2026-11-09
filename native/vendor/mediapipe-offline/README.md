@@ -113,6 +113,29 @@ required by app merge/package/assemble and `check`. The earlier 95-coordinate
 receipt is historical and is not reused as a count for this new dependency
 graph. Review the actual fresh report, including version-conflict selections.
 
+The independent review of exact source `21154b744544508009dbbafa07547555758103b6`
+([hosted run 42720053166](https://github.com/Hatsunama/sign-to-speak/actions/runs/42720053166))
+found identical QA and emulator graphs: 106 external coordinates, 108 reachable
+nodes including both local projects, 444 edges, and 103 artifact rows (100
+distinct artifacts; three AndroidX rows repeat identical bytes). Six nodes have
+no artifact: five metadata/relocation aliases and the coroutines BOM. Their
+selected target modules and constraint edges remain in the report, not omitted.
+
+Removing only the app's MediaPipe edge leaves eleven modules reachable solely
+through the detector. `runtime_license_routes` records their exact selected
+artifact hashes and existing or supplemental packaged grants, plus Guava's
+empty `listenablefuture` conflict-avoidance replacement. The Gradle gate checks
+this exact introduced-module set, verifies every route's actual resolved byte
+hash and packaged notice destination, and exports the verified routes. A new
+transitive module, changed version/bytes or missing notice fails closed.
+This is a dependency admission check, not a reconstruction of an old lockfile.
+
+That review found one real omission before final acceptance: the new
+`checker-compat-qual:2.5.3` JAR has no embedded grant and the SDK's aggregate
+NOTICE has no Checker Framework annotation grant. The exact upstream tagged
+license is now added below. This notice-only correction requires a fresh
+exact-head APK audit; the earlier green artifact does not include it.
+
 `check-live-tracking-apk.py MANIFEST APK --abi arm64-v8a` checks actual model/JNI
 bytes, complete exact notices, the no-network permission/component surface,
 required DEX class definitions and absence of telemetry in **every** DEX. It
@@ -132,6 +155,7 @@ AGP omits AAR `META-INF/NOTICE`, so the generated **app** assets explicitly carr
 | `Apache-2.0-LICENSE` | Existing Apache terms; SHA-256 `cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30` |
 | `protobuf-v26.1-LICENSE` | Official protobuf tag v26.1 LICENSE (BSD-3-Clause); SHA-256 `6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d` |
 | `flogger-0.6-LICENSE` | Official Flogger tag flogger-0.6 LICENSE; SHA-256 `8c6db340475136df3c1201d458fa5755698eace76e510471ecc9d857d6083dac` |
+| `checker-framework-2.5.3-LICENSE.txt` | Complete official tag `checker-framework-2.5.3` license at commit `4113cc2b669f4bec7a6775c74f1f3db16b18f807`, 22,320 bytes; SHA-256 `37ac781fd633d592519cc231473b9a25ebd84c3bbe829abb8f588d3355edc63c` |
 | `ATTRIBUTION.txt` | Integration changes, upstream ownership and explanation of the unchanged generic telemetry notice versus this dummy-logger build |
 | `MODEL-RECEIPT.json` | Exact reviewed `runtime-admission.json`, including source URLs, sizes, hashes and complete model-member inventory |
 
@@ -139,6 +163,11 @@ The entire upstream SDK NOTICE is retained, including its bundled third-party
 notices. Existing framework and JavaScript notice assets remain unchanged.
 No source grant is invented from an empty JAR: protobuf/Flogger published JARs
 contain no license entries, so the exact official tagged texts are packaged.
+Checker compatibility annotations use the upstream file's **explicit MIT grant
+for annotations**. The full original document also contains GPL/classpath terms
+for other Checker Framework code; those terms do not replace its annotation MIT
+grant. The admitted JAR contains only ten compatibility annotation classes,
+not the Checker Framework compiler or other components.
 
 The **QA test APK** continues to package its existing `sdk-licenses/` assets
 independently: the original MediaPipe NOTICE, Apache text and complete

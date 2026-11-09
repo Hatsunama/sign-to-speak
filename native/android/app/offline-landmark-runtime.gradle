@@ -149,6 +149,42 @@ androidComponents {
                             it.startsWith("com.google.ai.edge.litertlm:") }) {
                     throw new GradleException("Unadmitted MediaPipe runtime dependency graph: ${coordinates}")
                 }
+                // Require a reviewed grant/hash for every module introduced by
+                // the detector. Removing only the root detector edge preserves
+                // existing framework/shared dependencies in the comparison.
+                def rootId = resolution.rootComponent.get().id
+                def withoutDetector = [rootId].toSet()
+                while (true) {
+                    def next = new LinkedHashSet(withoutDetector)
+                    resolution.allDependencies.each { dependency ->
+                        def selectedId = dependency.selected.id
+                        def detectorRootEdge = dependency.from.id == rootId &&
+                            selectedId instanceof ModuleComponentIdentifier &&
+                            selectedId.group == "com.google.mediapipe"
+                        if (withoutDetector.contains(dependency.from.id) && !detectorRootEdge) {
+                            next.add(selectedId)
+                        }
+                    }
+                    if (next == withoutDetector) break
+                    withoutDetector = next
+                }
+                def introduced = components.findAll {
+                    it.id instanceof ModuleComponentIdentifier && !withoutDetector.contains(it.id)
+                }.collect { moduleCoordinate(it.id) }.toSet()
+                def licenseRoutes = admissionReceipt.runtime_license_routes
+                if (!(licenseRoutes instanceof List) || !licenseRoutes ||
+                        licenseRoutes*.coordinate.toSet().size() != licenseRoutes.size() ||
+                        licenseRoutes.any { !(it.scope in ["detector-only", "shared-resolution-change"]) } ||
+                        introduced != licenseRoutes.findAll { it.scope == "detector-only" }*.coordinate.toSet()) {
+                    throw new GradleException("Detector dependency additions differ from reviewed license routes: ${introduced}")
+                }
+                licenseRoutes.each { route ->
+                    def matched = artifacts.findAll { moduleCoordinate(it.id.componentIdentifier) == route.coordinate }
+                    if (matched.size() != 1 || digestFile(matched[0].file) != route.artifact_sha256 ||
+                            !admissionReceipt.notices.any { it.asset == route.asset }) {
+                        throw new GradleException("Missing or changed detector dependency artifact/license route: ${route.coordinate}")
+                    }
+                }
                 [
                     (expectedCore): [8325540L, "e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2"],
                     (expectedVision): [610482L, "cf6565d27feb96b411bbb2e5cb38b3db37e0e0d3109f30ec0c9a8178055051e6"],
@@ -203,6 +239,7 @@ androidComponents {
                 report.get().asFile.text = JsonOutput.prettyPrint(JsonOutput.toJson([
                     schema: 2, variant: variant.name, selected_coordinates: coordinates,
                     components: graphComponents, dependencies: graphDependencies,
+                    verified_license_routes: licenseRoutes,
                     artifacts: selected, admitted_detector_abis: ["arm64-v8a"], usage_logging: false])) + "\n"
                 logger.lifecycle("Offline detector SDK pins passed; recorded ${coordinates.size()} selected runtime Maven coordinates")
             }

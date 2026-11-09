@@ -18,7 +18,7 @@ class AdmissionTest(unittest.TestCase):
     def test_real_admission_and_source_built_core_are_intact(self):
         _, data = m.receipt()
         self.assertEqual(len(data['model']['members']), 7)
-        self.assertEqual(len(m.notice_sources(data)), 5)
+        self.assertEqual(len(m.notice_sources(data)), 6)
         m.verify_offline_core()
 
     def test_changed_pom_is_rejected_even_with_same_aar(self):
@@ -86,7 +86,7 @@ class PreparationTest(unittest.TestCase):
             download.assert_not_called()
         self.assertEqual((self.output / m.MODEL_ASSET).read_bytes(), self.model.read_bytes())
         self.assertEqual((self.output / 'holistic-licenses/MODEL-RECEIPT.json').read_bytes(), self.receipt.read_bytes())
-        self.assertEqual(len([p for p in self.output.rglob('*') if p.is_file()]), 7)
+        self.assertEqual(len([p for p in self.output.rglob('*') if p.is_file()]), 8)
 
     def test_missing_model_offline_and_bad_source_fail_closed(self):
         with self.assertRaisesRegex(ValueError, 'model missing'):

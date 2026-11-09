@@ -25,7 +25,8 @@ MODEL_SHA256 = 'e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8
 MODEL_ASSET = 'holistic/holistic_landmarker.task'
 NOTICE_PREFIX = 'holistic-licenses/'
 NOTICE_NAMES = frozenset({'mediapipe-tasks-1.1.1-NOTICE', 'Apache-2.0-LICENSE',
-                          'protobuf-v26.1-LICENSE', 'flogger-0.6-LICENSE', 'ATTRIBUTION.txt'})
+                          'protobuf-v26.1-LICENSE', 'flogger-0.6-LICENSE', 'ATTRIBUTION.txt',
+                          'checker-framework-2.5.3-LICENSE.txt'})
 CORE_VERSION = '1.1.1-offline-50505c8'
 CORE_BASE = VENDOR / f'maven/com/google/mediapipe/tasks-core/{CORE_VERSION}/tasks-core-{CORE_VERSION}'
 CORE_SHA256 = 'e0e9365d753b990f9b0d68e61274dfa5736d8812dbde5679095aec5ca28bd6b2'

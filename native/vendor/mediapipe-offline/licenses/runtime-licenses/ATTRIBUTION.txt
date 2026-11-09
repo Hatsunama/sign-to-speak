@@ -21,7 +21,12 @@ translation, medical interpretation or identity recognition.
 
 Flogger 0.6 and flogger-system-backend 0.6: Google LLC; Apache License 2.0.
 Protobuf Java Lite 4.26.1: Google Inc.; BSD-3-Clause. Their exact upstream
-license texts are included. Other third-party notices remain in the complete
+license texts are included. Checker Framework checker-compat-qual 2.5.3 contains
+compatibility annotations, admitted under the annotation-specific MIT grant in
+upstream checker-framework-2.5.3 LICENSE.txt. That exact complete source license
+is included; its broader GPL/classpath text describes other framework code,
+not a replacement for the explicit annotation MIT grant used here.
+Other third-party notices remain in the complete
 MediaPipe SDK NOTICE and the application's existing framework notice assets.
 
 Application integration and this notice: Copyright 2026 Sign To Speak contributors.
