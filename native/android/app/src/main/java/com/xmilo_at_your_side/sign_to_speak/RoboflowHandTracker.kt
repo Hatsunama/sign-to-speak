@@ -48,6 +48,13 @@ class RoboflowHandTracker : AutoCloseable {
         val continuous: Boolean,
     )
 
+    internal data class Diagnostics(
+        val measuredHands: Int,
+        val confirmedHands: Int,
+        val continuousHands: Int,
+        val associationAvailable: Boolean,
+    )
+
     @get:Synchronized
     var generation: Long = 0L
         private set
@@ -88,6 +95,7 @@ class RoboflowHandTracker : AutoCloseable {
     /**
      * Each hand is 21 xyz triples (63 floats), or null/all-NaN when absent.
      * All finite coordinates must lie in -4..4. Dimensions are 1..16384.
+     * Each measured box must span at least one pixel on both axes.
      * Timestamp is milliseconds within a clip, strictly increasing in 0..24h.
      * Validation failures leave state unchanged. Internal failures reset state.
      */
@@ -100,6 +108,50 @@ class RoboflowHandTracker : AutoCloseable {
         height: Int,
         expectedGeneration: Long = generation,
     ): List<HandTrack> {
+        val measurements = validatedMeasurements(left, right, timestampMs, width, height, expectedGeneration)
+        require(measurements.all { it.spansOnePixel }) { "Hand box must span one pixel" }
+        return updateAssociation(measurements, timestampMs, width, height)
+    }
+
+    /** Reports measured hands even when SORT cannot associate the validated frame. */
+    @Synchronized
+    internal fun updateDiagnostics(
+        left: FloatArray?,
+        right: FloatArray?,
+        timestampMs: Double,
+        width: Int,
+        height: Int,
+        expectedGeneration: Long = generation,
+    ): Diagnostics {
+        val measurements = validatedMeasurements(left, right, timestampMs, width, height, expectedGeneration)
+        val associated = if (measurements.any { !it.spansOnePixel }) {
+            clearState()
+            null
+        } else {
+            try {
+                updateAssociation(measurements, timestampMs, width, height)
+            } catch (_: AssociationFailure) {
+                // The association update already cleared its state.
+                null
+            }
+        }
+        if (associated == null) {
+            // The detector frame is still valid. Keep its time and geometry for admission.
+            recordFrame(timestampMs, width, height)
+            return Diagnostics(measurements.size, 0, 0, associationAvailable = false)
+        }
+        return Diagnostics(associated.size, associated.count { it.trackerId != null },
+            associated.count { it.continuous }, associationAvailable = true)
+    }
+
+    private fun validatedMeasurements(
+        left: FloatArray?,
+        right: FloatArray?,
+        timestampMs: Double,
+        width: Int,
+        height: Int,
+        expectedGeneration: Long,
+    ): List<Measurement> {
         check(!closed) { "Tracker is closed" }
         check(expectedGeneration == generation) { "Stale tracking generation" }
         require(timestampMs.isFinite() && timestampMs in 0.0..86_400_000.0) { "Invalid timestamp" }
@@ -110,10 +162,19 @@ class RoboflowHandTracker : AutoCloseable {
             "Coordinate space changed; reset first"
         }
         // Validate both complete hands before any state transition.
-        val measurements = listOfNotNull(
-            measuredBox(left, width, height)?.let { Measurement(Side.LEFT, it) },
-            measuredBox(right, width, height)?.let { Measurement(Side.RIGHT, it) },
+        return listOfNotNull(
+            measuredHand(Side.LEFT, left, width, height),
+            measuredHand(Side.RIGHT, right, width, height),
         )
+    }
+
+    private fun updateAssociation(
+        measurements: List<Measurement>,
+        timestampMs: Double,
+        width: Int,
+        height: Int,
+    ): List<HandTrack> {
+        val oldTimestamp = timestamp
         if (oldTimestamp != null && timestampMs - oldTimestamp > 250.0) clearState()
         try {
             val seconds = timestampMs / 1000.0
@@ -147,19 +208,26 @@ class RoboflowHandTracker : AutoCloseable {
                 HandTrack(measurement.side, generation, id, id != null && previous[measurement.side] == id)
             }
             previous = result.mapNotNull { item -> item.trackerId?.let { item.side to it } }.toMap()
-            timestamp = timestampMs
-            imageWidth = width
-            imageHeight = height
+            recordFrame(timestampMs, width, height)
             return result
         } catch (failure: RuntimeException) {
             clearState()
-            throw IllegalStateException("Tracking failed; state reset", failure)
+            throw AssociationFailure(failure)
         }
     }
 
-    private data class Measurement(val side: Side, val box: DoubleArray)
+    private fun recordFrame(timestampMs: Double, width: Int, height: Int) {
+        timestamp = timestampMs
+        imageWidth = width
+        imageHeight = height
+    }
 
-    private fun measuredBox(points: FloatArray?, width: Int, height: Int): DoubleArray? {
+    private class AssociationFailure(cause: RuntimeException) :
+        IllegalStateException("Tracking failed; state reset", cause)
+
+    private data class Measurement(val side: Side, val box: DoubleArray, val spansOnePixel: Boolean)
+
+    private fun measuredHand(side: Side, points: FloatArray?, width: Int, height: Int): Measurement? {
         if (points == null) return null
         require(points.size == 63) { "Hand requires 21 xyz points" }
         if (points.all { it.isNaN() }) return null
@@ -174,9 +242,10 @@ class RoboflowHandTracker : AutoCloseable {
             x1 = min(x1, x); y1 = min(y1, y)
             x2 = max(x2, x); y2 = max(y2, y)
         }
-        require(x2 - x1 >= 1.0 && y2 - y1 >= 1.0) { "Hand box must span one pixel" }
+        val spansOnePixel = x2 - x1 >= 1.0 && y2 - y1 >= 1.0
         // The host adapter rounds detection boxes to float32 before SORT.
-        return doubleArrayOf(x1, y1, x2, y2).map { it.toFloat().toDouble() }.toDoubleArray()
+        val box = doubleArrayOf(x1, y1, x2, y2).map { it.toFloat().toDouble() }.toDoubleArray()
+        return Measurement(side, box, spansOnePixel)
     }
 
     /** Exhaustive rectangular assignment is bounded by 64*63 pairs. */

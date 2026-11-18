@@ -130,6 +130,46 @@ class LiveHandTrackingTest {
         assertFalse(worker.hasCleanupFailure())
     }
 
+    @Test fun subpixelFrameBreaksContinuityAndFreshMeasurementsReconfirm() = withWorker { worker ->
+        val summaries = mutableListOf<HandTrackingSummary>()
+        val arrays = mutableListOf<FloatArray>()
+        val inferenceTimes = mutableListOf<Long>()
+        val detector = fakeDetector { _, timestamp ->
+            inferenceTimes.add(timestamp)
+            val left = hand()
+            val right = if (timestamp == 99L) hand() else null
+            if (right != null) {
+                left.indices.forEach { left[it] *= .125f }
+                arrays.add(right)
+            }
+            arrays.add(left)
+            DetectedHands(left, right)
+        }
+        var creates = 0
+        val analyzer = LiveHandTrackingAnalyzer(worker, {
+            creates++
+            detector
+        }, summaries::add, { fail("Cleanup failed") })
+        val frameTimes = listOf(0L, 33L, 66L, 99L, 132L, 165L, 198L)
+        val frames = frameTimes.map { frame(it * 1_000_000L) }
+        try {
+            frames.forEach { image -> run(worker) { analyzer.analyze(image) } }
+            assertEquals(frameTimes, inferenceTimes)
+            assertEquals(1, creates)
+            assertEquals(List(7) { "tracking_active" }, summaries.map { it.status })
+            assertEquals(listOf(1, 1, 1, 2, 1, 1, 1), summaries.map { it.measuredHands })
+            assertEquals(listOf(0, 1, 1, 0, 0, 1, 1), summaries.map { it.confirmedHands })
+            assertEquals(listOf(0, 0, 1, 0, 0, 0, 1), summaries.map { it.continuousHands })
+            assertEquals(listOf(true, true, true, false, true, true, true),
+                summaries.map { it.associationAvailable })
+            assertTrue(arrays.all { array -> array.all { it == 0f } })
+            frames.forEach { verify(it, times(1)).close() }
+        } finally {
+            analyzer.cancel()
+            run(worker) { }
+        }
+    }
+
     @Test fun realSdkBitmapOwnershipDoesNotLatchCleanupFailure() = withWorker { worker ->
         val faults = AtomicInteger()
         val statuses = mutableListOf<String>()

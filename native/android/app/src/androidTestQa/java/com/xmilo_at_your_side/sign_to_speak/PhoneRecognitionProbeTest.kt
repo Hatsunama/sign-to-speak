@@ -11,7 +11,6 @@ import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
 import com.google.mediapipe.tasks.vision.holisticlandmarker.HolisticLandmarker
-import com.google.mediapipe.tasks.vision.holisticlandmarker.HolisticLandmarkerResult
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assert.assertEquals
@@ -143,6 +142,8 @@ class PhoneRecognitionProbeTest {
                 .put("holistic_sha256", holisticHash)
                 .put("labels_sha256", labelsHash)
                 .put("frames_requested_per_clip", frameCount)
+                .put("timestamp_basis", "requested_sample_time")
+                .put("timestamp_note", "OPTION_CLOSEST may repeat a decoded frame. Distinct decoded presentation timestamps are unknown.")
                 .put("layout", "first 468 face, 21 left hand, 33 pose, 21 right hand; normalized xyz; missing=NaN; parity unverified")
             val results = JSONArray()
             val instrumentation = InstrumentationRegistry.getInstrumentation()
@@ -178,6 +179,58 @@ class PhoneRecognitionProbeTest {
         }
     }
 
+    @Test
+    fun subpixelAssociationPreservesLegacyClassifierFeatures() {
+        val face = List(478) { i -> NormalizedLandmark.create(.2f, -.1f, i * .001f) }
+        val pose = List(33) { i -> NormalizedLandmark.create(i * .01f, .6f, -.3f) }
+        val tinyLeft = List(21) { i ->
+            NormalizedLandmark.create(.25f + i * .00001f, .3f + i * .00001f, -.2f)
+        }
+        val regularRight = List(21) { i ->
+            NormalizedLandmark.create(.6f + i * .005f, .4f + i * .004f, -0.0f)
+        }
+        val features = ByteBuffer.allocateDirect(4 * 543 * 3 * 4).order(ByteOrder.nativeOrder())
+        RoboflowHandTracker().use { tracker ->
+            val first = consumeFrame(features, tracker, 0L, 640, 480,
+                face, tinyLeft, pose, regularRight)
+            assertEquals(false, first.associationAvailable)
+            assertEquals(2, first.measuredHands)
+            assertEquals(0, first.confirmedHands)
+            assertEquals(0, first.continuousHands)
+            assertEquals(1L, tracker.generation)
+            for (index in 1..3) {
+                val next = consumeFrame(features, tracker, index * 33L, 640, 480,
+                    emptyList(), emptyList(), pose, regularRight)
+                assertEquals(true, next.associationAvailable)
+                assertEquals(1, next.measuredHands)
+                assertEquals(if (index >= 2) 1 else 0, next.confirmedHands)
+                assertEquals(if (index == 3) 1 else 0, next.continuousHands)
+            }
+            assertEquals(1L, tracker.generation)
+        }
+        assertEquals(features.capacity(), features.position())
+        features.rewind()
+        fun verifyGroup(points: List<NormalizedLandmark>, count: Int) {
+            repeat(count) { index ->
+                val point = points.getOrNull(index)
+                assertEquals((point?.x() ?: Float.NaN).toRawBits(), features.getFloat().toRawBits())
+                assertEquals((point?.y() ?: Float.NaN).toRawBits(), features.getFloat().toRawBits())
+                assertEquals((point?.z() ?: Float.NaN).toRawBits(), features.getFloat().toRawBits())
+            }
+        }
+        verifyGroup(face, 468)
+        verifyGroup(tinyLeft, 21)
+        verifyGroup(pose, 33)
+        verifyGroup(regularRight, 21)
+        repeat(3) {
+            verifyGroup(emptyList(), 468)
+            verifyGroup(emptyList(), 21)
+            verifyGroup(pose, 33)
+            verifyGroup(regularRight, 21)
+        }
+        assertTrue(!features.hasRemaining())
+    }
+
     private fun transferArgs(args: Bundle): Pair<String, String> {
         val transferId = requireNotNull(args.getString("recognitionTransferId")) { "recognitionTransferId required" }
         // shellPath validates the token before any shell command is constructed.
@@ -211,6 +264,7 @@ class PhoneRecognitionProbeTest {
         var measuredHands = 0
         var confirmedHands = 0
         var continuousHands = 0
+        var degradedAssociationFrames = 0
         try {
             try {
                 retriever.setDataSource(file.absolutePath)
@@ -237,26 +291,19 @@ class PhoneRecognitionProbeTest {
                         val mpImage = BitmapImageBuilder(bitmap).build()
                         try {
                             val result = detector.detectForVideo(mpImage, timestampMs)
-                            if (result.leftHandLandmarks().isNotEmpty() || result.rightHandLandmarks().isNotEmpty()) handFrames++
-                            if (result.faceLandmarks().isNotEmpty()) faceFrames++
-                            if (result.poseLandmarks().isNotEmpty()) poseFrames++
-                            var left: FloatArray? = null
-                            var right: FloatArray? = null
-                            try {
-                                left = trackingHand(result.leftHandLandmarks())
-                                right = trackingHand(result.rightHandLandmarks())
-                                // Native/offline Kotlin adaptation. Association never rewrites
-                                // the anatomical slots or the classifier's landmark features.
-                                val tracked = handTracker.update(left, right, timestampMs.toDouble(),
-                                    bitmap.width, bitmap.height)
-                                measuredHands += tracked.size
-                                confirmedHands += tracked.count { it.trackerId != null }
-                                continuousHands += tracked.count { it.continuous }
-                            } finally {
-                                left?.fill(0f)
-                                right?.fill(0f)
-                            }
-                            appendFeatures(features, result)
+                            val face = result.faceLandmarks()
+                            val leftHand = result.leftHandLandmarks()
+                            val pose = result.poseLandmarks()
+                            val rightHand = result.rightHandLandmarks()
+                            val tracked = consumeFrame(features, handTracker, timestampMs, bitmap.width, bitmap.height,
+                                face, leftHand, pose, rightHand)
+                            if (leftHand.isNotEmpty() || rightHand.isNotEmpty()) handFrames++
+                            if (face.isNotEmpty()) faceFrames++
+                            if (pose.isNotEmpty()) poseFrames++
+                            measuredHands += tracked.measuredHands
+                            confirmedHands += tracked.confirmedHands
+                            continuousHands += tracked.continuousHands
+                            if (!tracked.associationAvailable) degradedAssociationFrames++
                             frameSeen++
                         } finally {
                             mpImage.close()
@@ -278,6 +325,7 @@ class PhoneRecognitionProbeTest {
                     .put("measured_hands", measuredHands)
                     .put("confirmed_hands", confirmedHands)
                     .put("continuous_hands", continuousHands)
+                    .put("degraded_association_frames", degradedAssociationFrames)
                     .put("generation_resets", handTracker.generation)
                     .put("classifier_features_unchanged", true))
             if (handFrames == 0) {
@@ -315,6 +363,31 @@ class PhoneRecognitionProbeTest {
         }
     }
 
+    private fun consumeFrame(
+        features: ByteBuffer,
+        handTracker: RoboflowHandTracker,
+        timestampMs: Long,
+        width: Int,
+        height: Int,
+        face: List<NormalizedLandmark>,
+        leftHand: List<NormalizedLandmark>,
+        pose: List<NormalizedLandmark>,
+        rightHand: List<NormalizedLandmark>,
+    ): RoboflowHandTracker.Diagnostics {
+        var left: FloatArray? = null
+        var right: FloatArray? = null
+        val tracked = try {
+            left = trackingHand(leftHand)
+            right = trackingHand(rightHand)
+            handTracker.updateDiagnostics(left, right, timestampMs.toDouble(), width, height)
+        } finally {
+            left?.fill(0f)
+            right?.fill(0f)
+        }
+        appendFeatures(features, face, leftHand, pose, rightHand)
+        return tracked
+    }
+
     private fun trackingHand(points: List<NormalizedLandmark>): FloatArray? {
         if (points.isEmpty()) return null
         require(points.size == 21) { "Tracking requires exactly 21 hand landmarks" }
@@ -324,11 +397,17 @@ class PhoneRecognitionProbeTest {
         }
     }
 
-    private fun appendFeatures(buffer: ByteBuffer, result: HolisticLandmarkerResult) {
-        appendLandmarks(buffer, result.faceLandmarks(), 468)
-        appendLandmarks(buffer, result.leftHandLandmarks(), 21)
-        appendLandmarks(buffer, result.poseLandmarks(), 33)
-        appendLandmarks(buffer, result.rightHandLandmarks(), 21)
+    private fun appendFeatures(
+        buffer: ByteBuffer,
+        face: List<NormalizedLandmark>,
+        leftHand: List<NormalizedLandmark>,
+        pose: List<NormalizedLandmark>,
+        rightHand: List<NormalizedLandmark>,
+    ) {
+        appendLandmarks(buffer, face, 468)
+        appendLandmarks(buffer, leftHand, 21)
+        appendLandmarks(buffer, pose, 33)
+        appendLandmarks(buffer, rightHand, 21)
     }
 
     private fun appendLandmarks(buffer: ByteBuffer, points: List<NormalizedLandmark>, count: Int) {
