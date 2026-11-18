@@ -7,12 +7,14 @@ const tracker = source('src/main/java/com/xmilo_at_your_side/sign_to_speak/Robof
 
 test('native recorded-video path consumes local tracking with per-clip cleanup', () => {
   assert.match(probe, /val handTracker = RoboflowHandTracker\(\)/);
-  assert.match(probe, /handTracker\.update\(left, right, timestampMs\.toDouble\(\),/);
+  assert.match(probe, /val face = result\.faceLandmarks\(\)\s+val leftHand = result\.leftHandLandmarks\(\)\s+val pose = result\.poseLandmarks\(\)\s+val rightHand = result\.rightHandLandmarks\(\)\s+val tracked = consumeFrame\(features, handTracker, timestampMs, bitmap\.width, bitmap\.height,\s+face, leftHand, pose, rightHand\)/);
+  assert.match(probe, /handTracker\.updateDiagnostics\(left, right, timestampMs\.toDouble\(\), width, height\)/);
   assert.match(probe, /handTracker\.close\(\)/);
-  assert.match(probe, /var left: FloatArray\? = null\s+var right: FloatArray\? = null\s+try \{\s+left = trackingHand\(result\.leftHandLandmarks\(\)\)\s+right = trackingHand\(result\.rightHandLandmarks\(\)\)/);
+  assert.match(probe, /var left: FloatArray\? = null\s+var right: FloatArray\? = null\s+val tracked = try \{\s+left = trackingHand\(leftHand\)\s+right = trackingHand\(rightHand\)/);
   assert.match(probe, /left\?\.fill\(0f\)/);
   assert.match(probe, /right\?\.fill\(0f\)/);
-  assert.match(probe, /appendFeatures\(features, result\)/);
+  assert.match(probe, /appendFeatures\(features, face, leftHand, pose, rightHand\)/);
+  assert.match(probe, /appendLandmarks\(buffer, face, 468\)\s+appendLandmarks\(buffer, leftHand, 21\)\s+appendLandmarks\(buffer, pose, 33\)\s+appendLandmarks\(buffer, rightHand, 21\)/);
   assert.match(probe, /classifier_features_unchanged/);
   assert.doesNotMatch(probe, /put\("(?:tracking_landmarks|tracking_boxes|tracker_ids)"/);
 });

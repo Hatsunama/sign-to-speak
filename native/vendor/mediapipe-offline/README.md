@@ -86,15 +86,35 @@ or sent to JavaScript. Optional face blendshapes and segmentation are disabled.
 
 Every app variant registers the same `:app:stageHolisticAssets` output through
 AGP's `variant.sources.assets.addGeneratedSourceDirectory` producer API. This
-prevents an untracked source-directory or merge-order omission. It runs the
-bounded Python preparer, validates the exact source core/POM, model and every
-notice, then stages only the model and `holistic-licenses/` notice inventory.
-Repeated builds reuse only a valid hash-checked staged model. Corrupt existing
-models fail rather than silently fetching a replacement. Missing models can
-be fetched on the build host from the one HTTPS URL, with redirects refused,
+prevents an untracked source-directory or merge-order omission. Gradle declares
+both the preparer and its shared `native/scripts/asset_output.py` helper as task
+inputs and forces the task to run even when the output is present. The preparer
+validates the exact source core/POM, model and every notice, then stages only the
+model and `holistic-licenses/` notice inventory.
+
+The shared publication helper also serves Pocket TTS asset preparation. It
+rejects unmanaged output entries, symlinks and Windows junctions or other
+reparse-point paths, including ancestors. The Holistic preparer rejects an
+explicit model file or vendor build inputs inside the output directory. On the
+implicit model path, it verifies any staged model before reuse. A corrupt
+implicit model fails the build. An absent implicit model can be fetched during
+build preparation from the one pinned HTTPS URL, with redirects refused,
 size/read bounds and final cryptographic verification.
 
-An offline or pre-provisioned build can use:
+The publisher stages verified files beside the output directory and uses
+same-filesystem renames. A short-lived directory lock prevents a second
+cooperating publisher from entering this step. If an exception or keyboard
+interrupt occurs after moving the old tree and before publishing the new tree,
+the publisher attempts to restore the old tree. If that restore fails, the
+error identifies the preserved backup. A hard kill can leave the sibling
+`.holistic-assets.publish-lock` and a `.holistic-assets-backup-*/previous` tree.
+Confirm that no publisher is active and inspect the output, any preserved
+backup, and the reported error before moving an orphaned lock aside. Keep the
+backup until a retry has verified and published a complete output tree.
+
+Generated output under `app/build/` may disappear on a clean build. For a
+durable offline build input, keep a verified model at an external path and pass
+it explicitly from `native/android` with cached Gradle dependencies.
 
 ```sh
 ./gradlew --offline -PholisticModelFile=/absolute/path/holistic_landmarker.task \

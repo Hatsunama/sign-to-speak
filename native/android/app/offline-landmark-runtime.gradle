@@ -81,6 +81,7 @@ def stageHolisticAssets = tasks.register("stageHolisticAssets", StageHolisticAss
     group = "build setup"
     description = "Stage the pinned official Holistic model and complete notices for the offline app."
     preparer.fileValue(file("../../scripts/prepare-holistic-assets.py"))
+    inputs.file(file("../../scripts/asset_output.py"))
     admission.fileValue(admissionFile)
     notices.from(admissionReceipt.notices.collect { file("../../vendor/mediapipe-offline/${it.source}") })
     def provided = providers.gradleProperty("holisticModelFile")

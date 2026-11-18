@@ -12,6 +12,7 @@ internal data class HandTrackingSummary(
     val measuredHands: Int = 0,
     val confirmedHands: Int = 0,
     val continuousHands: Int = 0,
+    val associationAvailable: Boolean = status == "tracking_active",
 )
 
 internal class DetectedHands(val left: FloatArray?, val right: FloatArray?) : AutoCloseable {
@@ -79,10 +80,10 @@ internal class LiveHandTrackingAnalyzer(
             pixels = null
             hands = requireNotNull(detector).detect(bitmap, stamp.milliseconds)
             if (!active.get()) return
-            val result = tracker.update(hands.left, hands.right, stamp.milliseconds.toDouble(),
+            val result = tracker.updateDiagnostics(hands.left, hands.right, stamp.milliseconds.toDouble(),
                 copied.width, copied.height, tracker.generation)
-            if (active.get()) publish(HandTrackingSummary("tracking_active", result.size,
-                result.count { it.trackerId != null }, result.count { it.continuous }))
+            if (active.get()) publish(HandTrackingSummary("tracking_active", result.measuredHands,
+                result.confirmedHands, result.continuousHands, result.associationAvailable))
         } catch (_: HandTrackingCleanupException) {
             fault()
         } catch (_: Exception) {

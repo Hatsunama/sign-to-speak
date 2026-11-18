@@ -81,6 +81,62 @@ private fun contractChecks() {
     rejects { tracker.update(copy, null, 100.0, 640, 480) }
     rejects { tracker.reset() }
 
+    RoboflowHandTracker().use { diagnostic ->
+        val tiny = FloatArray(63) { index -> copy[index] * .001f }
+        val absent = FloatArray(63) { Float.NaN }
+        val first = diagnostic.updateDiagnostics(null, copy, 0.0, 640, 480)
+        check(first.associationAvailable && first.measuredHands == 1)
+        for (bad in invalid.filterNot { it.all { coordinate -> coordinate == 0f } }) {
+            rejects { diagnostic.updateDiagnostics(tiny, bad, 33.0, 640, 480) }
+        }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, Double.NaN, 640, 480) }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 0.0, 640, 480) }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 33.0, 0, 480) }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 33.0, 1280, 480) }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 33.0, 640, 480, -1L) }
+        rejects { diagnostic.update(tiny, absent, 33.0, 640, 480) }
+        check(diagnostic.generation == 0L)
+        val confirmedByDiagnostics = diagnostic.updateDiagnostics(null, copy, 33.0, 640, 480)
+        check(confirmedByDiagnostics.associationAvailable && confirmedByDiagnostics.confirmedHands == 1)
+        val degraded = diagnostic.updateDiagnostics(tiny, absent, 400.0, 640, 480)
+        check(!degraded.associationAvailable && degraded.measuredHands == 1)
+        check(degraded.confirmedHands == 0 && degraded.continuousHands == 0)
+        check(diagnostic.generation == 1L) {
+            "Degenerate measurement must reset association once, even across a time gap"
+        }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 400.0, 640, 480) }
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 433.0, 1280, 480) }
+        val restarted = diagnostic.updateDiagnostics(null, copy, 433.0, 640, 480)
+        check(restarted.associationAvailable && restarted.confirmedHands == 0)
+        check(diagnostic.generation == 1L)
+        diagnostic.close()
+        rejects { diagnostic.updateDiagnostics(tiny, absent, 466.0, 640, 480) }
+    }
+
+    RoboflowHandTracker().use { diagnostic ->
+        var timestamp = 0.0
+        fun location(index: Int): FloatArray = hand(-3.7f + (index % 16) * .2f,
+            -3.7f + (index / 16) * .2f)
+        repeat(32) { pair ->
+            repeat(2) {
+                val result = diagnostic.updateDiagnostics(location(pair * 2), location(pair * 2 + 1),
+                    timestamp++, 640, 480)
+                check(result.associationAvailable && result.measuredHands == 2)
+            }
+        }
+        val overflowAt = timestamp++
+        val overflowed = diagnostic.updateDiagnostics(location(64), location(65), overflowAt, 640, 480)
+        check(!overflowed.associationAvailable && overflowed.measuredHands == 2)
+        check(overflowed.confirmedHands == 0 && overflowed.continuousHands == 0)
+        check(diagnostic.generation == 1L) { "Computation failure must reset association once" }
+        rejects { diagnostic.updateDiagnostics(copy, null, overflowAt, 640, 480) }
+        val restarted = diagnostic.updateDiagnostics(copy, null, timestamp++, 640, 480)
+        check(restarted.associationAvailable && restarted.confirmedHands == 0)
+        val recovered = diagnostic.updateDiagnostics(copy, null, timestamp, 640, 480)
+        check(recovered.associationAvailable && recovered.confirmedHands == 1)
+        check(diagnostic.generation == 1L)
+    }
+
     // Confirm disjoint short-lived hypotheses faster than their 500ms expiry.
     // Exceeding the documented bound must reset rather than silently evict IDs.
     val bounded = RoboflowHandTracker()

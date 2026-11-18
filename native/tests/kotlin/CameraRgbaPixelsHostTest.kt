@@ -34,6 +34,22 @@ fun main() {
     check(runCatching { CameraRgbaPixels.copy(source, 15, 4, geometry) }.isFailure)
     check(runCatching { CameraRgbaPixels.copy(source, 20, 3, geometry) }.isFailure)
     check(runCatching { CameraRgbaPixels.copy(ByteBuffer.allocate(8), 20, 4, geometry) }.isFailure)
+    val smallCrop = CameraRgbaPixels.Geometry(2, 2, 0, 0, 1, 1, 0)
+    val invalidCrops = listOf(
+        smallCrop.copy(left = Int.MAX_VALUE),
+        smallCrop.copy(top = Int.MAX_VALUE),
+        smallCrop.copy(left = 2),
+        smallCrop.copy(top = 2),
+        smallCrop.copy(left = 1),
+        smallCrop.copy(top = 1),
+    )
+    val smallPlane = ByteBuffer.allocate(16)
+    val invalidCropsNotRejected = invalidCrops.filterNot {
+        runCatching { CameraRgbaPixels.copy(smallPlane, 8, 4, it).close() }
+            .exceptionOrNull() is IllegalArgumentException
+    }
+    check(invalidCropsNotRejected.isEmpty()) { "Expected invalid crop rejection: $invalidCropsNotRejected" }
+
     val timeline = HandTrackingTimeline()
     check(timeline.next(1_000_000_000, geometry) == HandTrackingTimeline.Stamp(0, true))
     check(timeline.next(1_000_000_000, geometry) == null)

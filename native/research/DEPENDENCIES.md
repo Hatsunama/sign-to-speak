@@ -33,23 +33,28 @@ python3.12 -m venv /tmp/sign-trackers
   -s native/research -p 'test_*.py' -v
 ```
 
-The separate `sign-roboflow-trackers.yml` workflow runs these checks on the
-reviewed same-repository integration PR branch or manual dispatch. It also compiles the native Kotlin
-adaptation against synthetic reference cases and compiles Android source, but
-does not package/install APKs, contact devices, fetch models or upload artifacts. Updating a pin
-requires regenerating the selected wheel hashes and rerunning the real-library
-tests and `pip check` in a fresh environment.
+The [live tracking workflow](../../.github/workflows/sign-roboflow-trackers.yml)
+runs these checks and Kotlin reference parity for eligible same-repository PRs
+from the integration branch or on manual dispatch. It also runs host and Android
+unit checks, prepares pinned models on the build host, builds and audits the
+unsigned ARM64 QA app and instrumentation APKs, and compiles x86_64 emulator
+instrumentation without executing it. The workflow retains bounded build and test
+evidence for three days. Uploading the unsigned QA pair requires overall success.
+The workflow uses no devices and performs no signing or installation.
+
+Updating a Python pin requires regenerating the selected wheel hashes and
+rerunning the real-library tests and `pip check` in a fresh environment.
 
 ## Source and license scope
 
 - [Roboflow Trackers 2.7.0 on PyPI](https://pypi.org/project/trackers/2.7.0/)
   is Apache-2.0. Its [source repository](https://github.com/roboflow/trackers)
   was inspected at commit
-  `3d1532372b46bae1e31a7f4aa3d7350482dadfb6`. The installed wheel, not an
-  editable checkout, supplies the implementation used by this integration.
-- The upstream package implements box tracking; it is not a hand-landmark
-  detector, sign recognizer or translator. No upstream tracker source is copied
-  into this repository.
+  `3d1532372b46bae1e31a7f4aa3d7350482dadfb6`. The installed wheel supplies the
+  host reference implementation.
+- The upstream package implements box tracking. The Android app uses an
+  attributed Kotlin adaptation of its SORT tracker with the upstream Apache-2.0
+  license and modification notice. The Python package remains host-only.
 - Transitive dependencies retain their own licenses and bundled notices. Apache
   licensing of Trackers does not cover the whole Python stack, multimedia codecs,
   models, datasets or private recordings. Preserve each wheel's license files

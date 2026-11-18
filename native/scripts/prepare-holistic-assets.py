@@ -15,6 +15,8 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 
+from asset_output import managed_files, no_links, publish_directory
+
 NATIVE = Path(__file__).resolve().parents[1]
 VENDOR = NATIVE / 'vendor/mediapipe-offline'
 RECEIPT = VENDOR / 'runtime-admission.json'
@@ -24,6 +26,7 @@ MODEL_SIZE = 13683609
 MODEL_SHA256 = 'e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8'
 MODEL_ASSET = 'holistic/holistic_landmarker.task'
 NOTICE_PREFIX = 'holistic-licenses/'
+RECEIPT_ASSET = Path(NOTICE_PREFIX) / 'MODEL-RECEIPT.json'
 NOTICE_NAMES = frozenset({'mediapipe-tasks-1.1.1-NOTICE', 'Apache-2.0-LICENSE',
                           'protobuf-v26.1-LICENSE', 'flogger-0.6-LICENSE', 'ATTRIBUTION.txt',
                           'checker-framework-2.5.3-LICENSE.txt'})
@@ -76,13 +79,6 @@ def verify_offline_core():
         raise ValueError('Offline core dependency inventory changed')
 
 
-def no_links(path):
-    path = Path(path).absolute()
-    if any(p.is_symlink() for p in (path, *path.parents)):
-        raise ValueError(f'Linked path is not admitted: {path}')
-    return path.resolve()
-
-
 def file_digest(path):
     value = hashlib.sha256()
     with path.open('rb') as stream:
@@ -91,14 +87,18 @@ def file_digest(path):
     return value.hexdigest()
 
 
-def receipt():
-    raw = no_links(RECEIPT).read_bytes()
-    data = json.loads(raw)
+def verify_receipt_pins(data):
     model = data['model']
     if (data['schema'] != 1 or model['url'] != MODEL_URL or
             model['asset'] != MODEL_ASSET or model['size'] != MODEL_SIZE or
             model['sha256'] != MODEL_SHA256 or model['license'] != 'Apache-2.0'):
         raise ValueError('Changed Holistic model admission pins')
+
+
+def receipt():
+    raw = no_links(RECEIPT).read_bytes()
+    data = json.loads(raw)
+    verify_receipt_pins(data)
     return raw, data
 
 
@@ -142,13 +142,17 @@ def download(destination):
             output.write(block)
 
 
-def notice_sources(data):
+def notice_rows(data):
     rows = data['notices']
     if (len(rows) != len(NOTICE_NAMES) or
             {row['asset'] for row in rows} != {NOTICE_PREFIX + n for n in NOTICE_NAMES}):
         raise ValueError('Changed Holistic notice inventory')
+    return rows
+
+
+def notice_sources(data):
     result = {}
-    for row in rows:
+    for row in notice_rows(data):
         source = no_links(VENDOR / row['source'])
         if (not source.is_relative_to(VENDOR.absolute()) or not source.is_file() or
                 source.stat().st_size != row['size'] or file_digest(source) != row['sha256']):
@@ -157,22 +161,46 @@ def notice_sources(data):
     return result
 
 
+def check_existing_output(output):
+    model_asset = Path(MODEL_ASSET)
+    notice_assets = {Path(NOTICE_PREFIX) / name for name in NOTICE_NAMES}
+    present = managed_files(output, {model_asset, RECEIPT_ASSET, *notice_assets})
+    if not present - {model_asset}:
+        return present
+    if RECEIPT_ASSET not in present:
+        raise ValueError('Existing Holistic notices lack their generated receipt')
+    previous = json.loads((output / RECEIPT_ASSET).read_bytes())
+    verify_receipt_pins(previous)
+    for row in notice_rows(previous):
+        asset = Path(row['asset'])
+        if asset in present:
+            path = output / asset
+            if path.stat().st_size != row['size'] or file_digest(path) != row['sha256']:
+                raise ValueError(f'Unmanaged Holistic notice contents: {asset}')
+    return present
+
+
 def prepare(output, model_file=None, allow_download=True):
     output = no_links(output)
-    if output.exists() and not output.is_dir():
-        raise ValueError('Holistic output must be a directory')
+    source = no_links(model_file) if model_file is not None else output / MODEL_ASSET
+    if model_file is not None and source.is_relative_to(output):
+        raise ValueError('Explicit Holistic model and output must not overlap')
+    existing = check_existing_output(output)
     raw, data = receipt()
     verify_offline_core()
     notices = notice_sources(data)
-    output.parent.mkdir(parents=True, exist_ok=True)
+    if any(path.is_relative_to(output) for path in (*notices.values(), no_links(RECEIPT), CORE_BASE)):
+        raise ValueError('Holistic build inputs and output must not overlap')
     # A previously staged exact model can be reused without a network request.
-    source = Path(model_file) if model_file is not None else output / MODEL_ASSET
-    if source.exists() or source.is_symlink():
+    if source.exists():
         verify_model(source, data['model'])
     elif model_file is not None or not allow_download:
         raise ValueError('Pinned Holistic model missing; provide --model-file for an offline build')
     else:
         source = None
+    if model_file is not None and existing == {Path(MODEL_ASSET)}:
+        verify_model(output / MODEL_ASSET, data['model'])
+    output.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='.holistic-stage-', dir=output.parent) as temporary:
         staged = Path(temporary)
         model = staged / MODEL_ASSET
@@ -186,13 +214,8 @@ def prepare(output, model_file=None, allow_download=True):
             target = staged / asset
             target.parent.mkdir(exist_ok=True)
             shutil.copyfile(original, target)
-        (staged / NOTICE_PREFIX / 'MODEL-RECEIPT.json').write_bytes(raw)
-        # Only replace this dedicated generated asset tree, after every check.
-        if output.exists():
-            for item in output.rglob('*'):
-                no_links(item)
-            shutil.rmtree(output)
-        shutil.copytree(staged, output)
+        (staged / RECEIPT_ASSET).write_bytes(raw)
+        publish_directory(staged, output, lambda: check_existing_output(output))
     return data
 
 

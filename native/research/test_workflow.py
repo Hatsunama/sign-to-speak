@@ -6,6 +6,38 @@ import unittest
 import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[2] / '.github/workflows/sign-roboflow-trackers.yml'
+UPLOAD_ARTIFACT = 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02'
+EVIDENCE_UPLOAD = {
+    'name': 'Retain bounded source and test evidence only',
+    'if': 'always()',
+    'uses': UPLOAD_ARTIFACT,
+    'with': {
+        'name': 'sign-live-tracking-evidence-${{ env.TESTED_SHA }}-${{ github.run_attempt }}',
+        'retention-days': '3',
+        'if-no-files-found': 'warn',
+        'path': (
+            'native/android/app/build/test-results/\n'
+            'native/android/app/build/reports/offline-landmark/\n'
+            'native/android/app/build/outputs/logs/manifest-merger-*-report.txt\n'
+            '${{ runner.temp }}/sign-evidence/\n'
+        ),
+    },
+}
+QA_APK_PATHS = (
+    'native/android/app/build/outputs/apk/qa/*.apk\n'
+    'native/android/app/build/outputs/apk/androidTest/qa/*.apk\n'
+)
+QA_UPLOAD = {
+    'name': 'Retain audited unsigned ARM64 QA app and instrumentation APKs',
+    'if': 'success()',
+    'uses': UPLOAD_ARTIFACT,
+    'with': {
+        'name': 'sign-live-tracking-arm64-qa-${{ env.TESTED_SHA }}-${{ github.run_attempt }}',
+        'retention-days': '3',
+        'if-no-files-found': 'error',
+        'path': QA_APK_PATHS,
+    },
+}
 
 
 def validate(raw):
@@ -52,17 +84,39 @@ def validate(raw):
     assert not re.search(r'assemble(?:Debug|Release)|bundleRelease|connectedAndroidTest|--licenses|keytool', native_commands)
     assert 'npm test' in native_commands and 'npm run typecheck' in native_commands
     assert 'scripts/*.test.py' in native_commands and 'scripts/*.test.mjs' in native_commands
-    uploads = [step for step in native['steps'] if step.get('uses', '').startswith('actions/upload-artifact@')]
-    assert len(uploads) == 1 and uploads[0]['with']['retention-days'] == '3'
-    assert '.apk' not in uploads[0]['with']['path']
-    for step in native['steps']:
-        if 'uses' in step:
-            assert re.fullmatch(r'[\w-]+/[\w-]+@[a-f0-9]{40}', step['uses'])
+    assert [step['uses'] for step in native['steps'] if 'uses' in step] == [
+        'actions/checkout@11d5960a326750d5838078e36cf38b85af677262',
+        'actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020',
+        UPLOAD_ARTIFACT,
+        UPLOAD_ARTIFACT,
+    ]
+    assert native['steps'][-2:] == [EVIDENCE_UPLOAD, QA_UPLOAD]
 
 
 class WorkflowTests(unittest.TestCase):
+    def test_exports_bounded_qa_pair_after_success(self):
+        doc = yaml.load(WORKFLOW.read_text(), Loader=yaml.BaseLoader)
+        steps = doc['jobs']['native_compile']['steps']
+        self.assertEqual(
+            [step for step in steps if step.get('name') == QA_UPLOAD['name']],
+            [QA_UPLOAD],
+            'Expected a dedicated success-gated upload of the audited QA app and test APKs.',
+        )
+
     def test_current_policy(self):
         validate(WORKFLOW.read_text())
+
+    def test_rejects_unbounded_or_ungated_artifact_uploads(self):
+        raw = WORKFLOW.read_text()
+        for old, new in [
+            ('if: success()', 'if: always()'),
+            ('apk/qa/*.apk', 'apk/**/*.apk'),
+            ('apk/androidTest/qa/*.apk', 'apk/androidTest/*/*.apk'),
+            ('if-no-files-found: error', 'if-no-files-found: warn'),
+            ('native/android/app/build/test-results/', 'native/android/app/build/'),
+        ]:
+            with self.subTest(change=old), self.assertRaises(AssertionError):
+                validate(raw.replace(old, new))
 
     def test_rejects_original_runner_context_failure(self):
         broken = WORKFLOW.read_text().replace("      CI: 'true'", "      CI: 'true'\n      MPLCONFIGDIR: ${{ runner.temp }}/matplotlib")
