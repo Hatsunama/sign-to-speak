@@ -477,11 +477,11 @@ public final class PhonePreviewIntegrationTest {
         return null;
     }
 
-    private UiObject2 findActionButton(String label) throws Exception {
-        return findActionButton(label, false);
+    private void findActionButton(String label) throws Exception {
+        findActionButton(label, false);
     }
 
-    private UiObject2 findActionButton(String label, boolean tapping) throws Exception {
+    private void findActionButton(String label, boolean tapping) throws Exception {
         ButtonSettleDeadline deadline = new ButtonSettleDeadline(SystemClock.elapsedRealtime());
         int lastScrollY = Integer.MIN_VALUE;
         Rect lastFull = null;
@@ -508,18 +508,17 @@ public final class PhonePreviewIntegrationTest {
             Rect visible = button == null ? null : button.getVisibleBounds();
             boolean ready = button != null && nativeVisible
                     && fullyVisible(button, visible, viewport, screen, nativeBounds);
+            long now = SystemClock.elapsedRealtime();
             long stableSince = deadline.stableSince();
             last = "nativeVisible=" + nativeVisible + ",UIAready=" + ready
                     + ",clickable=" + (button != null && button.isClickable())
                     + ",enabled=" + (button != null && button.isEnabled())
                     + ",buttonVisible=" + visible + ",buttonFull=" + nativeBounds
                     + ",scrollViewport=" + viewport + ",screen=" + screen
-                    + ",stableForMs=" + (stableSince < 0 ? "waiting" :
-                    SystemClock.elapsedRealtime() - stableSince)
+                    + ",stableForMs=" + (stableSince < 0 ? "waiting" : now - stableSince)
                     + ",lastGesture=" + lastGesture;
             if (ready) {
                 if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
-                long now = SystemClock.elapsedRealtime();
                 boolean geometryChanged = lastScrollY != nativeBounds.scrollY
                         || !nativeBounds.full.equals(lastFull);
                 if (stableSince >= 0 && geometryChanged) movementResets++;
@@ -538,19 +537,23 @@ public final class PhonePreviewIntegrationTest {
                     Rect freshViewport = freshScroll == null ? null : freshScroll.getVisibleBounds();
                     Rect freshScreen = new Rect(0, 0, device.getDisplayWidth(), device.getDisplayHeight());
                     ButtonGeometry latest = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
-                    if (fresh != null && freshViewport != null && latest != null
+                    Rect freshVisible = fresh == null ? null : fresh.getVisibleBounds();
+                    boolean freshReady = fresh != null && freshViewport != null && latest != null
                             && latest.scrollY == lastScrollY && latest.full.equals(lastFull)
-                            && fullyVisible(fresh, fresh.getVisibleBounds(),
-                                    freshViewport, freshScreen, latest)) {
-                        Log.i(QA_LOG, "elapsedRealtime=" + SystemClock.elapsedRealtime()
+                            && fullyVisible(fresh, freshVisible, freshViewport, freshScreen, latest);
+                    long validatedAt = SystemClock.elapsedRealtime();
+                    if (deadline.acceptFreshValidation(validatedAt, freshReady)) {
+                        // Dispatch the physical press immediately after the deadline check.
+                        if (tapping) fresh.click(100L);
+                        Log.i(QA_LOG, "elapsedRealtime=" + validatedAt
                                 + ",phase=settled,label=" + label + ",firstFullyVisible="
                                 + firstFullyVisible + ",final=" + latest
                                 + ",movementResets=" + movementResets);
-                        return fresh;
+                        return;
                     }
-                    deadline.clearStability();
-                    last = "fresh UIA/native/viewport check changed; previous=" + last
-                            + ",freshVisible=" + (fresh == null ? null : fresh.getVisibleBounds())
+                    last = (freshReady ? "fresh validation exceeded settling deadline"
+                            : "fresh UIA/native/viewport check changed") + "; previous=" + last
+                            + ",freshVisible=" + freshVisible
                             + ",freshNative=" + latest + ",freshViewport=" + freshViewport;
                 }
                 SystemClock.sleep(50);
@@ -580,6 +583,7 @@ public final class PhonePreviewIntegrationTest {
             // retaining the slow physical scroll that prevents landscape flings.
             float fraction = Math.max(0.20f, Math.min(0.65f,
                     (distance + Math.min(120, viewport.height() / 5)) / (float) viewport.height()));
+            if (!deadline.canSearch(SystemClock.elapsedRealtime())) break;
             boolean moved = scroll.scroll(direction, fraction, TARGET_SCROLL_SPEED_PX_PER_SEC);
             lastGesture = direction + "(" + fraction + ",moved=" + moved + ",target=" + nativeBounds + ")";
             if (!moved) downward = direction == Direction.UP;
@@ -605,9 +609,7 @@ public final class PhonePreviewIntegrationTest {
     }
 
     private void tapActionButton(String label) throws Exception {
-        UiObject2 button = findActionButton(label, true);
-        // Use a normal physical press after the button settles; avoid a zero-duration tap.
-        button.click(100L);
+        findActionButton(label, true);
         logAction("post-tap", label, 100L);
     }
 
