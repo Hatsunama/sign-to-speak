@@ -79,6 +79,57 @@ class LiveHandTrackingTest {
         run(worker) { }
     }
 
+    @Test fun subpixelHandStillPublishesMeasurementsAndKeepsDetectorActive() = withWorker { worker ->
+        val tinyHand = hand().apply {
+            // In the 2x2 frame, each dimension of this box spans less than one pixel.
+            for (index in indices) this[index] *= .125f
+        }
+        val regularHand = hand()
+        val summaries = mutableListOf<HandTrackingSummary>()
+        val inferenceTimes = mutableListOf<Long>()
+        val bitmaps = mutableListOf<Bitmap>()
+        var creates = 0
+        var closes = 0
+        var faults = 0
+        val analyzer = LiveHandTrackingAnalyzer(worker, {
+            creates++
+            fakeDetector({ closes++ }) { bitmap, timestampMs ->
+                bitmaps.add(bitmap)
+                inferenceTimes.add(timestampMs)
+                DetectedHands(if (timestampMs == 0L) tinyHand else regularHand, null)
+            }
+        }, summaries::add, { faults++ })
+        val firstFrame = frame(0)
+        val secondFrame = frame(33_000_000)
+        try {
+            run(worker) { analyzer.analyze(firstFrame) }
+            run(worker) { analyzer.analyze(secondFrame) }
+
+            assertEquals(
+                "A subpixel hand must preserve measurement and inference on the next frame",
+                listOf("tracking_active" to 1, "tracking_active" to 1),
+                summaries.map { it.status to it.measuredHands },
+            )
+            assertTrue(analyzer.isActive())
+            assertEquals(listOf(0L, 33L), inferenceTimes)
+            assertEquals(1, creates)
+            assertEquals(0, closes)
+            assertTrue(tinyHand.all { it == 0f })
+            assertTrue(regularHand.all { it == 0f })
+            assertTrue(bitmaps.all { it.isRecycled })
+            verify(firstFrame, times(1)).close()
+            verify(secondFrame, times(1)).close()
+        } finally {
+            analyzer.cancel()
+            run(worker) { }
+        }
+
+        assertFalse(analyzer.isActive())
+        assertEquals(1, closes)
+        assertEquals(0, faults)
+        assertFalse(worker.hasCleanupFailure())
+    }
+
     @Test fun realSdkBitmapOwnershipDoesNotLatchCleanupFailure() = withWorker { worker ->
         val faults = AtomicInteger()
         val statuses = mutableListOf<String>()

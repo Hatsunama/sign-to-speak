@@ -1,7 +1,9 @@
 import hashlib
 import importlib.util
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -113,6 +115,60 @@ class PocketAssetPreparation(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_prepare()
         self.assertEqual((self.output / 'pocket-alba/model.safetensors').read_bytes(), first)
+
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows directory junctions')
+    def test_output_junction_ancestor_is_rejected(self):
+        target = self.root / 'junction-target'
+        target.mkdir()
+        link = self.root / 'junction'
+        subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(link), str(target)],
+                       check=True, capture_output=True)
+        self.addCleanup(link.rmdir)
+        self.assertFalse(link.is_symlink(), 'fixture must be a junction')
+        self.assertEqual(link.resolve(), target.resolve())
+
+        self.output = link / 'nested' / 'output'
+        with self.assertRaises(ValueError):
+            try:
+                self.run_prepare()
+            finally:
+                self.assertFalse(any(target.iterdir()), 'preparation wrote through the junction')
+
+    def published_files(self):
+        return {path.relative_to(self.output): prepare.digest(path)
+                for path in self.output.rglob('*') if path.is_file()}
+
+    def test_failed_publication_preserves_verified_output_and_allows_retry(self):
+        self.run_prepare()
+        before = self.published_files()
+        source_notice = self.cargo / 'fixture-0' / 'LICENSE'
+        new_notice = b'Updated MIT license fixture 0\n'
+        source_notice.write_bytes(new_notice)
+        receipt = json.loads(self.receipt.read_text())
+        receipt['packages']['fixture-0@1.0.0|registry+https://example.test/index']['LICENSE'] = (
+            prepare.digest(source_notice))
+        self.receipt.write_text(json.dumps(receipt))
+        notice_asset = Path('pocket-licenses/cargo/fixture-0-1.0.0/LICENSE')
+
+        def fail_final_destination(operation):
+            def perform(source, destination, *args, **kwargs):
+                staged_notice = Path(source) / notice_asset
+                if (Path(destination) == self.output and staged_notice.is_file()
+                        and staged_notice.read_bytes() == new_notice):
+                    raise OSError('injected Pocket publication failure')
+                return operation(source, destination, *args, **kwargs)
+            return perform
+
+        with patch.object(prepare.shutil, 'copytree', side_effect=fail_final_destination(prepare.shutil.copytree)), \
+             patch.object(os, 'rename', side_effect=fail_final_destination(os.rename)), \
+             patch.object(os, 'replace', side_effect=fail_final_destination(os.replace)):
+            with self.assertRaisesRegex(OSError, 'injected Pocket publication failure'):
+                self.run_prepare()
+
+        self.assertEqual(self.published_files(), before, 'publication failure changed the previous output')
+        self.run_prepare()
+        before[notice_asset] = hashlib.sha256(new_notice).hexdigest()
+        self.assertEqual(self.published_files(), before)
 
     def test_collect_receipt_needs_no_models_or_existing_receipt(self):
         self.manifest.unlink()

@@ -3,7 +3,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest import mock
@@ -88,6 +90,96 @@ class PreparationTest(unittest.TestCase):
         self.assertEqual((self.output / 'holistic-licenses/MODEL-RECEIPT.json').read_bytes(), self.receipt.read_bytes())
         self.assertEqual(len([p for p in self.output.rglob('*') if p.is_file()]), 8)
 
+    def published_files(self):
+        return {path.relative_to(self.output): m.file_digest(path)
+                for path in self.output.rglob('*') if path.is_file()}
+
+    def test_arbitrary_existing_directory_keeps_unmanaged_file(self):
+        arbitrary = self.root / 'unrelated-directory'
+        arbitrary.mkdir()
+        sentinel = arbitrary / 'personal-data.txt'
+        sentinel.write_bytes(b'unmanaged fixture')
+        with self.assertRaises(ValueError):
+            try:
+                m.prepare(arbitrary, self.model, allow_download=False)
+            finally:
+                self.assertTrue(sentinel.is_file(), 'preparation deleted the unmanaged file')
+        self.assertEqual(sentinel.read_bytes(), b'unmanaged fixture')
+        self.assertEqual(list(arbitrary.iterdir()), [sentinel])
+
+    def test_unmanaged_file_inside_staged_tree_blocks_replacement(self):
+        m.prepare(self.output, self.model, allow_download=False)
+        sentinel = self.output / m.NOTICE_PREFIX / 'unmanaged.txt'
+        sentinel.write_bytes(b'unmanaged fixture')
+        before = self.published_files()
+        with self.assertRaises(ValueError):
+            try:
+                m.prepare(self.output, allow_download=False)
+            finally:
+                self.assertTrue(sentinel.is_file(), 'preparation deleted the unmanaged file')
+        self.assertEqual(self.published_files(), before)
+
+    def test_explicit_model_beneath_output_is_rejected_and_kept(self):
+        model = self.output / 'inputs' / self.model.name
+        model.parent.mkdir(parents=True)
+        original = self.model.read_bytes()
+        model.write_bytes(original)
+        with self.assertRaises(ValueError):
+            try:
+                m.prepare(self.output, model, allow_download=False)
+            finally:
+                self.assertTrue(model.is_file(), 'preparation deleted the explicit model input')
+        self.assertEqual(model.read_bytes(), original)
+        self.assertFalse((self.output / m.MODEL_ASSET).exists())
+
+    @unittest.skipUnless(os.name == 'nt', 'requires Windows directory junctions')
+    def test_output_junction_and_junction_ancestor_are_rejected(self):
+        for location in ('output', 'ancestor'):
+            with self.subTest(location=location):
+                target = self.root / f'{location}-target'
+                target.mkdir()
+                link = self.root / f'{location}-junction'
+                subprocess.run(['cmd.exe', '/d', '/c', 'mklink', '/J', str(link), str(target)],
+                               check=True, capture_output=True)
+                self.addCleanup(link.rmdir)
+                self.assertFalse(link.is_symlink(), 'fixture must be a junction')
+                self.assertEqual(link.resolve(), target.resolve())
+                output = link if location == 'output' else link / 'nested' / 'output'
+                with self.assertRaises(ValueError):
+                    try:
+                        m.prepare(output, self.model, allow_download=False)
+                    finally:
+                        self.assertTrue(link.is_dir(), 'preparation removed the junction')
+                        self.assertFalse(any(target.iterdir()), 'preparation wrote through the junction')
+
+    def test_failed_publication_preserves_verified_output_and_allows_retry(self):
+        m.prepare(self.output, self.model, allow_download=False)
+        before = self.published_files()
+        # A new receipt encoding is still admitted and must reach publication.
+        receipt = json.dumps(self.data, indent=2).encode()
+        self.receipt.write_bytes(receipt)
+        receipt_asset = Path(m.NOTICE_PREFIX) / 'MODEL-RECEIPT.json'
+
+        def fail_final_destination(operation):
+            def perform(source, destination, *args, **kwargs):
+                staged_receipt = Path(source) / receipt_asset
+                if (Path(destination) == self.output and staged_receipt.is_file()
+                        and staged_receipt.read_bytes() == receipt):
+                    raise OSError('injected Holistic publication failure')
+                return operation(source, destination, *args, **kwargs)
+            return perform
+
+        with mock.patch.object(m.shutil, 'copytree', side_effect=fail_final_destination(m.shutil.copytree)), \
+             mock.patch.object(os, 'rename', side_effect=fail_final_destination(os.rename)), \
+             mock.patch.object(os, 'replace', side_effect=fail_final_destination(os.replace)):
+            with self.assertRaisesRegex(OSError, 'injected Holistic publication failure'):
+                m.prepare(self.output, allow_download=False)
+
+        self.assertEqual(self.published_files(), before, 'publication failure changed the previous output')
+        m.prepare(self.output, allow_download=False)
+        before[receipt_asset] = hashlib.sha256(receipt).hexdigest()
+        self.assertEqual(self.published_files(), before)
+
     def test_missing_model_offline_and_bad_source_fail_closed(self):
         with self.assertRaisesRegex(ValueError, 'model missing'):
             m.prepare(self.output, allow_download=False)
@@ -107,7 +199,12 @@ class PreparationTest(unittest.TestCase):
 
     def test_linked_model_output_and_parent_are_rejected(self):
         model_link = self.root / 'linked.task'
-        model_link.symlink_to(self.model)
+        try:
+            model_link.symlink_to(self.model)
+        except OSError as error:
+            if getattr(error, 'winerror', None) == 1314:
+                self.skipTest('Windows symbolic-link privilege unavailable')
+            raise
         with self.assertRaisesRegex(ValueError, 'Linked'):
             m.prepare(self.output, model_link)
         parent_link = self.root / 'linked-dir'

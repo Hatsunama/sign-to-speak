@@ -30,6 +30,7 @@ import androidx.camera.core.Preview;
 import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.ImageProxy;
 import androidx.camera.core.ImageInfo;
+import androidx.camera.core.impl.ImageOutputConfig;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.hardware.display.DisplayManager;
@@ -711,6 +712,7 @@ public class NativeBackPrivacyTest {
         assertEquals(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST, frames.getBackpressureStrategy());
         assertEquals(ImageAnalysis.OUTPUT_IMAGE_FORMAT_RGBA_8888, frames.getOutputImageFormat());
         verify(provider).bindToLifecycle(activity, CameraSelector.DEFAULT_BACK_CAMERA, owned, frames);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
         LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
         runTracking(() -> analyzer.analyze(trackingFrame(0)));
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
@@ -726,23 +728,104 @@ public class NativeBackPrivacyTest {
         verify(detector).close();
     }
 
-    @Test public void detectorFailureUnbindsOnlyAnalysisAndKeepsPreview() throws Exception {
+    @Test public void detectorFailureRetiresAnalysisAndKeepsAutomaticPreviewRotation() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenThrow(new IllegalStateException("Synthetic inference failure"));
+        replaceWithTrackingView(detector);
+        Shadows.shadowOf(view.getDisplay()).setRotation(Surface.ROTATION_0);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        ImageAnalysis frames = (ImageAnalysis) field("analysis");
+        Preview owned = ownedPreview();
+        assertNotNull(frames);
+        assertNotNull(owned);
+        assertEquals(Surface.ROTATION_0, frames.getTargetRotation());
+        DisplayManager.DisplayListener listener = (DisplayManager.DisplayListener) field("rotationListener");
+        Shadows.shadowOf(view.getDisplay()).setRotation(Surface.ROTATION_90);
+        listener.onDisplayChanged(view.getDisplay().getDisplayId());
+        assertEquals(Surface.ROTATION_90, frames.getTargetRotation());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> analyzer.analyze(trackingFrame(0)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
+        assertFalse(analyzer.isActive());
+        assertNull(field("analysis"));
+        assertNull(field("rotationDisplayManager"));
+        assertSame(owned, ownedPreview());
+        verify(provider).unbind(frames);
+        verify(provider, never()).unbind(owned);
+
+        Shadows.shadowOf(view.getDisplay()).setRotation(Surface.ROTATION_270);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        assertSame(owned, ownedPreview());
+        assertEquals(View.VISIBLE, previewView().getVisibility());
+        // CameraX 1.4.2 forwards the app target to PreviewView's TransformationInfo.
+        // ROTATION_NOT_SPECIFIED lets TextureView follow the display after analysis retires.
+        int appTargetRotation = ((ImageOutputConfig) owned.getCurrentConfig())
+            .getAppTargetRotation(ImageOutputConfig.ROTATION_NOT_SPECIFIED);
+        view.setActive(false);
+        assertStopped();
+        verify(provider).unbind(owned);
+        assertEquals("PreviewView must retain automatic display rotation after analysis retires",
+            ImageOutputConfig.ROTATION_NOT_SPECIFIED, appTargetRotation);
+    }
+
+    @Test public void earlyDetectorFailureRetiresAnalysisBeforeCurrentPreviewStreams() throws Exception {
         LiveHandDetector detector = mock(LiveHandDetector.class);
         when(detector.detect(any(), anyLong())).thenThrow(new IllegalStateException("Synthetic inference failure"));
         replaceWithTrackingView(detector);
         view.setActive(true);
         future.set(provider);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview retired = ownedPreview();
+        assertNotNull(retired);
+        Observer<PreviewView.StreamState> retiredStream = observer(streamStates());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertTrue(statuses.contains("preview_only"));
+        view.setActive(false);
+        verify(provider).unbind(retired);
+
+        statuses.clear();
+        view.setActive(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview current = ownedPreview();
+        assertNotNull(current);
+        assertNotSame(retired, current);
+        assertEquals(PreviewView.StreamState.STREAMING, streamStates().getValue());
+        assertTrue("Cached STREAMING belongs to the retired binding", statuses.isEmpty());
         ImageAnalysis frames = (ImageAnalysis) field("analysis");
-        Preview owned = ownedPreview();
         LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        assertNotNull(frames);
+        assertNotNull(analyzer);
         runTracking(() -> analyzer.analyze(trackingFrame(0)));
         Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
-        assertEquals("tracking_unavailable", statuses.get(statuses.size() - 1));
+        assertFalse(analyzer.isActive());
         assertNull(field("analysis"));
-        assertSame(owned, field("preview"));
+        assertNull(field("rotationDisplayManager"));
         verify(provider).unbind(frames);
-        verify(provider, never()).unbind(owned);
+        verify(provider, never()).unbind(current);
+        assertSame(current, ownedPreview());
+        assertTrue(requested());
+
+        retiredStream.onChanged(PreviewView.StreamState.STREAMING);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertTrue("Detector failure cannot report a live preview before current STREAMING", statuses.isEmpty());
+        streamStates().setValue(PreviewView.StreamState.IDLE);
+        assertTrue(requested());
+        assertTrue(statuses.isEmpty());
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals(List.of("preview_only", "tracking_unavailable"), statuses);
+
+        view.setActive(false);
+        assertStopped();
+        assertFalse(streamStates().hasObservers());
+        verify(provider, times(1)).unbind(frames);
+        verify(provider).unbind(current);
     }
 
     @Test public void displayRotationUpdatesIncludeHalfTurnAndIgnoreOtherDisplays() throws Exception {
@@ -757,7 +840,6 @@ public class NativeBackPrivacyTest {
             Shadows.shadowOf(view.getDisplay()).setRotation(rotation);
             listener.onDisplayChanged(ownDisplay);
             assertEquals(rotation, frames.getTargetRotation());
-            assertEquals(rotation, ownedPreview().getTargetRotation());
         }
         Shadows.shadowOf(view.getDisplay()).setRotation(Surface.ROTATION_0);
         listener.onDisplayChanged(ownDisplay + 123);
@@ -881,6 +963,7 @@ public class NativeBackPrivacyTest {
         view.setActive(true);
         future.set(provider);
         Shadows.shadowOf(Looper.getMainLooper()).idle();
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
         LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
         for (int index = 0; index < 100; index++) {
             final long timestamp = index * 33_000_000L;
