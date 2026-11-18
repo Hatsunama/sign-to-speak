@@ -2,6 +2,7 @@
 
 import argparse
 from collections import Counter
+from dataclasses import dataclass
 import hashlib
 from importlib.metadata import version
 import json
@@ -36,8 +37,39 @@ DEPS = (
 )
 
 
-def visual_conditions():
-    return {"matched": (0, 2, 5, 7), "shuffled": (5, 0, 7, 2), "blank": None}
+@dataclass(frozen=True)
+class InputProfile:
+    name: str
+    root: Path
+    admitted_frames: int
+    matched: tuple[int, ...]
+    shuffled: tuple[int, ...]
+    max_sequence_tokens: int
+    evaluation_role: str
+
+    def __post_init__(self):
+        if (not self.matched or tuple(sorted(set(self.matched))) != self.matched
+                or self.matched[0] < 0 or self.matched[-1] >= self.admitted_frames
+                or sorted(self.shuffled) != list(self.matched)
+                or any(a == b for a, b in zip(self.matched, self.shuffled))):
+            raise ValueError("Visual conditions must contain the same distinct slots in different orders")
+
+
+DENSE_FRAME_COUNT = 32
+SPARSE_ADMISSION_SHA256 = "886be06ad069c3401e53d314d4f69a1fbc7ac025f23662202791c0ec62a16101"
+SPARSE = InputProfile(
+    "sparse", PILOT, 8, (0, 2, 5, 7), (5, 0, 7, 2), MAX_SEQUENCE_TOKENS, "holdout",
+)
+DENSE = InputProfile(
+    "dense", Path("/data/pilot_dense"), DENSE_FRAME_COUNT, tuple(range(DENSE_FRAME_COUNT)),
+    tuple((13 * slot + 7) % DENSE_FRAME_COUNT for slot in range(DENSE_FRAME_COUNT)),
+    6144, "development_controls",
+)
+PROFILES = {profile.name: profile for profile in (SPARSE, DENSE)}
+
+
+def visual_conditions(profile=SPARSE):
+    return {"matched": profile.matched, "shuffled": profile.shuffled, "blank": None}
 
 
 def inference_messages(images):
@@ -58,10 +90,15 @@ def completion_labels(prefix_ids, full_ids, eos_id):
     return [-100] * start + full_ids[start:end + 1] + [-100] * (len(full_ids) - end - 1)
 
 
-def validate_admission(document):
+def validate_admission(document, profile=SPARSE):
     if (document.get("schema_version") != 1
             or document.get("ready") is not True or document.get("status") != "ready"):
         raise ValueError("Admission is not ready")
+    admitted_frames = document.get("frames_per_clip", SPARSE.admitted_frames)
+    if admitted_frames != profile.admitted_frames:
+        raise ValueError(f"Admission must declare {profile.admitted_frames} frames per clip")
+    if profile.name == "dense" and document.get("evaluation_role") != profile.evaluation_role:
+        raise ValueError("Dense evaluation clips must be designated as development controls")
     model = document["model"]
     if (model["id"] != MODEL_ID or model["model_type"] != "qwen3_5"
             or model["pipeline_tag"] != "image-text-to-text"
@@ -92,8 +129,8 @@ def validate_admission(document):
         if not reference.strip() or re.search(r"<\||</?think>", reference):
             raise ValueError("Invalid English reference")
         frames = clip["frames"]
-        if len(frames) != 8:
-            raise ValueError("Each admitted clip must have eight frames")
+        if len(frames) != profile.admitted_frames:
+            raise ValueError(f"Each admitted clip must have {profile.admitted_frames} frames")
         for index, frame in enumerate(frames):
             if frame["path"] != f"frames/{clip_id}/{index:02d}.png":
                 raise ValueError("Frame paths must be relative, unique and chronologically numbered")
@@ -102,6 +139,17 @@ def validate_admission(document):
             if (any(not math.isfinite(value) or value < 0 for value in times)
                     or times != sorted(times)):
                 raise ValueError("Frame timestamps must be nonnegative and chronological")
+        if profile.name == "dense":
+            source_times = [frame["source_pts_seconds"] for frame in frames]
+            if (any(not math.isfinite(value) for value in source_times)
+                    or source_times != sorted(source_times)):
+                raise ValueError("Source presentation timestamps must be finite and chronological")
+            seen_pts = set()
+            for frame, pts in zip(frames, source_times):
+                if (not math.isclose(frame["actual_seconds"], pts - source_times[0], abs_tol=1e-8)
+                        or frame["duplicate"] is not (pts in seen_pts)):
+                    raise ValueError("Inconsistent presentation timestamp or duplicate flag")
+                seen_pts.add(pts)
         seen_ids.add(clip_id)
         seen_bytes.add(digest)
         seen_paths.add(source_path)
@@ -110,6 +158,8 @@ def validate_admission(document):
     counts = {split: len(clips) for split, clips in splits.items()}
     if counts != document["counts"] or not (1 <= counts["train"] <= 16 and 1 <= counts["holdout"] <= 4):
         raise ValueError("Admission split counts are missing, inconsistent or out of bounds")
+    if profile.name == "dense" and counts != {"train": 16, "holdout": 4}:
+        raise ValueError("Dense admission must preserve all 16 training and four development clips")
     return splits["train"], splits["holdout"]
 
 
@@ -120,8 +170,8 @@ def save_json(path, data):
         stream.write("\n")
 
 
-def frame_image(image_module, path):
-    with image_module.open(PILOT / path) as image:
+def frame_image(image_module, path, profile=SPARSE):
+    with image_module.open(profile.root / path) as image:
         if image.format != "PNG" or image.mode != "RGB" or max(image.size) > 384:
             raise ValueError("Admitted frame is not a bounded RGB PNG")
         return image.copy()
@@ -131,27 +181,33 @@ def tensor_digest(tensor):
     return hashlib.sha256(tensor.contiguous().numpy().tobytes()).hexdigest()
 
 
-def tokenize_messages(processor, messages, generation):
+def tokenize_messages(processor, messages, generation, profile=SPARSE):
     encoded = processor.apply_chat_template(
         messages, tokenize=True, return_dict=True, return_tensors="pt",
         add_generation_prompt=generation, enable_thinking=False,
     )
-    if encoded["input_ids"].shape[1] > MAX_SEQUENCE_TOKENS:
-        raise ValueError("Input sequence exceeded the pilot token budget")
+    prompt_tokens = encoded["input_ids"].shape[1]
+    reserved_tokens = MAX_NEW_TOKENS if generation and profile.name == "dense" else 0
+    if prompt_tokens + reserved_tokens > profile.max_sequence_tokens:
+        raise ValueError("Input sequence and reserved generation exceeded the pilot token budget")
     grid = encoded["image_grid_thw"]
-    if grid.shape[0] != len(visual_conditions()["matched"]) or not encoded["pixel_values"].numel():
-        raise ValueError("Processor did not encode four image inputs")
+    expected_images = len(profile.matched)
+    if grid.shape != (expected_images, 3) or not encoded["pixel_values"].numel():
+        raise ValueError(f"Processor did not encode {expected_images} image inputs")
+    if any(tensor.device.type != "cpu" for tensor in encoded.values()):
+        raise ValueError("Processed inputs must remain on CPU until model execution")
     return encoded
 
 
-def training_example(torch, image_module, processor, clip, output):
-    indices = visual_conditions()["matched"]
+def training_example(torch, image_module, processor, clip, output, profile=SPARSE):
+    indices = profile.matched
     frames = [clip["frames"][index] for index in indices]
-    messages = inference_messages([frame_image(image_module, frame["path"]) for frame in frames])
-    prefix = tokenize_messages(processor, messages, generation=True)
+    images = [frame_image(image_module, frame["path"], profile) for frame in frames]
+    messages = inference_messages(images)
+    prefix = tokenize_messages(processor, messages, generation=True, profile=profile)
     full = tokenize_messages(processor, messages + [
         {"role": "assistant", "content": clip["reference"].strip()},
-    ], generation=False)
+    ], generation=False, profile=profile)
     if not torch.equal(prefix["pixel_values"], full["pixel_values"]):
         raise ValueError("Teacher-forcing input changed image tensors")
     labels = completion_labels(
@@ -171,11 +227,11 @@ def training_example(torch, image_module, processor, clip, output):
     return full
 
 
-def condition_inputs(image_module, processor, clip):
-    conditions = visual_conditions()
+def condition_inputs(image_module, processor, clip, profile=SPARSE):
+    conditions = visual_conditions(profile)
     selected = conditions["matched"]
     images_by_index = {
-        index: frame_image(image_module, clip["frames"][index]["path"]) for index in selected
+        index: frame_image(image_module, clip["frames"][index]["path"], profile) for index in selected
     }
     encoded_controls = {}
     for condition, order in conditions.items():
@@ -183,7 +239,7 @@ def condition_inputs(image_module, processor, clip):
             images = [image_module.new("RGB", images_by_index[index].size) for index in selected]
         else:
             images = [images_by_index[index] for index in order]
-        encoded = tokenize_messages(processor, inference_messages(images), generation=True)
+        encoded = tokenize_messages(processor, inference_messages(images), generation=True, profile=profile)
         encoded_controls[condition] = (encoded, {
             "frame_indices": order,
             "frames": [clip["frames"][index] for index in order] if order is not None else [],
@@ -216,18 +272,19 @@ def score(decoded, reference):
     }
 
 
-def evaluate(torch, image_module, processor, model, holdout, output, phase):
+def evaluate(torch, image_module, processor, model, holdout, output, phase, profile=SPARSE):
     model.eval()
-    results = {condition: [] for condition in visual_conditions()}
+    results = {condition: [] for condition in visual_conditions(profile)}
     output_matches = {condition: [] for condition in ("shuffled", "blank")}
     with torch.inference_mode():
         for clip in holdout:
-            controls = condition_inputs(image_module, processor, clip)
+            controls = condition_inputs(image_module, processor, clip, profile)
             predictions = {}
             for condition, (encoded, visual_receipt) in controls.items():
                 prompt_length = encoded["input_ids"].shape[1]
                 generated = model.generate(
-                    **encoded.to("cuda"), max_new_tokens=MAX_NEW_TOKENS, do_sample=False,
+                    **{name: tensor.to("cuda") for name, tensor in encoded.items()},
+                    max_new_tokens=MAX_NEW_TOKENS, do_sample=False,
                     use_cache=True,
                 )
                 tokens = generated[0, prompt_length:].tolist()
@@ -306,19 +363,37 @@ def train(torch, model, examples, output, steps):
         raise RuntimeError("LoRA B matrices did not change from zero initialization")
 
 
-def run(args, output, status):
+def run(args, output, status, profile=SPARSE):
     started = time.monotonic()
     status["stage"] = "admission"
-    admission_bytes = (PILOT / "admission.json").read_bytes()
+    admission_bytes = (profile.root / "admission.json").read_bytes()
     admission = json.loads(admission_bytes)
-    training, holdout = validate_admission(admission)
+    training, holdout = validate_admission(admission, profile)
+    if profile.name == "dense":
+        if admission.get("source_admission_sha256") != SPARSE_ADMISSION_SHA256:
+            raise ValueError("Dense admission does not identify the pinned sparse cohort")
+        sparse_bytes = (SPARSE.root / "admission.json").read_bytes()
+        if hashlib.sha256(sparse_bytes).hexdigest() != SPARSE_ADMISSION_SHA256:
+            raise ValueError("Original sparse admission bytes changed")
+        sparse = json.loads(sparse_bytes)
+        cohort = [{key: value for key, value in clip.items() if key not in {"frames", "immutable_video_url"}}
+                  for clip in admission["clips"]]
+        original_cohort = [{key: value for key, value in clip.items() if key != "frames"}
+                           for clip in sparse["clips"]]
+        if cohort != original_cohort or admission["model"] != sparse["model"] or admission["dataset"] != sparse["dataset"]:
+            raise ValueError("Dense admission changed the sparse cohort, reference text or model/data pins")
     save_json(output / "dataset_receipt.json", {
         "admission_sha256": hashlib.sha256(admission_bytes).hexdigest(),
         "model": admission["model"], "dataset": admission["dataset"], "counts": admission["counts"],
-        "training": [clip["id"] for clip in training], "holdout": [clip["id"] for clip in holdout],
-        "frame_conditions": visual_conditions(), "instruction": INSTRUCTION, "seed": SEED,
+        "training": [clip["id"] for clip in training],
+        profile.evaluation_role: [clip["id"] for clip in holdout],
+        "evaluation_role": profile.evaluation_role, "input_profile": profile.name,
+        "source_admission_sha256": admission.get("source_admission_sha256"),
+        "admitted_frames_per_clip": profile.admitted_frames,
+        "encoded_images_per_clip": len(profile.matched),
+        "frame_conditions": visual_conditions(profile), "instruction": INSTRUCTION, "seed": SEED,
         "batch_size": 1, "gradient_accumulation": GRAD_ACCUMULATION, "optimizer_steps_planned": args.steps,
-        "learning_rate": LEARNING_RATE, "max_sequence_tokens": MAX_SEQUENCE_TOKENS,
+        "learning_rate": LEARNING_RATE, "max_sequence_tokens": profile.max_sequence_tokens,
         "max_target_tokens_including_eos": MAX_TARGET_TOKENS, "max_new_tokens": MAX_NEW_TOKENS,
         "decode": "greedy", "blank": "all-zero RGB, same dimensions as matched frames",
     })
@@ -355,11 +430,11 @@ def run(args, output, status):
 
     status["stage"] = "training_input_validation"
     examples = {
-        clip["id"]: training_example(torch, Image, processor, clip, output)
+        clip["id"]: training_example(torch, Image, processor, clip, output, profile)
         for clip in training
     }
     status["stage"] = "frozen_baseline"
-    baseline = evaluate(torch, Image, processor, model, holdout, output, "baseline")
+    baseline = evaluate(torch, Image, processor, model, holdout, output, "baseline", profile)
     print("Frozen baseline evaluations saved", flush=True)
 
     status["stage"] = "lora_setup"
@@ -386,14 +461,16 @@ def run(args, output, status):
     status["stage"] = "training"
     train(torch, model, examples, output, args.steps)
     status["stage"] = "adapter_evaluation"
-    adapted = evaluate(torch, Image, processor, model, holdout, output, "adapter")
+    adapted = evaluate(torch, Image, processor, model, holdout, output, "adapter", profile)
     status["stage"] = "completion"
     save_json(output / "success.json", {
         "status": "completed_pilot", "optimizer_steps": args.steps,
         "baseline": baseline, "adapter": adapted,
         "elapsed_seconds": round(time.monotonic() - started, 2),
         "peak_gpu_allocated_bytes": torch.cuda.max_memory_allocated(),
-        "scope": "Small held-out pilot, no translation-readiness claim",
+        "input_profile": profile.name, "evaluation_role": profile.evaluation_role,
+        "scope": ("Previously inspected development controls for visual sensitivity"
+                  if profile.name == "dense" else "Small held-out pilot, no translation-readiness claim"),
     })
     print("Adapter evaluations and pilot receipt saved", flush=True)
 
@@ -402,18 +479,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", required=True, help="Unique artifact directory name")
     parser.add_argument("--steps", type=int, default=MAX_OPTIMIZER_STEPS)
+    parser.add_argument("--profile", choices=PROFILES, default=SPARSE.name)
     args = parser.parse_args()
+    profile = PROFILES[args.profile]
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", args.run):
         parser.error("run name must be a lowercase directory name")
     if not 1 <= args.steps <= MAX_OPTIMIZER_STEPS:
         parser.error("steps must be between 1 and 40")
-    if sys.platform != "linux" or not PILOT.is_dir():
+    if sys.platform != "linux" or not profile.root.is_dir():
         parser.error("This script requires the mounted cloud pilot directory")
-    output = PILOT / "train" / args.run
+    output = profile.root / "train" / args.run
     output.mkdir(parents=True, exist_ok=False)
     status = {"stage": "startup"}
     try:
-        run(args, output, status)
+        run(args, output, status, profile)
     except Exception as error:
         details = "".join(traceback.format_exception(error))
         details = re.sub(r"\bhf_[A-Za-z0-9]+\b", "[redacted]", details)

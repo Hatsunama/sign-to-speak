@@ -207,9 +207,11 @@ def select_frame_indices(actual_seconds, requests):
     return selected
 
 
-def decode_frames(video, root, clip_id):
+def decode_frames(video, root, clip_id, *, frame_count=FRAME_COUNT):
     import av
 
+    if frame_count < 2:
+        raise AdmissionError("at least two sample slots are required")
     timestamps = []
     with av.open(str(video), mode="r") as container:
         if len(container.streams.video) != 1:
@@ -229,7 +231,7 @@ def decode_frames(video, root, clip_id):
         duration = max(actual_seconds[-1], reported_duration)
     if not math.isfinite(duration) or not 0 < duration <= 180:
         raise AdmissionError("video duration out of bounds")
-    requests = [duration * number / (FRAME_COUNT - 1) for number in range(FRAME_COUNT)]
+    requests = [duration * number / (frame_count - 1) for number in range(frame_count)]
     indices = select_frame_indices(actual_seconds, requests)
     directory = root / "frames" / clip_id
     directory.mkdir(parents=True, exist_ok=True)
