@@ -318,6 +318,26 @@ def evaluate(torch, image_module, processor, model, holdout, output, phase, prof
     return summary
 
 
+def completion_loss(torch, model, batch):
+    labels = batch["labels"]
+    if (len(labels.shape) != 2 or labels.shape[0] != 1 or labels.shape[1] < 2
+            or labels.shape != batch["input_ids"].shape):
+        raise ValueError("Completion loss requires one sequence with aligned input IDs and labels")
+    if labels[0, 0].item() != -100:
+        raise ValueError("The first token cannot be a completion target")
+
+    # labels[0, 1:][i] is the token predicted by hidden state i.
+    next_tokens = labels[0, 1:]
+    predictors = (next_tokens != -100).nonzero(as_tuple=True)[0]
+    if not predictors.numel():
+        raise ValueError("Completion loss requires at least one supervised token")
+
+    inputs = {name: value for name, value in batch.items() if name != "labels"}
+    # Qwen indexes hidden states with logits_to_keep before applying lm_head.
+    logits = model(**inputs, use_cache=False, logits_to_keep=predictors).logits[0]
+    return torch.nn.functional.cross_entropy(logits.float(), next_tokens[predictors])
+
+
 def train(torch, model, examples, output, steps):
     model.train()
     trainable = [parameter for parameter in model.parameters() if parameter.requires_grad]
@@ -335,7 +355,7 @@ def train(torch, model, examples, output, steps):
             clip_id = order[index]
             # Move tensors independently so the cached CPU BatchFeature remains on CPU.
             batch = {name: value.to("cuda") for name, value in examples[clip_id].items()}
-            loss = model(**batch, use_cache=False).loss
+            loss = completion_loss(torch, model, batch)
             value = loss.detach().item()
             if not math.isfinite(value):
                 raise RuntimeError("Encountered nonfinite training loss")
@@ -456,6 +476,7 @@ def run(args, output, status, profile=SPARSE):
         "rank": 8, "alpha": 16, "dropout": 0.0, "targets": targets,
         "trainable_parameters": sum(size for _, size in trainable),
         "all_parameters": sum(parameter.numel() for parameter in model.parameters()),
+        "loss_implementation": "Mean FP32 causal cross-entropy over target predictor positions",
     })
 
     status["stage"] = "training"
