@@ -978,6 +978,85 @@ public class NativeBackPrivacyTest {
         assertEquals(1, statuses.stream().filter("tracking_active"::equals).count());
     }
 
+    @Test public void successfulPrestreamTrackingWaitsForCurrentPreviewAfterRestart() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenAnswer(invocation -> new DetectedHands(null, null));
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview retired = ownedPreview();
+        assertNotNull(retired);
+        Observer<PreviewView.StreamState> retiredStream = observer(streamStates());
+        LiveHandTrackingAnalyzer retiredAnalyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> retiredAnalyzer.analyze(trackingFrame(0)));
+        view.setActive(false);
+        assertStopped();
+        assertFalse(retiredAnalyzer.isActive());
+        verify(provider).unbind(retired);
+
+        view.setActive(true);
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        Preview current = ownedPreview();
+        assertNotNull(current);
+        assertNotSame(retired, current);
+        assertTrue("Cancel removes the retired binding's pending summary", statuses.isEmpty());
+        LiveHandTrackingAnalyzer currentAnalyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        runTracking(() -> currentAnalyzer.analyze(trackingFrame(0)));
+        runTracking(() -> currentAnalyzer.analyze(trackingFrame(33_000_000L)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        retiredStream.onChanged(PreviewView.StreamState.STREAMING);
+        assertTrue("Successful analysis must wait for the current preview to stream", statuses.isEmpty());
+
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        streamStates().setValue(PreviewView.StreamState.STREAMING);
+        assertEquals(List.of("preview_only", "tracking_active"), statuses);
+        runTracking(() -> currentAnalyzer.analyze(trackingFrame(66_000_000L)));
+        Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+        assertEquals(List.of("preview_only", "tracking_active"), statuses);
+    }
+
+    @Test public void earlyAnalysisUnbindFailureStopsPreviewAndBlocksRestart() throws Exception {
+        LiveHandDetector detector = mock(LiveHandDetector.class);
+        when(detector.detect(any(), anyLong())).thenThrow(new IllegalStateException("Synthetic inference failure"));
+        replaceWithTrackingView(detector);
+        view.setActive(true);
+        future.set(provider);
+        Shadows.shadowOf(Looper.getMainLooper()).idle();
+        Preview owned = ownedPreview();
+        ImageAnalysis frames = (ImageAnalysis) field("analysis");
+        LiveHandTrackingAnalyzer analyzer = (LiveHandTrackingAnalyzer) field("analyzer");
+        Observer<PreviewView.StreamState> retiredStream = observer(streamStates());
+        long token = leaseToken(view);
+        assertNotNull(owned);
+        assertNotNull(frames);
+        assertNotNull(analyzer);
+        assertEquals(PreviewView.StreamState.IDLE, streamStates().getValue());
+        doThrow(new UnsupportedOperationException("Injected analysis cleanup failure")).when(provider).unbind(frames);
+        try {
+            runTracking(() -> analyzer.analyze(trackingFrame(0)));
+            Shadows.shadowOf(Looper.getMainLooper()).idleFor(Duration.ofMillis(300));
+            assertNativeCanceled(view, token);
+            assertFalse(analyzer.isActive());
+            assertNull(field("analysis"));
+            assertNull(field("rotationDisplayManager"));
+            assertFalse(cameraStates.hasObservers());
+            assertFalse(streamStates().hasObservers());
+            verify(provider, times(1)).unbind(frames);
+            verify(provider, times(1)).unbind(owned);
+            assertEquals(1, cleanupFailures());
+            retiredStream.onChanged(PreviewView.StreamState.STREAMING);
+            assertEquals(List.of("camera_cleanup_failed"), statuses);
+
+            view.setActive(true);
+            assertStopped();
+            assertEquals(1, ProviderCompanionShadow.acquisitionCount);
+            assertEquals(List.of("camera_cleanup_failed", "camera_cleanup_failed"), statuses);
+        } finally {
+            doNothing().when(provider).unbind(frames);
+        }
+    }
+
     private void replaceWithTrackingView(LiveHandDetector detector) throws Exception {
         view.dispose();
         root.removeView(view);

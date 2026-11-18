@@ -72,6 +72,8 @@ class PrivateCameraView internal constructor(
     private var pendingTrackingStatus: Pair<Long, HandTrackingSummary>? = null
     private var trackingStatusPosted = false
     private var trackingState = HandTrackingSummary("tracking_starting")
+    // Main-thread state for the current preview lease.
+    private var previewStreaming = false
     private val deliverTrackingStatus = Runnable {
         val next = synchronized(trackingStatusLock) {
             val value = pendingTrackingStatus
@@ -87,7 +89,7 @@ class PrivateCameraView internal constructor(
                 if (next.second.status == "tracking_unavailable" && !retireUnavailableAnalysis()) return@Runnable
                 if (trackingState != next.second) {
                     trackingState = next.second
-                    status(trackingState.status, trackingState)
+                    if (previewStreaming) status(trackingState.status, trackingState)
                 }
             }
         }
@@ -282,15 +284,14 @@ class PrivateCameraView internal constructor(
         states.observe(owner, errors)
         if (!isCurrent(token)) return // observe may synchronously report an existing error.
 
-        var streamed = false
         // LiveData may still cache STREAMING from a retired binding. Require its
         // IDLE transition before accepting a new session's streaming signal.
         var waitingForIdle = hadRetiredStream
         val streams = Observer<PreviewView.StreamState> { state ->
             if (isCurrent(token)) {
                 when (state) {
-                    PreviewView.StreamState.STREAMING -> if (!waitingForIdle && !streamed) {
-                        streamed = true
+                    PreviewView.StreamState.STREAMING -> if (!waitingForIdle && !previewStreaming) {
+                        previewStreaming = true
                         status("preview_only")
                         status(trackingState.status, trackingState)
                     }
@@ -298,7 +299,7 @@ class PrivateCameraView internal constructor(
                         waitingForIdle = false
                         // Initial IDLE is expected. Once frames stop, stop claiming
                         // a live preview; only an explicit user Start can retry.
-                        if (streamed && stop()) status("stopped")
+                        if (previewStreaming && stop()) status("stopped")
                     }
                     else -> Unit
                 }
@@ -311,6 +312,7 @@ class PrivateCameraView internal constructor(
     private fun stop(): Boolean {
         requested = false
         lease.stop()
+        previewStreaming = false
         synchronized(trackingStatusLock) {
             pendingTrackingStatus = null
             mainHandler.removeCallbacks(deliverTrackingStatus)
@@ -408,7 +410,7 @@ class PrivateCameraView internal constructor(
 
     private fun updateTargetRotation() {
         val rotation = display?.rotation ?: return
-        preview?.targetRotation = rotation
+        // Leave PreviewView's display transformation automatic after analysis retires.
         analysis?.targetRotation = rotation
     }
 
