@@ -108,9 +108,15 @@ interrupt occurs after moving the old tree and before publishing the new tree,
 the publisher attempts to restore the old tree. If that restore fails, the
 error identifies the preserved backup. A hard kill can leave the sibling
 `.holistic-assets.publish-lock` and a `.holistic-assets-backup-*/previous` tree.
-Confirm that no publisher is active and inspect the output, any preserved
-backup, and the reported error before moving an orphaned lock aside. Keep the
-backup until a retry has verified and published a complete output tree.
+Confirm that no publisher is active or holds the lock. Inspect the output,
+the reported error, and any preserved `previous` tree before moving an orphaned
+lock aside. Match the previous tree's receipt to `runtime-admission.json` and
+verify its file inventory and the model and notice sizes and SHA-256 hashes
+against those pins. If the output directory is absent, restore it from a copy
+of the verified tree, or rerun the preparer with `--offline` and
+`--model-file <previous>/holistic/holistic_landmarker.task`. For Gradle, pass
+that path with `-PholisticModelFile` and use `--offline`. Keep the original backup
+until the complete published output has been verified.
 
 Generated output under `app/build/` may disappear on a clean build. For a
 durable offline build input, keep a verified model at an external path and pass
