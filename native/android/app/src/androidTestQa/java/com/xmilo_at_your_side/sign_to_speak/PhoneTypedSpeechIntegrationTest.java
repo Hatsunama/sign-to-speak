@@ -76,6 +76,47 @@ public final class PhoneTypedSpeechIntegrationTest {
         if (driver != null) driver.close();
     }
 
+    @Test(timeout = 75000) public void partiallyClippedSpeakButtonIsNotReady() throws Exception {
+        String id = "typed-speech-speak";
+        Rect full = onMain(() -> {
+            View speak = findReactView(activity.getWindow().getDecorView(), id);
+            assertNotNull("Clipping fixture requires the native React Speak button", speak);
+            ViewParent parent = speak.getParent();
+            while (parent instanceof View && !(parent instanceof ScrollView)) parent = parent.getParent();
+            assertTrue("Clipping fixture requires a native enclosing ScrollView", parent instanceof ScrollView);
+            ScrollView scroll = (ScrollView) parent;
+            Rect viewport = new Rect();
+            assertTrue("Clipping fixture requires a visible native viewport", scroll.getLocalVisibleRect(viewport));
+            int[] origin = new int[2];
+            scroll.getLocationOnScreen(origin);
+            int viewportBottom = origin[1] + viewport.bottom;
+            speak.getLocationOnScreen(origin);
+            int height = speak.getHeight();
+            assertTrue("Clipping fixture requires a laid-out Speak button", height > 1 && speak.getWidth() > 0);
+
+            scroll.scrollTo(scroll.getScrollX(), scroll.getScrollY() + origin[1] + height / 2 - viewportBottom);
+            speak.getLocationOnScreen(origin);
+            Rect bounds = new Rect(origin[0], origin[1], origin[0] + speak.getWidth(), origin[1] + height);
+            assertTrue("Clipping fixture must straddle the native viewport bottom",
+                    bounds.top < viewportBottom && bounds.bottom > viewportBottom);
+            return bounds;
+        });
+
+        await("clipping fixture exposes an enabled, clickable UIAutomator fragment", 5000, () -> {
+            UiObject2 node = findNode(id);
+            UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
+            if (node == null || scroll == null || !node.isClickable() || !node.isEnabled()) return false;
+            Rect visible = node.getVisibleBounds();
+            Rect viewport = scroll.getVisibleBounds();
+            if (visible.isEmpty() || visible.height() >= full.height()
+                    || !viewport.contains(visible) || viewport.contains(full)) return false;
+
+            assertFalse("Readiness must reject a partially clipped Speak button",
+                    readyToTap(id, node, scroll));
+            return true;
+        });
+    }
+
     @Test(timeout = 150000) public void typedInputValidatesPlaysCompletesAndBackgroundClearsDraft() throws Exception {
         input(repeat('x', 257));
         tap("typed-speech-speak", "Speak typed text");
@@ -213,14 +254,18 @@ public final class PhoneTypedSpeechIntegrationTest {
         while (SystemClock.elapsedRealtime() < until) {
             UiObject2 node = findNode(id);
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (node != null && node.isClickable() && !node.getVisibleBounds().isEmpty()
-                    && node.getVisibleBounds().top >= 0
-                    && node.getVisibleBounds().bottom <= device.getDisplayHeight()
-                    && (scroll == null || scroll.getVisibleBounds().contains(node.getVisibleBounds()))) return;
+            if (readyToTap(id, node, scroll)) return;
             if (scroll == null) SystemClock.sleep(100);
             else if (!scroll.scroll(down ? Direction.DOWN : Direction.UP, 0.65f)) down = !down;
         }
         throw new AssertionError("Cannot reach actual React control: " + label);
+    }
+
+    private boolean readyToTap(String id, UiObject2 node, UiObject2 scroll) {
+        return node != null && node.isClickable() && !node.getVisibleBounds().isEmpty()
+                && node.getVisibleBounds().top >= 0
+                && node.getVisibleBounds().bottom <= device.getDisplayHeight()
+                && (scroll == null || scroll.getVisibleBounds().contains(node.getVisibleBounds()));
     }
 
     private void awaitStatus(String expected) throws Exception {
