@@ -7,12 +7,18 @@ import android.app.Instrumentation;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.graphics.Rect;
 import android.media.AudioTrack;
 import android.os.Build;
 import android.os.SystemClock;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.WindowManager;
+import android.widget.ScrollView;
 import android.widget.TextView;
+import androidx.core.view.ViewCompat;
+import androidx.core.view.WindowInsetsCompat;
 import androidx.lifecycle.Lifecycle;
 import androidx.test.ext.junit.runners.AndroidJUnit4;
 import androidx.test.platform.app.InstrumentationRegistry;
@@ -218,8 +224,112 @@ public final class PhoneTypedSpeechIntegrationTest {
     }
 
     private void awaitStatus(String expected) throws Exception {
-        await("UI status: " + expected, WAIT_MS,
-                () -> onMain(() -> hasText(activity.getWindow().getDecorView(), expected)));
+        try {
+            await("UI status: " + expected, WAIT_MS,
+                    () -> onMain(() -> hasText(activity.getWindow().getDecorView(), expected)));
+        } catch (AssertionError failure) {
+            // Snapshot after the unchanged wait so diagnostics cannot affect the tap or status polling.
+            String diagnostics;
+            try {
+                diagnostics = onMain(this::nativeStatusDiagnostics);
+            } catch (Exception | AssertionError | LinkageError unavailable) {
+                diagnostics = "native=diagnostic_unavailable";
+            }
+            try {
+                UiObject2 speak = findNode("typed-speech-speak");
+                diagnostics += speak == null ? " uiSpeak=missing" :
+                        " uiSpeakVisibleScreenPx=" + speak.getVisibleBounds().toShortString()
+                                + " uiSpeakClickable=" + speak.isClickable()
+                                + " uiSpeakEnabled=" + speak.isEnabled();
+            } catch (RuntimeException | AssertionError | LinkageError unavailable) {
+                diagnostics += " uiSpeak=diagnostic_unavailable";
+            }
+            throw new AssertionError(failure.getMessage() + " [at failure: " + diagnostics + "]", failure);
+        }
+    }
+
+    private String nativeStatusDiagnostics() {
+        View decor = activity.getWindow().getDecorView();
+        View status = findReactView(decor, "typed-speech-status");
+        View input = findReactView(decor, "typed-speech-input");
+        View speak = findReactView(decor, "typed-speech-speak");
+        WindowInsetsCompat insets = ViewCompat.getRootWindowInsets(decor);
+        String diagnostics = "status=" + statusCode(status)
+                + " resumed=" + activity.getLifecycle().getCurrentState().isAtLeast(Lifecycle.State.RESUMED)
+                + " windowFocused=" + decor.hasWindowFocus()
+                + " capturePrivacyReady=" + ((MainApplication) activity.getApplication()).getCapturePrivacyReady()
+                + " secureWindow=" + ((activity.getWindow().getAttributes().flags
+                        & WindowManager.LayoutParams.FLAG_SECURE) != 0)
+                + " imeVisible=" + (insets == null ? "unknown" : insets.isVisible(WindowInsetsCompat.Type.ime()));
+        if (input instanceof TextView) {
+            CharSequence draft = ((TextView) input).getText();
+            int length = draft.length();
+            diagnostics += " draftLength=" + length + " draftLengthInRange=" + (length >= 1 && length <= 256)
+                    + " draftMatchesOverlengthFixture=" + repeat('x', 257).contentEquals(draft)
+                    + " inputFocused=" + input.hasFocus();
+        } else {
+            diagnostics += " input=missing";
+        }
+        diagnostics += speak == null ? " nativeSpeak=missing" :
+                " nativeSpeak=" + bounds(speak) + " nativeSpeakEnabled=" + speak.isEnabled();
+        View control = speak == null ? input : speak;
+        ViewParent firstParent = control == null ? null : control.getParent();
+        for (ViewParent parent = firstParent; parent instanceof View; parent = parent.getParent()) {
+            if (parent instanceof ScrollView) {
+                ScrollView scroll = (ScrollView) parent;
+                return diagnostics + " scrollViewport=" + bounds(scroll) + " scrollY=" + scroll.getScrollY();
+            }
+        }
+        return diagnostics + " scrollViewport=missing";
+    }
+
+    private static View findReactView(View view, String id) {
+        if (id.equals(view.getTag(com.facebook.react.R.id.react_test_id))) return view;
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                View match = findReactView(group.getChildAt(i), id);
+                if (match != null) return match;
+            }
+        }
+        return null;
+    }
+
+    private static String bounds(View view) {
+        int[] origin = new int[2];
+        view.getLocationOnScreen(origin);
+        Rect full = new Rect(origin[0], origin[1], origin[0] + view.getWidth(), origin[1] + view.getHeight());
+        Rect visible = new Rect();
+        boolean hasVisibleBounds = view.isShown() && view.getLocalVisibleRect(visible);
+        visible.offset(origin[0], origin[1]);
+        return "{fullScreenPx=" + full.toShortString()
+                + " visibleScreenPx=" + (hasVisibleBounds ? visible.toShortString() : "none") + "}";
+    }
+
+    private static String statusCode(View status) {
+        // Only fixed codes can reach the failure message, even if the UI text changes.
+        if (!(status instanceof TextView)) return "missing";
+        switch (((TextView) status).getText().toString()) {
+            case "Type text, review it, then tap Speak typed text.": return "initial";
+            case "Review the text, then tap Speak typed text.": return "review";
+            case "Text changed. Review it and tap Speak typed text again.": return "edited_during_speech";
+            case "Enter text before speaking.": return "empty_input";
+            case "Use 1 to 256 characters. Edit the text and try again.": return "overlength";
+            case "Preparing local speech...": return "preparing";
+            case "Speaking typed text...": return "speaking";
+            case "Typed text spoken.": return "completed";
+            case "Speech stopped.": return "stopped";
+            case "Speech stopped. Type text to speak again.": return "stopped_and_cleared";
+            case "Speech was cancelled.": return "cancelled";
+            case "Typed text cleared.": return "cleared";
+            case "Speech is busy. Try again.": return "busy";
+            case "Local speech is unavailable. Try again when the app is active.": return "unavailable";
+            case "This text is unsupported by the local English voice. Edit it and try again.": return "unsupported";
+            case "Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.":
+                return "cleanup_failed";
+            case "Speech could not be completed. Try again.": return "failed";
+            default: return "unrecognized";
+        }
     }
 
     private static boolean hasText(View view, String text) {
