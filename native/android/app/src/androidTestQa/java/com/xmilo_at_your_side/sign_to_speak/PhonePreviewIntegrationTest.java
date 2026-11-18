@@ -56,7 +56,6 @@ public final class PhonePreviewIntegrationTest {
     private static final Pattern ACTIVE_TRACKING_NOTICE = Pattern.compile(
             "^Local hand tracking: (?:0 hands|1 hand|2 hands) detected\\. Recognition: unsupported\\.$");
     private static final long STREAM_WAIT_MS = 20000;
-    private static final long SCROLL_STABLE_MS = 400;
     private static final int TARGET_SCROLL_SPEED_PX_PER_SEC = 200;
     private static final String QA_LOG = "PhonePreviewQA";
     private final Instrumentation instrumentation = InstrumentationRegistry.getInstrumentation();
@@ -483,8 +482,7 @@ public final class PhonePreviewIntegrationTest {
     }
 
     private UiObject2 findActionButton(String label, boolean tapping) throws Exception {
-        long end = SystemClock.elapsedRealtime() + 15000;
-        long stableSince = -1;
+        ButtonSettleDeadline deadline = new ButtonSettleDeadline(SystemClock.elapsedRealtime());
         int lastScrollY = Integer.MIN_VALUE;
         Rect lastFull = null;
         ButtonGeometry firstFullyVisible = null;
@@ -492,7 +490,7 @@ public final class PhonePreviewIntegrationTest {
         boolean downward = true;
         String last = "label absent";
         String lastGesture = "none";
-        while (SystemClock.elapsedRealtime() < end) {
+        while (deadline.canSample(SystemClock.elapsedRealtime())) {
             // Native geometry is authoritative while the target is offscreen. Accessibility
             // text/description searches can consume the whole deadline on a clipped button.
             ButtonGeometry nativeBounds = onMain(() -> buttonGeometry(activity.getWindow().getDecorView(), label));
@@ -510,6 +508,7 @@ public final class PhonePreviewIntegrationTest {
             Rect visible = button == null ? null : button.getVisibleBounds();
             boolean ready = button != null && nativeVisible
                     && fullyVisible(button, visible, viewport, screen, nativeBounds);
+            long stableSince = deadline.stableSince();
             last = "nativeVisible=" + nativeVisible + ",UIAready=" + ready
                     + ",clickable=" + (button != null && button.isClickable())
                     + ",enabled=" + (button != null && button.isEnabled())
@@ -521,13 +520,13 @@ public final class PhonePreviewIntegrationTest {
             if (ready) {
                 if (firstFullyVisible == null) firstFullyVisible = nativeBounds;
                 long now = SystemClock.elapsedRealtime();
-                if (stableSince >= 0 && (lastScrollY != nativeBounds.scrollY
-                        || !nativeBounds.full.equals(lastFull))) movementResets++;
-                if (stableSince < 0 || lastScrollY != nativeBounds.scrollY
-                        || !nativeBounds.full.equals(lastFull)) stableSince = now;
+                boolean geometryChanged = lastScrollY != nativeBounds.scrollY
+                        || !nativeBounds.full.equals(lastFull);
+                if (stableSince >= 0 && geometryChanged) movementResets++;
+                boolean settled = deadline.observeReady(now, geometryChanged);
                 lastScrollY = nativeBounds.scrollY;
                 lastFull = new Rect(nativeBounds.full);
-                if (now - stableSince >= SCROLL_STABLE_MS) {
+                if (settled) {
                     if (tapping) Log.i(QA_LOG, "elapsedRealtime=" + now + ",phase=pre-tap"
                             + ",label=" + label + ",native=" + nativeBounds + ",UIAvisible=" + visible
                             + ",fixedLabels=" + fixedUiLabels());
@@ -549,7 +548,7 @@ public final class PhonePreviewIntegrationTest {
                                 + ",movementResets=" + movementResets);
                         return fresh;
                     }
-                    stableSince = -1;
+                    deadline.clearStability();
                     last = "fresh UIA/native/viewport check changed; previous=" + last
                             + ",freshVisible=" + (fresh == null ? null : fresh.getVisibleBounds())
                             + ",freshNative=" + latest + ",freshViewport=" + freshViewport;
@@ -558,7 +557,7 @@ public final class PhonePreviewIntegrationTest {
                 continue;
             }
             if (stableSince >= 0) movementResets++;
-            stableSince = -1;
+            deadline.clearStability();
             lastFull = null;
             // Native geometry can settle before UI Automator exposes the label. Keep the
             // already visible target still while accessibility catches up.
