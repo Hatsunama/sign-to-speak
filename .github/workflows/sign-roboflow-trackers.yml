@@ -192,3 +192,13 @@ jobs:
             native/android/app/build/reports/offline-landmark/
             native/android/app/build/outputs/logs/manifest-merger-*-report.txt
             ${{ runner.temp }}/sign-evidence/
+      - name: Retain audited unsigned ARM64 QA app and instrumentation APKs
+        if: success()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: sign-live-tracking-arm64-qa-${{ env.TESTED_SHA }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: |
+            native/android/app/build/outputs/apk/qa/*.apk
+            native/android/app/build/outputs/apk/androidTest/qa/*.apk

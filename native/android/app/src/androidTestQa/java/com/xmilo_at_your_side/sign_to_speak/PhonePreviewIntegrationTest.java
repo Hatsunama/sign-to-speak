@@ -19,6 +19,7 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 import androidx.camera.core.Camera;
 import androidx.camera.core.CameraSelector;
+import androidx.camera.core.ImageAnalysis;
 import androidx.camera.core.Preview;
 import androidx.camera.core.UseCase;
 import androidx.camera.lifecycle.ProcessCameraProvider;
@@ -52,6 +53,8 @@ public final class PhonePreviewIntegrationTest {
     // Status text is a UI assertion, never evidence that CameraX is streaming or
     // that a detector is accurate. A startup notice must not satisfy this check.
     private static final Pattern LIVE_NOTICE = Pattern.compile("^(?:Live preview only\\. Recognition: unsupported\\.|Local hand tracking is unavailable\\. Live preview only\\. Recognition: unsupported\\.|Local hand tracking active\\. Recognition: unsupported\\.|Local hand tracking: (?:0 hands|1 hand|2 hands) detected\\. Recognition: unsupported\\.)$");
+    private static final Pattern ACTIVE_TRACKING_NOTICE = Pattern.compile(
+            "^Local hand tracking: (?:0 hands|1 hand|2 hands) detected\\. Recognition: unsupported\\.$");
     private static final long STREAM_WAIT_MS = 20000;
     private static final long SCROLL_STABLE_MS = 400;
     private static final int TARGET_SCROLL_SPEED_PX_PER_SEC = 200;
@@ -67,13 +70,7 @@ public final class PhonePreviewIntegrationTest {
     }
 
     @Test(timeout = 150000) public void uiStartStreamsAndEveryExitReleasesPreview() throws Exception {
-        assertEquals("Test only the installed QA application", QA_PACKAGE, target.getPackageName());
-        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());
-        assertTrue("Run on an ARM64 physical phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
-        assertFalse("An emulator cannot certify a physical camera", Build.FINGERPRINT.contains("generic")
-                || Build.MODEL.toLowerCase().contains("emulator"));
-        assertEquals("Grant CAMERA before the run; this test never changes permissions",
-                PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
+        assertPhysicalQaCameraPreconditions();
         driver = new PhoneActivityDriver(instrumentation);
         activity = driver.launch();
         assertTrue("Capture privacy must be ready before mounting Home",
@@ -114,13 +111,7 @@ public final class PhonePreviewIntegrationTest {
 
     @Test(timeout = 210000) public void rearDefaultAndLiveLensFlipsBindTheActualRequestedCamera()
             throws Exception {
-        assertEquals("Test only the installed QA application", QA_PACKAGE, target.getPackageName());
-        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());
-        assertTrue("Run on an ARM64 physical phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
-        assertFalse("An emulator cannot certify a physical camera", Build.FINGERPRINT.contains("generic")
-                || Build.MODEL.toLowerCase().contains("emulator"));
-        assertEquals("Grant CAMERA before the run; this test never changes permissions",
-                PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
+        assertPhysicalQaCameraPreconditions();
         driver = new PhoneActivityDriver(instrumentation);
         activity = driver.launch();
         assertTrue("Capture privacy must be ready before mounting Home",
@@ -152,6 +143,148 @@ public final class PhonePreviewIntegrationTest {
                 () -> nativeActionRendered(START));
         assertReleased("Final Stop", offFlipFront);
         assertCameraOff("Final Stop");
+    }
+
+    /**
+     * End-to-end inference through the default camera/model path. Zero measured hands still
+     * demonstrates completed inference. Positive hand detection and quality need a controlled scene.
+     */
+    @Test(timeout = 210000) public void liveArm64DetectorRunsOnRearFrontAndAfterStop()
+            throws Exception {
+        assertPhysicalQaCameraPreconditions();
+        try (PhoneActivityDriver detectorDriver = new PhoneActivityDriver(instrumentation)) {
+            activity = detectorDriver.launch();
+            assertTrue("Capture privacy must be ready before mounting Home",
+                    ((MainApplication) activity.getApplication()).getCapturePrivacyReady());
+
+            CameraSnapshot rear = startAndAwaitStreaming();
+            assertBoundLens("Default Start", rear, CameraSelector.LENS_FACING_BACK);
+            TrackingSession rearTracking = awaitActiveDetector("rear", rear);
+
+            CameraSnapshot front = flipAndAwaitStreaming(SWITCH_TO_FRONT, rear,
+                    CameraSelector.LENS_FACING_FRONT);
+            assertTrackingReleased("Rear-to-front Flip", rear, rearTracking);
+            TrackingSession frontTracking = awaitActiveDetector("front", front);
+            stopAndAssertTrackingReleased(front, frontTracking);
+            assertNoAutomaticRestart();
+
+            CameraSnapshot restarted = startAndAwaitStreaming();
+            assertNotSame("Restart mounts a fresh preview", front.preview, restarted.preview);
+            assertBoundLens("Explicit recovery Start", restarted, CameraSelector.LENS_FACING_FRONT);
+            TrackingSession recoveredTracking = awaitActiveDetector("restart-front", restarted);
+            stopAndAssertTrackingReleased(restarted, recoveredTracking);
+        }
+    }
+
+    private void assertPhysicalQaCameraPreconditions() {
+        assertEquals("Test only the installed QA application", QA_PACKAGE, target.getPackageName());
+        assertEquals(QA_PACKAGE + ".test", instrumentation.getContext().getPackageName());
+        assertTrue("Run on an ARM64 physical phone", Arrays.asList(Build.SUPPORTED_ABIS).contains("arm64-v8a"));
+        assertFalse("An emulator cannot certify a physical camera", Build.FINGERPRINT.contains("generic")
+                || Build.MODEL.toLowerCase().contains("emulator"));
+        assertEquals("Grant CAMERA before the run; this test never changes permissions",
+                PackageManager.PERMISSION_GRANTED, target.checkSelfPermission(Manifest.permission.CAMERA));
+    }
+
+    private TrackingSession awaitActiveDetector(String stage, CameraSnapshot camera) throws Exception {
+        AtomicReference<TrackingSession> active = new AtomicReference<>();
+        await(stage + " reaches tracking_active on the current camera", STREAM_WAIT_MS, () ->
+                onMain(() -> {
+                    if (field(camera.view, "preview") != camera.preview) return false;
+                    HandTrackingSummary summary = (HandTrackingSummary) field(camera.view, "trackingState");
+                    assertNotEquals(stage + " detector failed", "tracking_unavailable", summary.getStatus());
+                    if (!"tracking_active".equals(summary.getStatus())) return false;
+                    ImageAnalysis frames = (ImageAnalysis) field(camera.view, "analysis");
+                    LiveHandTrackingAnalyzer analyzer =
+                            (LiveHandTrackingAnalyzer) field(camera.view, "analyzer");
+                    LiveHandTrackingWorker worker =
+                            (LiveHandTrackingWorker) field(camera.view, "trackingWorker");
+                    assertNotNull(stage + " owns ImageAnalysis", frames);
+                    assertTrue(stage + " binds ImageAnalysis", camera.provider.isBound(frames));
+                    assertNotNull(stage + " owns the analyzer", analyzer);
+                    assertTrue(stage + " analyzer is active", analyzer.isActive());
+                    active.set(new TrackingSession(frames, analyzer, worker));
+                    return true;
+                }));
+        TrackingSession session = active.get();
+        assertDetectorWorkerState(stage, session, true);
+        findLiveNotice(ACTIVE_TRACKING_NOTICE);
+        assertStreaming(stage + " after counted tracking notice", camera);
+        int measuredHands = onMain(() -> {
+            assertSame(stage + " still owns this analysis", session.frames, field(camera.view, "analysis"));
+            assertSame(stage + " still owns this analyzer", session.analyzer, field(camera.view, "analyzer"));
+            HandTrackingSummary summary = (HandTrackingSummary) field(camera.view, "trackingState");
+            assertEquals(stage + " still tracks", "tracking_active", summary.getStatus());
+            assertTrue(stage + " reports a bounded measured hand count",
+                    summary.getMeasuredHands() >= 0 && summary.getMeasuredHands() <= 2);
+            return summary.getMeasuredHands();
+        });
+        Log.i(QA_LOG, "{\"stage\":\"" + stage + "\",\"status\":\"tracking_active\",\"measuredHands\":"
+                + measuredHands + "}");
+        return session;
+    }
+
+    private void stopAndAssertTrackingReleased(CameraSnapshot camera, TrackingSession tracking)
+            throws Exception {
+        tapActionButton(STOP);
+        await("Stop accepted (Start local preview rendered)", 5000, () -> nativeActionRendered(START));
+        assertReleased("Stop", camera);
+        assertTrackingReleased("Stop", camera, tracking);
+        assertCameraOff("After detector Stop");
+    }
+
+    private void assertTrackingReleased(String step, CameraSnapshot camera, TrackingSession tracking)
+            throws Exception {
+        onMain(() -> {
+            assertNull(step + " drops owned ImageAnalysis", field(camera.view, "analysis"));
+            assertNull(step + " drops owned analyzer", field(camera.view, "analyzer"));
+            assertFalse(step + " unbinds ImageAnalysis", camera.provider.isBound(tracking.frames));
+            return null;
+        });
+        assertFalse(step + " cancels the analyzer", tracking.analyzer.isActive());
+        assertDetectorWorkerState(step, tracking, false);
+        assertFalse(step + " closes the detector without a worker fault", tracking.worker.hasCleanupFailure());
+        assertEquals(step + " leaves no Activity cleanup failure", 0,
+                ((Number) onMain(() -> field(activity, "cameraCleanupFailures"))).intValue());
+    }
+
+    private static void assertDetectorWorkerState(String step, TrackingSession session, boolean active) {
+        // The analyzer and graph belong to the worker. Read them after queued work on that thread.
+        session.worker.executeAndAwaitForTest(() -> {
+            try {
+                Object owner = field(session.worker, "owner");
+                Object detector = field(session.analyzer, "detector");
+                if (active) {
+                    assertSame(step + " worker owns the current analyzer", session.analyzer, owner);
+                    assertNotNull(step + " analyzer created its detector", detector);
+                    // Only the default constructor path verifies the bundled .task and opens this graph.
+                    assertEquals(step + " uses the default model loader", LiveHolisticHandDetector.class,
+                            detector.getClass());
+                    Object task = field(detector, "detector");
+                    assertNotNull(step + " has a Holistic graph", task);
+                    assertEquals(step + " uses the actual MediaPipe SDK task",
+                            "com.google.mediapipe.tasks.vision.holisticlandmarker.HolisticLandmarker",
+                            task.getClass().getName());
+                } else {
+                    assertNotSame(step + " retires the worker's old analyzer", session.analyzer, owner);
+                    assertNull(step + " releases the old detector graph", detector);
+                }
+            } catch (ReflectiveOperationException e) {
+                throw new AssertionError(step + " could not inspect the native detector", e);
+            }
+        });
+    }
+
+    private static final class TrackingSession {
+        final ImageAnalysis frames;
+        final LiveHandTrackingAnalyzer analyzer;
+        final LiveHandTrackingWorker worker;
+
+        TrackingSession(ImageAnalysis frames, LiveHandTrackingAnalyzer analyzer, LiveHandTrackingWorker worker) {
+            this.frames = frames;
+            this.analyzer = analyzer;
+            this.worker = worker;
+        }
     }
 
     private CameraSnapshot flipAndAwaitStreaming(String action, CameraSnapshot previous,
@@ -560,19 +693,23 @@ public final class PhonePreviewIntegrationTest {
     }
 
     private UiObject2 findLiveNotice() throws Exception {
+        return findLiveNotice(LIVE_NOTICE);
+    }
+
+    private UiObject2 findLiveNotice(Pattern notice) throws Exception {
         long end = SystemClock.elapsedRealtime() + 15000;
         boolean downward = true;
         while (SystemClock.elapsedRealtime() < end) {
-            UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(LIVE_NOTICE));
+            UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(notice));
             if (node != null) return node;
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
             if (scroll == null) SystemClock.sleep(100);
             else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
         }
-        throw new AssertionError("QA UI missing a settled preview/tracking notice; " + snapshot());
+        throw new AssertionError("QA UI missing preview/tracking notice matching " + notice + "; " + snapshot());
     }
 
-    private static Object field(Object owner, String name) throws Exception {
+    private static Object field(Object owner, String name) throws ReflectiveOperationException {
         Field field = owner.getClass().getDeclaredField(name);
         field.setAccessible(true);
         return field.get(owner);
