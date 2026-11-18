@@ -180,6 +180,37 @@ class PreparationTest(unittest.TestCase):
         before[receipt_asset] = hashlib.sha256(receipt).hexdigest()
         self.assertEqual(self.published_files(), before)
 
+    def test_interrupted_publication_restores_output_and_cleans_temporary_paths(self):
+        m.prepare(self.output, self.model, allow_download=False)
+        before = self.published_files()
+        siblings = set(self.root.iterdir())
+        replace = os.replace
+
+        def interrupt_commit(source, destination, *args, **kwargs):
+            if Path(destination) == self.output and Path(source).name.startswith('.holistic-stage-'):
+                raise KeyboardInterrupt('injected interruption after moving previous assets')
+            return replace(source, destination, *args, **kwargs)
+
+        with mock.patch.object(os, 'replace', side_effect=interrupt_commit):
+            with self.assertRaisesRegex(KeyboardInterrupt, 'after moving previous assets'):
+                m.prepare(self.output, allow_download=False)
+
+        self.assertEqual(self.published_files(), before)
+        self.assertEqual(set(self.root.iterdir()), siblings)
+        m.prepare(self.output, allow_download=False)
+
+    def test_corrupt_download_does_not_publish_to_empty_output(self):
+        self.output.mkdir()
+
+        def bad_download(destination):
+            destination.write_bytes(b'corrupt')
+
+        with mock.patch.object(m, 'download', side_effect=bad_download) as download:
+            with self.assertRaisesRegex(ValueError, 'size or SHA-256'):
+                m.prepare(self.output)
+        download.assert_called_once()
+        self.assertEqual(list(self.output.iterdir()), [])
+
     def test_missing_model_offline_and_bad_source_fail_closed(self):
         with self.assertRaisesRegex(ValueError, 'model missing'):
             m.prepare(self.output, allow_download=False)

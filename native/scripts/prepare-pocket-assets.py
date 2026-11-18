@@ -18,6 +18,8 @@ import sys
 import tempfile
 import tomllib
 
+from asset_output import managed_files, no_links, publish_directory
+
 NATIVE = Path(__file__).resolve().parents[1]
 MODEL_MANIFEST = NATIVE / 'vendor/pocket-tts-audition/manifest.json'
 LICENSE_RECEIPT = NATIVE / 'licenses/pocket-tts/cargo-license-files.json'
@@ -131,7 +133,9 @@ def verify_model(asset_dir, manifest):
         size, sha = EXPECTED[name]
         if (entry['size'], entry['sha256']) != (size, sha):
             raise ValueError(f'Changed pinned receipt: {name}')
-        path = regular(asset_dir / entry['path'], asset_dir)
+        path = no_links(asset_dir / entry['path'])
+        if not path.is_file() or not path.is_relative_to(asset_dir):
+            raise ValueError(f'Missing or escaped model asset: {name}')
         if path.stat().st_size != size or digest(path) != sha:
             raise ValueError(f'Size or SHA-256 mismatch: {name}')
         sources[name] = path
@@ -253,7 +257,9 @@ def inventory(metadata, cargo_home):
 
 
 def collect_receipt(metadata_path, output_dir, cargo_home):
-    if output_dir.is_symlink() or (output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir()))):
+    output_dir = no_links(output_dir)
+    metadata_path = no_links(metadata_path)
+    if output_dir.exists() and (not output_dir.is_dir() or any(output_dir.iterdir())):
         raise ValueError('Candidate output directory must be empty and not linked')
     metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
     found = inventory(metadata, Path(cargo_home))
@@ -302,22 +308,29 @@ def license_sources(metadata, receipt, cargo_home):
     return report, selected
 
 
+def check_existing_output(output, model_receipt, notice_assets):
+    receipt_asset = Path('pocket-licenses/MODEL-RECEIPT.json')
+    files = {Path('pocket-alba') / name for name in EXPECTED}
+    files.update({receipt_asset, Path('pocket-licenses/ATTRIBUTION.txt'),
+                  Path('pocket-licenses/KYUTAI-MIT-LICENSE'),
+                  Path('pocket-licenses/cargo-declaration-routes.json'), *notice_assets})
+    present = managed_files(output, files)
+    if present and (receipt_asset not in present or
+                    json.loads((output / receipt_asset).read_bytes()) != model_receipt):
+        raise ValueError('Existing Pocket assets lack their matching generated model receipt')
+
+
 def prepare(asset_dir, metadata_path, output_dir, *, manifest_path=MODEL_MANIFEST,
             receipt_path=LICENSE_RECEIPT, cargo_home=None, allowed_output=None):
     allowed = Path(allowed_output) if allowed_output is not None else NATIVE / 'generated/pocket-assets'
     if output_dir.absolute() != allowed.absolute():
         raise ValueError('Pocket output directory must be the fixed native/generated/pocket-assets target')
-    current = output_dir
-    while True:
-        if current.is_symlink():
-            raise ValueError('Pocket output directory or parent is linked')
-        if current == current.parent:
-            break
-        current = current.parent
-    if output_dir.exists() and not output_dir.is_dir():
-        raise ValueError('Pocket output directory is not a directory')
-    if output_dir.resolve() == asset_dir.resolve() or output_dir.resolve().is_relative_to(asset_dir.resolve()) or asset_dir.resolve().is_relative_to(output_dir.resolve()):
-        raise ValueError('Output and source asset directories must not overlap')
+    output_dir = no_links(output_dir)
+    asset_dir = no_links(asset_dir)
+    metadata_path, manifest_path, receipt_path = map(no_links, (metadata_path, manifest_path, receipt_path))
+    if output_dir.is_relative_to(asset_dir) or any(
+            path.is_relative_to(output_dir) for path in (asset_dir, metadata_path, manifest_path, receipt_path)):
+        raise ValueError('Pocket inputs and output must not overlap')
     manifest = json.loads(manifest_path.read_text(encoding='utf-8'))
     sources = verify_model(asset_dir, manifest)
     metadata = json.loads(metadata_path.read_text(encoding='utf-8'))
@@ -327,6 +340,13 @@ def prepare(asset_dir, metadata_path, output_dir, *, manifest_path=MODEL_MANIFES
     regular(MIT_SOURCE, NATIVE)
     if digest(MIT_SOURCE) != '23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3':
         raise ValueError('Kyutai MIT notice changed')
+    notice_assets = {Path('pocket-licenses/cargo') / f'{name}-{version}' / rel: source
+                     for (name, version, rel), source in notices.items()}
+    if any(path.resolve().is_relative_to(output_dir) for path in (*notices.values(), MIT_SOURCE)):
+        raise ValueError('Pocket notice inputs and output must not overlap')
+    model_receipt = {key: manifest['model'][key]
+                     for key in ('repository', 'revision', 'language', 'voice', 'assets')}
+    check_existing_output(output_dir, model_receipt, notice_assets)
     output_dir.parent.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix='pocket-assets-', dir=output_dir.parent) as temp:
         stage = Path(temp)
@@ -349,21 +369,15 @@ def prepare(asset_dir, metadata_path, output_dir, *, manifest_path=MODEL_MANIFES
             'Changes: Original pinned model, tokenizer and Alba embedding are bundled without modification. '
             'Kyutai Pocket TTS 4.0.1 Rust source is adapted for a local Android C ABI, bounded requests and cancellation; see native/vendor/pocket-tts-runtime/MODIFICATIONS.md.\n',
             encoding='utf-8')
-        (notice_out / 'MODEL-RECEIPT.json').write_text(json.dumps({
-            'repository': manifest['model']['repository'],
-            'revision': manifest['model']['revision'],
-            'language': manifest['model']['language'],
-            'voice': manifest['model']['voice'],
-            'assets': manifest['model']['assets'],
-        }, indent=2) + '\n', encoding='utf-8')
-        for (name, version, rel), source in notices.items():
-            target = notice_out / 'cargo' / f'{name}-{version}' / rel
+        (notice_out / 'MODEL-RECEIPT.json').write_text(
+            json.dumps(model_receipt, indent=2) + '\n', encoding='utf-8')
+        for asset, source in notice_assets.items():
+            target = stage / asset
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(source, target)
         (notice_out / 'cargo-declaration-routes.json').write_text(json.dumps(report, indent=2) + '\n')
-        if output_dir.exists():
-            shutil.rmtree(output_dir)
-        shutil.move(str(stage), output_dir)
+        publish_directory(stage, output_dir,
+                          lambda: check_existing_output(output_dir, model_receipt, notice_assets))
 
 
 def main():
