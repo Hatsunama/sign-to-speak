@@ -13,13 +13,12 @@ Neither implementation is a hand detector, sign recognizer or ASL translator.
 The native tracker is connected to live CameraX through a bundled offline
 Holistic detector. See [live runtime admission and change audit](../docs/LIVE_HAND_TRACKING.md).
 No server, permission change or Python-in-APK shim is added.
-The classifier retains exactly the same landmark values and anatomical ordering.
+Tracking leaves the QA classifier's landmark values and anatomical ordering
+unchanged. The live UI shows tracking status and hand counts.
 
-The active Android source is the stacked recognition branch, not the retired
-browser prototype on `main`. The base of this work is
-`01b9c9befab1c19b31c934c28aa6461866836b6b`. Existing layout, camera ownership and reviewed speech
-behavior are preserved; the UI gains honest tracking/unavailable status text. New code and notice assets are compiled into the app;
-no modified APK has been installed or exercised on a device.
+The tracker integration started from Android source
+`01b9c9befab1c19b31c934c28aa6461866836b6b`. Earlier recorded-video and phone
+reports apply to their own named sources and artifacts.
 
 ## Kotlin implementation and native pipeline
 
@@ -171,11 +170,12 @@ separately generated or authorized fixtures matching that contract.
 `recognition-benchmark.py` still evaluates sign predictions independently;
 tracking IDs must never be substituted for labels or treated as accuracy evidence.
 
-Live customer-camera use remains blocked on admitting a production landmark
-runtime/model, establishing feature parity and frame ownership/cancellation,
-and measuring real-video/device behavior. The current QA detector/model remain
-in the instrumentation app. This PR does not move them into production, change
-permissions or add a service to avoid those gates.
+The main Android app now bundles the admitted offline Holistic runtime and
+detector model. Its live CameraX consumer feeds hand measurements into the
+attributed Kotlin tracker on supported ARM64 devices. The recorded-video
+classifier remains QA instrumentation only. Production sign recognition, ASL
+translation and reply generation remain absent. Real-video and device
+validation of live tracking remains pending.
 
 ## Verification and limits
 
@@ -199,17 +199,20 @@ python native/research/native_tracking_parity.py --kotlinc /path/to/kotlinc
 ```
 
 The runner compiles the actual Android-source class, not a test copy, and compares
-its outputs against the pinned real Python package. Current deterministic coverage
-matches 931 protocol steps across 907 synthetic measured frames, including the
-IoU and time boundaries. Native contract checks cover stale work, close/reset,
-input ownership, transactional validation and bounded-hypothesis failure/recovery.
-These are JVM tests, not device/Android runtime evidence.
+its outputs against the pinned real Python package. Both implementations receive
+synthetic landmarks quantized to the Kotlin input domain (FP32). The deterministic
+suite compares 931 protocol steps, including 907 frame commands with valid,
+empty and rejected inputs. It exercises IoU and time boundaries. Native contract
+checks cover stale work, close/reset, input ownership, transactional validation
+and bounded-hypothesis failure/recovery. JVM parity measures agreement in these
+cases. Tracking or recognition gains and Android runtime behavior require
+separate evidence.
 
 The CI workflow runs the Python and Kotlin reference checks on the exact head,
 then runs host and Android unit checks and builds an unsigned ARM64 app/test
 pair for exact manifest, model, dependency, notice and native-library audits.
-Model downloads occur only in build preparation, never in the app. CI does not
-install APKs, use devices or alter signing. No ASL accuracy, performance improvement or
-release certification is claimed. Tests were written
+Model downloads occur only during build preparation. CI retains bounded build
+and test evidence and uploads the unsigned QA pair only after overall success.
+CI does not install APKs, use devices or alter signing. Tests were written
 before the adapter and initially failed because its module did not exist; that
 is a missing-feature baseline, not a reproduced bug in the old app.
