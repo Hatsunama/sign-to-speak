@@ -16,8 +16,8 @@ internal object CameraRgbaPixels {
     fun copy(buffer: ByteBuffer, rowStride: Int, pixelStride: Int, geometry: Geometry): Pixels {
         val g = geometry
         require(g.width in 1..4096 && g.height in 1..4096)
-        require(g.left >= 0 && g.top >= 0 && g.right in (g.left + 1)..g.width &&
-            g.bottom in (g.top + 1)..g.height)
+        require(g.left >= 0 && g.left < g.right && g.right <= g.width &&
+            g.top >= 0 && g.top < g.bottom && g.bottom <= g.height)
         require(g.rotationDegrees in listOf(0, 90, 180, 270))
         require(pixelStride == 4 && rowStride.toLong() >= g.width.toLong() * pixelStride)
         val plane = buffer.duplicate() // Do not mutate the platform buffer's position or limit.
