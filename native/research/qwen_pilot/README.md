@@ -2,11 +2,17 @@
 
 Bounded private cloud experiments, not a production translator. Keep customer data, credentials, signing keys, media, reference manifests, predictions and weights out of this source PR.
 
-Run the full research suite with PyAV 17 and Pillow available:
+Run the lightweight research suite with PyAV 17.0.0, Pillow 12.2.0 and NumPy 2.2.6 available:
 `python -B -m unittest discover -s native/research/qwen_pilot -p 'test_*.py'`.
 Use the pinned cloud CUDA environment for training and the opt-in `test_target_only_loss.py --cuda` for controlled loss/gradient equivalence.
 
-## Current paired path
+## Current FSboard v4 work
+
+The current path freezes whole-prompt cohorts, admits actual 8 to 32 distinct ordered frames, verifies the pinned processor and five controls, then gates a six-clip training fit before the 192-update paired experiment. Source and data pins remain mandatory. The current fit policy is v2 and explicitly aligns generation stops with supervised assistant EOS. Full-cohort and GPU qualification status belongs in the evidence record, not in a source-exists flag.
+
+Read [current media/input evidence](FSBOARD_V4_MEDIA_AND_INPUT_STATUS.md), [generation stops](GENERATION_STOP_CONTRACT.md) and the [continuous-ASL data plan](CONTINUOUS_ASL_DATA_INTAKE_PLAN.md) before running current work. The historical commands below reproduce the original failed experiment and supply shared helpers; they are not the v4 entry points.
+
+## Historical 80-update paired path
 
 1. Preserve historical inputs. Run `dense_admission.py --output /data/pilot_dense_oriented` against the original pinned cohort. The shared `video_orientation.py` validates and applies right-angle nonmirrored display rotation. Sampling retains actual timestamps and source/applied rotation fields.
 2. Run `static_admission.py --output /data/static-v1`. Intake verifies bounded original JPEGs, the source anchor, canonical/mirror equality and source provenance. The actual archive has a complete duplicate wrapper and four rectangular photos. Optional `--archive-file PATH --archive-sha256 SHA` verifies cached originals. Review the contact sheets before producing a separate eligible manifest.
@@ -34,4 +40,4 @@ Both 80-update candidates failed the fresh eight-clip fingerspelling assessment 
 
 The GitHub-only runtime preflight produced Linux/Android CPU executables, followed by cloud-only F16 conversion and Q4 quantization of the original pinned base. See [measured runtime evidence](RUNTIME_PREFLIGHT_RESULTS.md) and [reproduction procedure](EXPORT_PREFLIGHT.md). The exact original-base CPU CLI has passed bounded engineering checks on both phones; [phone evidence](PHONE_RUNTIME_RESULTS.md) records latency, cancellation, recovery and remaining qualification gaps. The Vulkan companion is under numerical investigation. No release or language-quality claim follows.
 
-Final evidence review removed four duplicate fixture test executions and added a regression rejecting inconsistent LoRA receipt fields against the digest-verified configuration. The final suite has 114 unique cases. Both local tests and cloud validation against the actual archived pair passed; the training source/results remain preserved separately.
+Final evidence review removed four duplicate fixture test executions and added a regression rejecting inconsistent LoRA receipt fields against the digest-verified configuration. That historical evidence checkpoint ran 114 unique cases; current checks are recorded in the v4 status document. Both local tests and cloud validation against the actual archived pair passed; the training source/results remain preserved separately.

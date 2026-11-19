@@ -300,6 +300,20 @@ def validate_encoding(np, processor, batch, frame_count):
     return sequence
 
 
+def generation_eos_ids(tokenizer_eos, model_eos, special_ids):
+    """Resolve the assistant end-of-turn token and model-declared special stop tokens."""
+    if type(tokenizer_eos) is not int or tokenizer_eos <= 0 or tokenizer_eos not in special_ids:
+        raise AdmissionError("tokenizer did not declare a valid assistant end-of-turn token")
+    if model_eos is None:
+        return (tokenizer_eos,)
+    declared = model_eos if isinstance(model_eos, (list, tuple)) else (model_eos,)
+    if not declared or any(
+        type(token) is not int or token < 0 or token not in special_ids for token in declared
+    ):
+        raise AdmissionError("model declared an invalid generation EOS token or list")
+    return tuple(dict.fromkeys((tokenizer_eos, *declared)))
+
+
 def encode_example(processor, images, reference, *, context=evaluation.PROFILE.max_sequence_tokens,
                    generation_cap=evaluation.MAX_NEW_TOKENS, min_frames=MIN_FRAMES, max_frames=FRAME_COUNT):
     """Build and validate single-example inference and target-only teacher-forcing batches."""

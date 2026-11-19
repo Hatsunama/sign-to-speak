@@ -23,7 +23,7 @@ import paired_experiment as paired
 import train_qwen_pilot as pilot
 
 
-FIT_ID = "sts-fsboard-v4-six-clip-fit-smoke-20261119-v1"
+FIT_ID = "sts-fsboard-v4-six-clip-fit-smoke-20261119-v2"
 FIT_SOURCE = Path(__file__).name
 RUNTIME_SOURCES = cloud.RUNTIME_SOURCES | {FIT_SOURCE}
 FIT_POLICY = {
@@ -38,7 +38,8 @@ FIT_POLICY = {
     "static_microbatches_per_update": 0,
     "schedule": "cycle_selected_clips_in_frozen_training_order",
     "checkpoints": [0, 50, 100],
-    "generation": {"max_new_tokens": 32, "do_sample": False, "use_cache": True},
+    "generation": {"max_new_tokens": 32, "do_sample": False, "num_beams": 1, "use_cache": True},
+    "generation_stop_policy": "tokenizer_assistant_eos_first_then_distinct_special_model_eos_reject_continuation",
     "teacher_nll": "arithmetic_mean_of_per_clip_eos_inclusive_token_mean_completion_loss",
     "minimum_exact_matches": 6,
     "minimum_relative_teacher_nll_reduction": 0.25,
@@ -111,9 +112,12 @@ def encode_checkpoint_clip(verified, attested, torch, processor, clip):
 
 
 def assess(torch, processor, model, clips, encode, update, digest):
+    tokenizer = processor.tokenizer
+    eos = gate.generation_eos_ids(
+        tokenizer.eos_token_id, model.generation_config.eos_token_id, tokenizer.all_special_ids,
+    )
     model.eval()
     generation = FIT_POLICY["generation"]
-    eos = model.generation_config.eos_token_id
     rows = []
     with torch.inference_mode():
         for clip in clips:
@@ -123,13 +127,15 @@ def assess(torch, processor, model, clips, encode, update, digest):
             prompt_length = prefix["input_ids"].shape[1]
             generated = model.generate(
                 **{key: tensor.to("cuda") for key, tensor in prefix.items()},
-                **generation, return_dict_in_generate=False,
+                **generation, return_dict_in_generate=False, eos_token_id=list(eos),
             )
             tokens = generated[0, prompt_length:].tolist()
             if len(tokens) > generation["max_new_tokens"]:
                 raise cloud.RunError("Fit generation exceeded its token cap")
+            if any(token in eos for token in tokens[:-1]):
+                raise cloud.RunError("Fit generation returned tokens after EOS")
             stop = paired.generation_status(tokens, eos, generation["max_new_tokens"])
-            decoded = processor.tokenizer.decode(
+            decoded = tokenizer.decode(
                 tokens, skip_special_tokens=True, clean_up_tokenization_spaces=False,
             ).strip()
             loss = pilot.completion_loss(
@@ -141,6 +147,7 @@ def assess(torch, processor, model, clips, encode, update, digest):
             rows.append({
                 "clip_id": clip["id"], "decoded": decoded, "reference": clip["reference"],
                 "generated_token_ids": tokens, "generated_tokens": len(tokens), "stop": stop,
+                "eos_token_ids": list(eos),
                 "scores": scorer.score(decoded, clip["reference"]),
                 "output_equals_matched": True, "model_input": encoding,
                 "reference_nll": {"mean_per_token": loss, "tokens_including_eos": count, "total": loss * count},
@@ -148,6 +155,7 @@ def assess(torch, processor, model, clips, encode, update, digest):
             del prefix, teacher, generated
     return {
         "optimizer_updates": update, "parameter_sha256": digest, "examples": rows,
+        "eos_token_ids": list(eos),
         "aggregate": scorer.aggregate(rows),
         "mean_matched_teacher_nll": sum(row["reference_nll"]["mean_per_token"] for row in rows) / len(rows),
     }
@@ -319,6 +327,7 @@ def run_fit(args, progress):
         "pins": pins, "source_sha256": sources, "training_clip_ids": ids,
         "initial_parameter_sha256": digest, "final_parameter_sha256": final["parameter_sha256"],
         "optimizer_updates": final["optimizer_updates"], "checkpoints": summaries,
+        "eos_token_ids": final["eos_token_ids"],
         "video_microbatches": final["optimizer_updates"] * FIT_POLICY["video_microbatches_per_update"],
         "static_microbatches": 0, "fit_adapter_reusable": False, "holdout_or_development_model_calls": 0,
         "peak_gpu_allocated_bytes": torch.cuda.max_memory_allocated(),

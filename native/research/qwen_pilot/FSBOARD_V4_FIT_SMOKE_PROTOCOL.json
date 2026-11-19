@@ -6,12 +6,14 @@
   ],
   "early_stop_on_first_passing_trained_checkpoint": true,
   "fit_adapter_reusable": false,
-  "fit_id": "sts-fsboard-v4-six-clip-fit-smoke-20261119-v1",
+  "fit_id": "sts-fsboard-v4-six-clip-fit-smoke-20261119-v2",
   "generation": {
     "do_sample": false,
     "max_new_tokens": 32,
+    "num_beams": 1,
     "use_cache": true
   },
+  "generation_stop_policy": "tokenizer_assistant_eos_first_then_distinct_special_model_eos_reject_continuation",
   "minimum_exact_matches": 6,
   "minimum_relative_teacher_nll_reduction": 0.25,
   "parent_experiment_id": "sts-fsboard-whole-prompt-static-ablation-20261119-v4",

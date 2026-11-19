@@ -17,6 +17,29 @@ import fsboard_task_inputs as inputs
 from test_fsboard_task_admission import proposal_fixture
 
 
+class GenerationStopTests(unittest.TestCase):
+    def test_pinned_qwen_stop_ids_are_ordered_and_deduplicated(self):
+        special_ids = [248044, 248045, 248046]
+        for model_eos in (248044, [248044, 248046, 248044]):
+            with self.subTest(model_eos=model_eos):
+                self.assertEqual(
+                    inputs.generation_eos_ids(248046, model_eos, special_ids), (248046, 248044),
+                )
+        self.assertEqual(inputs.generation_eos_ids(248046, None, special_ids), (248046,))
+
+    def test_rejects_invalid_tokenizer_and_model_stop_ids(self):
+        special_ids = [0, 248044, 248046]
+        for tokenizer_eos in (None, True, 0, -1, "248046", 248045):
+            with self.subTest(tokenizer_eos=tokenizer_eos):
+                with self.assertRaisesRegex(inputs.AdmissionError, "tokenizer"):
+                    inputs.generation_eos_ids(tokenizer_eos, 248044, special_ids)
+        for model_eos in (True, -1, "248044", [], [None], [248044, True], [248045], {"id": 248044}):
+            with self.subTest(model_eos=model_eos):
+                with self.assertRaisesRegex(inputs.AdmissionError, "model"):
+                    inputs.generation_eos_ids(248046, model_eos, special_ids)
+        self.assertEqual(inputs.generation_eos_ids(248046, 0, special_ids), (248046, 0))
+
+
 class Processor:
     start_id, image_id, end_id = 7, 8, 9
     vision_start_token_id, image_token_id, vision_end_token_id = start_id, image_id, end_id

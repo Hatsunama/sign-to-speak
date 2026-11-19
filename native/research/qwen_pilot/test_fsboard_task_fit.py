@@ -17,6 +17,10 @@ import fsboard_evaluate as scorer
 import fsboard_task_fit as fit
 
 
+ASSISTANT_EOS = 248046
+MODEL_EOS = 248044
+
+
 def clip(index, reference, role="training"):
     return {"id": f"{role}-{index:03}", "role": role, "reference": reference}
 
@@ -61,26 +65,60 @@ class FitSmokeTests(unittest.TestCase):
             fit.select_training_clips([self.clips[0], duplicate, *self.clips[1:5]])
 
     def test_checkpoint_separates_prefix_and_teacher_inputs_and_uses_pinned_score(self):
-        self.model.generation_config.eos_token_id = [99, 101]
+        self.model.generation_config.eos_token_id = MODEL_EOS
         prefix = {key: Tensor([1, 2]) for key in fit.gate.MODEL_FIELDS}
-        teacher = {key: Tensor([1, 2, 50, 99]) for key in (*fit.gate.MODEL_FIELDS, "labels")}
-        receipt = {"supervised_tokens_including_eos": 2}
-        self.model.generate.return_value = Tensor([1, 2, 50, 99])
-        processor = NS(tokenizer=NS(decode=Mock(return_value="  EXAMPLE  ONE ")))
+        teacher = {key: Tensor([1, 2, 33, 3226, ASSISTANT_EOS]) for key in fit.gate.MODEL_FIELDS}
+        teacher["labels"] = Tensor([-100, -100, 33, 3226, ASSISTANT_EOS])
+        receipt = {"supervised_tokens_including_eos": 3, "eos_token_id": ASSISTANT_EOS}
+        processor = NS(tokenizer=NS(
+            eos_token_id=ASSISTANT_EOS, all_special_ids=[MODEL_EOS, ASSISTANT_EOS],
+            decode=Mock(return_value="  EXAMPLE  ONE "),
+        ))
+
+        def generate(**kwargs):
+            eos = kwargs.get("eos_token_id", [MODEL_EOS])
+            tokens = [1, 2]
+            for token in [33, 3226, ASSISTANT_EOS, 198, MODEL_EOS]:
+                tokens.append(token)
+                if token in eos:
+                    break
+            return Tensor(tokens)
+
+        self.model.generate.side_effect = generate
         loss = Mock(return_value=Mock(item=Mock(return_value=2.5)))
         with patch.object(fit.pilot, "completion_loss", loss):
             report = fit.assess(self.torch, processor, self.model, self.clips[:1],
                                 lambda row: (prefix, teacher, receipt), 0, "aaa")
-        self.model.generate.assert_called_once_with(
-            **prefix, max_new_tokens=32, do_sample=False, use_cache=True, return_dict_in_generate=False,
-        )
-        loss.assert_called_once_with(self.torch, self.model, teacher)
         row, = report["examples"]
-        self.assertEqual(row["generated_token_ids"], [50, 99])
+        self.assertEqual(row["generated_token_ids"], [33, 3226, ASSISTANT_EOS])
+        self.model.generate.assert_called_once_with(
+            **prefix, max_new_tokens=32, do_sample=False, num_beams=1, use_cache=True,
+            return_dict_in_generate=False, eos_token_id=[ASSISTANT_EOS, MODEL_EOS],
+        )
+        self.assertEqual(self.model.generation_config.eos_token_id, MODEL_EOS)
+        loss.assert_called_once_with(self.torch, self.model, teacher)
+        self.assertEqual(row["eos_token_ids"], [ASSISTANT_EOS, MODEL_EOS])
+        self.assertEqual(report["eos_token_ids"], [ASSISTANT_EOS, MODEL_EOS])
         self.assertEqual(row["stop"], "eos")
         self.assertEqual(row["scores"], scorer.score("EXAMPLE  ONE", "example one"))
         self.assertEqual(report["aggregate"], scorer.aggregate([row]))
         self.assertEqual(report["mean_matched_teacher_nll"], 2.5)
+
+        self.model.generate.side_effect = None
+        self.model.generate.return_value = Tensor([1, 2, 50, MODEL_EOS])
+        with patch.object(fit.pilot, "completion_loss", loss):
+            secondary = fit.assess(self.torch, processor, self.model, self.clips[:1],
+                                   lambda row: (prefix, teacher, receipt), 0, "aaa")
+        self.assertEqual(secondary["examples"][0]["stop"], "eos")
+
+        for eos in (ASSISTANT_EOS, MODEL_EOS):
+            with self.subTest(ignored_eos=eos):
+                self.model.generate.return_value = Tensor([1, 2, 50, eos, 198, MODEL_EOS])
+                with patch.object(fit.pilot, "completion_loss") as invalid_loss:
+                    with self.assertRaisesRegex(fit.cloud.RunError, "after EOS"):
+                        fit.assess(self.torch, processor, self.model, self.clips[:1],
+                                   lambda row: (prefix, teacher, receipt), 0, "aaa")
+                invalid_loss.assert_not_called()
 
         self.model.generate.return_value = Tensor([1, 2, *([50] * 32)])
         with patch.object(fit.pilot, "completion_loss", loss):
