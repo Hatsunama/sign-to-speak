@@ -15,7 +15,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     env:
       NDK_VERSION: '27.3.13750724'
       ANDROID_API: '28'
@@ -23,6 +23,8 @@ jobs:
       BUILD_TOOLS: '36.0.0'
       CMAKE_BUILD_PARALLEL_LEVEL: '2'
       LLAMA_COMMIT: b1b770d90d94cad9e9ea5b993bdbc383a522fb28
+      SHADERC_RELEASE_MANIFEST_COMMIT: 75137cca3b41a59b8b3e5c42177da8a9490c042f
+      SHADERC_SOURCE_COMMIT: b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc
     steps:
       - name: Check out workflow repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
@@ -37,6 +39,22 @@ jobs:
           path: llama.cpp
           persist-credentials: false
 
+      - name: Check out the Shaderc release manifest
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: google/shaderc
+          ref: ${{ env.SHADERC_RELEASE_MANIFEST_COMMIT }}
+          path: shaderc-release-manifest
+          persist-credentials: false
+
+      - name: Check out Shaderc sources
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: google/shaderc
+          ref: ${{ env.SHADERC_SOURCE_COMMIT }}
+          path: shaderc
+          persist-credentials: false
+
       - name: Install runner dependencies
         shell: bash
         run: |
@@ -44,7 +62,7 @@ jobs:
           mkdir -p "$diagnostics"
           exec > >(tee "$diagnostics/dependencies.log") 2>&1
           sudo apt-get update
-          sudo apt-get install --no-install-recommends -y glslc spirv-headers spirv-tools libvulkan-dev
+          sudo apt-get install --no-install-recommends -y spirv-headers spirv-tools libvulkan-dev
 
           sdk_packages=()
           if [[ ! -f "$ANDROID_HOME/platforms/android-$ANDROID_SDK/android.jar" ]]; then
@@ -59,6 +77,69 @@ jobs:
           if (( ${#sdk_packages[@]} )); then
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "${sdk_packages[@]}"
           fi
+
+      - name: Build pinned host glslc and compile the integer-dot feature test
+        shell: bash
+        run: |
+          export LC_ALL=C
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          compiler_receipt="$diagnostics/shader-compiler"
+          mkdir -p "$compiler_receipt"
+          exec > >(tee "$diagnostics/host-glslc.log") 2>&1
+          host_build="$RUNNER_TEMP/sign-qwen-shaderc-build"
+          glslc="$host_build/glslc/glslc"
+
+          test "$(git -C shaderc-release-manifest rev-parse HEAD)" = "$SHADERC_RELEASE_MANIFEST_COMMIT"
+          test "$(git -C shaderc rev-parse HEAD)" = "$SHADERC_SOURCE_COMMIT"
+          cp shaderc-release-manifest/known_good.json "$compiler_receipt/"
+          cp shaderc/DEPS "$compiler_receipt/"
+          (
+            cd shaderc
+            python3 utils/git-sync-deps
+          )
+
+          # git-sync-deps fetches from the source DEPS file. Check every resolved
+          # checkout against the separate LunarG-selected release manifest.
+          python3 - "$compiler_receipt/known_good.json" <<'PY' | tee "$compiler_receipt/resolved-commits.txt"
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          print("lunarg_sdk_config=https://vulkan.lunarg.com/sdk/config/1.4.363.0/linux/config.json")
+          print("shaderc_release_manifest_commit=" + os.environ["SHADERC_RELEASE_MANIFEST_COMMIT"])
+          entries = json.loads(Path(sys.argv[1]).read_text())["commits"]
+          for entry in entries:
+              name = entry["name"]
+              subdir = ("third_party/spirv-headers" if name == "spirv-headers"
+                        else entry.get("subdir", ""))
+              checkout = Path("shaderc") / subdir
+              git = ["git", "-C", str(checkout)]
+              actual = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
+              expected = entry["commit"]
+              if actual != expected:
+                  sys.exit(f"{checkout}: expected {expected}, found {actual}")
+              if name == "shaderc" and actual != os.environ["SHADERC_SOURCE_COMMIT"]:
+                  sys.exit(f"Release manifest Shaderc commit {actual} disagrees with workflow pin")
+              print(f"{name} {actual} https://github.com/{entry['subrepo']} {checkout}")
+          PY
+
+          cmake -S shaderc -B "$host_build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_INSTALL=ON
+          cmake --build "$host_build" --target glslc_exe --parallel 2
+          test -x "$glslc"
+          {
+            "$glslc" --version
+            sha256sum "$glslc"
+            readelf -hW "$glslc" | grep -E 'Machine: +Advanced Micro Devices X86-64$'
+          } | tee "$compiler_receipt/glslc.txt"
+          integer_dot_test=llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders/feature-tests/integer_dot.comp
+          "$glslc" -fshader-stage=compute --target-env=vulkan1.3 "$integer_dot_test" \
+            -o "$compiler_receipt/integer_dot.spv" 2>&1 | tee "$compiler_receipt/integer-dot-compile.log"
+          test -s "$compiler_receipt/integer_dot.spv"
+          sha256sum "$integer_dot_test" "$compiler_receipt/integer_dot.spv" \
+            | tee "$compiler_receipt/integer-dot-sha256.txt"
 
       - name: Build and verify the unsigned Android QA probe
         shell: bash
@@ -79,7 +160,7 @@ jobs:
           toolchain="$ndk/build/cmake/android.toolchain.cmake"
           ndk_llvm="$ndk/toolchains/llvm/prebuilt/linux-x86_64"
           vulkan_library="$ndk_llvm/sysroot/usr/lib/aarch64-linux-android/$ANDROID_API/libvulkan.so"
-          glslc=/usr/bin/glslc
+          glslc="$RUNNER_TEMP/sign-qwen-shaderc-build/glslc/glslc"
           android_jar="$ANDROID_HOME/platforms/android-$ANDROID_SDK/android.jar"
           build_tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
           test -f "$toolchain"
@@ -115,7 +196,7 @@ jobs:
           test "$llama_commit" = "$LLAMA_COMMIT"
           host_cc="$(command -v gcc)"
           host_cxx="$(command -v g++)"
-          apt_packages=(glslc libshaderc1 spirv-headers spirv-tools libvulkan-dev)
+          apt_packages=(spirv-headers spirv-tools libvulkan-dev)
           {
             printf 'scope=unsigned Android Vulkan/CPU instrumentation QA APK\n'
             printf 'workflow_source=%s\nworkflow_commit=%s\n' "$GITHUB_REPOSITORY" "$workflow_commit"
@@ -129,6 +210,9 @@ jobs:
             "$host_cxx" --version
             "$ndk_llvm/bin/clang++" --version
             "$glslc" --version
+            /usr/bin/spirv-val --version
+            /usr/bin/spirv-dis --version
+            cat "$diagnostics/shader-compiler/resolved-commits.txt"
             java -version
             javac -version
             "$build_tools/aapt2" version
@@ -179,7 +263,9 @@ jobs:
             -DANDROID_PLATFORM="android-$ANDROID_API" -DANDROID_STL=c++_static \
             -DCMAKE_SHARED_LINKER_FLAGS='-Wl,--gc-sections,-z,max-page-size=16384,-z,common-page-size=16384' \
             -DVulkan_INCLUDE_DIR:PATH="$vulkan_include" -DVulkan_LIBRARY:FILEPATH="$vulkan_library" \
-            -DVulkan_GLSLC_EXECUTABLE:FILEPATH="$glslc" -DSPIRV-Headers_DIR:PATH="$spirv_dir"
+            -DVulkan_GLSLC_EXECUTABLE:FILEPATH="$glslc" -DSPIRV-Headers_DIR:PATH="$spirv_dir" \
+            2>&1 | tee "$diagnostics/android-configure.log"
+          grep -F 'GL_EXT_integer_dot_product supported by glslc' "$diagnostics/android-configure.log"
 
           cache="$build_dir/CMakeCache.txt"
           grep -Fx "LLAMA_SOURCE_DIR:PATH=$PWD/llama.cpp" "$cache"
@@ -202,6 +288,52 @@ jobs:
 
           library="$package/libsign_backend_probe.so"
           install -m644 "$build_dir/lib/libsign_backend_probe.so" "$library"
+
+          vulkan_build="$build_dir/llama.cpp/ggml/src/ggml-vulkan"
+          generator_cache="$vulkan_build/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-build/CMakeCache.txt"
+          cp "$generator_cache" "$diagnostics/shader-compiler/generator-CMakeCache.txt"
+          grep -E '^GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT:[^=]+=ON$' "$generator_cache"
+
+          shader_evidence="$diagnostics/q4-k-shaders"
+          mkdir -p "$shader_evidence"
+          q4_modules=()
+          for family in f32_f32 q8_1_f32; do
+            for suffix in '' _subgroup _subgroup_no_shmem; do
+              shader="mul_mat_vec_q4_k_${family}${suffix}"
+              cp "$vulkan_build/vulkan-shaders.spv/$shader.spv" "$shader_evidence/"
+              q4_modules+=("$shader.spv")
+            done
+          done
+          (
+            cd "$shader_evidence"
+            sha256sum "${q4_modules[@]}" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+            for module in "${q4_modules[@]}"; do
+              /usr/bin/spirv-dis "$module" -o "$module.spvasm" 2>&1 | tee "$module.dis.log"
+              /usr/bin/spirv-val --target-env vulkan1.2 --scalar-block-layout "$module" \
+                2>&1 | tee "$module.val.log"
+              if [[ "$module" == mul_mat_vec_q4_k_q8_1_f32* ]]; then
+                grep -E 'Op(S|U|SU)Dot(KHR)?[[:space:]].*PackedVectorFormat4x8Bit(KHR)?$' \
+                  "$module.spvasm" > "$module.packed-dot.txt"
+              fi
+            done
+          )
+          python3 - "$library" "$shader_evidence" "${q4_modules[@]}" <<'PY' | tee "$shader_evidence/embedded.txt"
+          from pathlib import Path
+          import sys
+
+          library = Path(sys.argv[1]).read_bytes()
+          shader_dir = Path(sys.argv[2])
+          for filename in sys.argv[3:]:
+              module = (shader_dir / filename).read_bytes()
+              if not module or module not in library:
+                  sys.exit(f"Shader missing from the final Android ELF: {filename}")
+              print(f"Embedded {filename} ({len(module)} bytes)")
+          pipeline = b"mul_mat_vec_q4_k_q8_1_f32\x00"
+          if pipeline not in library:
+              sys.exit("Q4_K packed-dot pipeline name missing from Android ELF")
+          print("Q4_K packed-dot pipeline present in Android ELF")
+          PY
           {
             readelf -hW "$library"
             readelf -dW "$library"
@@ -272,6 +404,13 @@ jobs:
             cat "$diagnostics/contract-test.log" "$diagnostics"/{badging,permissions,manifest,zipalign}.txt
           } >> "$build_receipt"
 
+          cp -R "$diagnostics/shader-compiler" "$diagnostics/q4-k-shaders" "$package/"
+          install -Dm644 shaderc/LICENSE "$package/licenses/shaderc/LICENSE"
+          install -Dm644 shaderc/third_party/glslang/LICENSE.txt "$package/licenses/shaderc/glslang/LICENSE.txt"
+          for dep in spirv-headers spirv-tools; do
+            install -Dm644 "shaderc/third_party/$dep/LICENSE" "$package/licenses/shaderc/$dep/LICENSE"
+          done
+
           mkdir -p "$package/source/backend_app"
           cp -R "$qa_source/." "$package/source/backend_app/"
           install -Dm644 .github/workflows/sign-qwen-backend-app-smoke.yml "$package/source/sign-qwen-backend-app-smoke.yml"
@@ -313,6 +452,11 @@ jobs:
             ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeCache.txt
             ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ runner.temp }}/sign-qwen-backend-app-build/host-toolchain.cmake
+            ${{ runner.temp }}/sign-qwen-shaderc-build/CMakeCache.txt
+            ${{ runner.temp }}/sign-qwen-shaderc-build/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-build/CMakeCache.txt
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders.spv/mul_mat_vec_q4_k_f32_f32*.spv
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders.spv/mul_mat_vec_q4_k_q8_1_f32*.spv
             ${{ runner.temp }}/sign-qwen-backend-app-package/sign-qwen-backend-app-unsigned-aligned.apk
             ${{ runner.temp }}/sign-qwen-backend-app-package/libsign_backend_probe.so
           if-no-files-found: warn

@@ -2,7 +2,7 @@
 
 This test-only APK runs the pinned llama.cpp synthetic backend tests from a real Android app process. Android loads the probe through the app class loader. The APK declares no permissions and exposes no activities or launcher entry. The probe uses no model or input assets.
 
-Compilation and device execution are pending. This diagnostic APK does not qualify the main application or a release.
+The Vulkan modes are pending build and device verification. This diagnostic APK does not qualify the main application or a release.
 
 ## Build inputs
 
@@ -10,7 +10,7 @@ Build the Android `arm64-v8a` CMake target `sign_backend_probe` with `LLAMA_SOUR
 
 ## Instrumentation
 
-Run the self-instrumentation with three arguments. Use a fresh runid containing exactly 32 lowercase hex characters, backend CPU or Vulkan0, and case q4_n1, q4_n2, or q6.
+Run the self-instrumentation with a fresh `runid` containing exactly 32 lowercase hex characters, `backend` set to `CPU` or `Vulkan0`, and `case` set to `q4_n1`, `q4_n2`, or `q6`. The optional `vkmode` defaults to `baseline`.
 
 ```sh
 adb shell am instrument -w \
@@ -19,7 +19,18 @@ adb shell am instrument -w \
     com.hatsunama.signtospeak.backendprobe/.ProbeInstrumentation
 ```
 
-The app creates an exclusive child directory under its private files directory at files/qa-<runid>. The start receipt is run.json. The native adapter creates stdout.log exclusively and captures both stdout and stderr. The result.json receipt records the native exit code, any adapter or loader failure returned to Java, and the end time. Both receipts include the request, process ID, runtime Android API, app target SDK, and start time. The Android instrumentation returns `RESULT_OK` (`-1`) after a native exit of zero and a successful result write. A fatal native process exit may leave a start receipt and a partial log.
+Add `-e vkmode f32` (or use `--vk-mode f32` with the private host runner) to request a Vulkan variant. CPU accepts only `baseline`.
+
+| Vulkan mode | Process environment |
+| --- | --- |
+| `baseline` | Both controlled variables unset |
+| `f32` | `GGML_VK_DISABLE_F16=1` |
+| `mmvq` | `GGML_VK_FORCE_MMVQ=1` |
+| `f32_mmvq` | `GGML_VK_DISABLE_F16=1` and `GGML_VK_FORCE_MMVQ=1` |
+
+The probe clears both variables and sets the selected values in the instrumentation process before loading the native library. The `f32` mode disables FP16 shader arithmetic while continuing to exercise the quantized operands in the case table. The MMVQ modes request an MMVQ path from the backend. Verify in build evidence that the relevant MMVQ shaders were compiled before attributing behavior to MMVQ, and use backend execution evidence to confirm that path ran.
+
+The app creates an exclusive child directory under its private files directory at files/qa-<runid>. The start receipt is run.json. The native adapter creates stdout.log exclusively and captures both stdout and stderr. The result.json receipt records the native exit code, any adapter or loader failure returned to Java, and the end time. Both receipts include the request, process ID, runtime Android API, app target SDK, start time, and the selected `vkMode` and `vkEnvironment`. The private host runner requires both mode fields to match its request before marking a run successful. The Android instrumentation returns `RESULT_OK` (`-1`) after a native exit of zero and a successful result write. A fatal native process exit may leave a start receipt and a partial log.
 
 Require a matching result receipt with nativeExitCode equal to zero and nativeFailure null. Verify that the requested backend actually ran and that stdout.log shows the expected successful MUL_MAT cases on it. The upstream executable can return zero when its filters match no backend or case.
 
