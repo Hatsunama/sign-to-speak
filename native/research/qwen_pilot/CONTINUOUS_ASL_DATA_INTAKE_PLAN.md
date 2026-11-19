@@ -41,3 +41,11 @@ Start with the rights register and de-leakage plan, then the local sentinel, the
 Open items are exact publisher versions and access, file-level rights and reference alignment, availability of an independent everyday conversation source, de-leakage results, decoded media and timing receipts, and qualified model and device results. This planning pass used public documentation only.
 
 Metadata update: [FLEURS-ASL version 2](FLEURS_METADATA_ACCESS.md) is anonymously accessible. Its 495-video inventory and both reference JSON files have been checked; this changes access status, not the pending video, alignment, cross-source leakage or model-quality gates.
+
+### Verified grouping and media intake checkpoint — November 19, 2026
+
+Use the follow-up evidence in [FLEURS metadata and media access](FLEURS_METADATA_ACCESS.md). The initial operational recording passed actual download, two-pass decoding and sampled-image checks. Broader intake and signed-reference alignment remain pending.
+
+Before continuous-ASL training, freeze linked document/recording/prompt groups across prior Meta exposure and FLEURS. The 40 published human examples span every FLEURS signer group, and three reserved document families connect to prior pilot prompts. Do not call that entire assessment independent after training on this corpus. A new prospective split may allocate signer groups and reserve suitable expert-reference examples before training; record the resulting coverage limits and add a separate cleared source for broader claims.
+
+Preserve publisher time windows and record their overlaps; 25 recordings have adjacent overlaps up to 2.28 seconds. Check signed content against existing published expert reference material, distinguish upstream English prompts from actual ASL back-translations, and exclude ambiguous scored examples. Keep data-free customer operation and the prohibition on collecting customer records. Use published material and its existing expert annotations rather than requiring recruited Deaf testers. The first operational recording and its frames remain private and are not model-accuracy evidence.

@@ -397,8 +397,8 @@ def validate_runtime(torch, output):
     })
     if packages != pinned or torch.version.cuda != "12.6":
         raise RuntimeError("Cloud libraries do not match the pinned CUDA 12.6 training runtime")
-    if not re.search(r"\bL4\b", device.name) or not torch.cuda.is_bf16_supported():
-        raise RuntimeError("A bf16-capable NVIDIA L4 GPU is required")
+    if device.name not in {"NVIDIA L4", "NVIDIA L40S"} or not torch.cuda.is_bf16_supported():
+        raise RuntimeError("A bf16-capable NVIDIA L4 or NVIDIA L40S GPU is required")
 
 
 def create_initial_adapter(torch, base, lora_config, wrap, revision, path):

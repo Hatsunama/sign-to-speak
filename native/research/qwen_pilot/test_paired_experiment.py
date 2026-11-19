@@ -21,6 +21,80 @@ def experiment():
     return importlib.import_module("paired_experiment")
 
 
+class RuntimeTests(unittest.TestCase):
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.output = Path(scratch.name)
+        self.packages = {
+            "torch": "2.8.0+cu126",
+            "torchvision": "0.23.0+cu126",
+            "transformers": "5.12.0",
+            "peft": "0.20.0",
+            "accelerate": "1.12.0",
+            "Pillow": "12.2.0",
+            "huggingface-hub": "1.14.0",
+            "tokenizers": "0.22.2",
+            "safetensors": "0.7.0",
+            "numpy": "2.2.6",
+            "Jinja2": "3.1.6",
+        }
+
+    def validate(self, device="NVIDIA L4", *, cuda="12.6", count=1, available=True, bf16=True):
+        properties = SimpleNamespace(name=device, total_memory=48 * 1024**3)
+        torch = SimpleNamespace(
+            version=SimpleNamespace(cuda=cuda),
+            cuda=SimpleNamespace(
+                is_available=lambda: available,
+                device_count=lambda: count,
+                get_device_properties=lambda index: properties,
+                is_bf16_supported=lambda: bf16,
+            ),
+        )
+        output = Path(tempfile.mkdtemp(dir=self.output))
+        module = experiment()
+        with patch.object(module, "version", side_effect=self.packages.__getitem__):
+            module.validate_runtime(torch, output)
+        return output / "runtime_receipt.json"
+
+    def test_supported_devices_are_recorded_verbatim(self):
+        for device in ("NVIDIA L4", "NVIDIA L40S"):
+            with self.subTest(device=device):
+                receipt_path = self.validate(device)
+                receipt = json.loads(receipt_path.read_text())
+                self.assertEqual(receipt["device"], device)
+                self.assertEqual(receipt["total_gpu_bytes"], 48 * 1024**3)
+                self.assertEqual(receipt["packages"], self.packages)
+                self.assertEqual(receipt["torch_cuda"], "12.6")
+                self.assertEqual(receipt["dtype"], "bfloat16")
+                self.assertEqual(receipt["attention_implementation"], "sdpa")
+
+    def test_unsupported_devices_are_rejected(self):
+        for device in ("NVIDIA L40", "NVIDIA A100-SXM4-80GB", "Other Vendor L40S"):
+            with self.subTest(device=device):
+                with self.assertRaisesRegex(RuntimeError, "bf16-capable"):
+                    self.validate(device)
+
+    def test_supported_devices_require_bf16(self):
+        for device in ("NVIDIA L4", "NVIDIA L40S"):
+            with self.subTest(device=device):
+                with self.assertRaisesRegex(RuntimeError, "bf16-capable"):
+                    self.validate(device, bf16=False)
+
+    def test_requires_exactly_one_cuda_gpu(self):
+        for settings in ({"available": False}, {"count": 0}, {"count": 2}):
+            with self.subTest(settings=settings):
+                with self.assertRaisesRegex(RuntimeError, "One cloud CUDA GPU"):
+                    self.validate(**settings)
+
+    def test_requires_pinned_cuda_and_packages(self):
+        with self.assertRaisesRegex(RuntimeError, "pinned CUDA 12.6"):
+            self.validate(cuda="12.8")
+        self.packages["torchvision"] = "0.23.0"
+        with self.assertRaisesRegex(RuntimeError, "pinned CUDA 12.6"):
+            self.validate()
+
+
 class AdmissionTests(unittest.TestCase):
     def setUp(self):
         self.directory = tempfile.TemporaryDirectory()
