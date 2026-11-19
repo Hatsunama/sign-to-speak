@@ -1,12 +1,16 @@
-"""Stdlib regression tests for the FSboard evaluation admission."""
+"""Regression tests for the FSboard evaluation admission."""
 import hashlib
 import io
 import json
 import math
+import struct
+import sys
 import tempfile
 import unittest
+from fractions import Fraction
 from pathlib import Path
-from unittest.mock import patch
+from types import SimpleNamespace
+from unittest.mock import MagicMock, patch
 from urllib.request import Request
 
 from fsboard_admission import (
@@ -15,9 +19,11 @@ from fsboard_admission import (
     FRAME_COUNT,
     HTTPSRedirects,
     LICENSE_BYTES,
+    MAX_EDGE,
     admit,
     annotation_window,
     copy_verified,
+    decode_frames,
     parse_candidates,
     select_candidates,
     select_samples,
@@ -121,6 +127,178 @@ class TimelineTests(unittest.TestCase):
         pts[16] -= .012
         samples = select_samples(pts, origin=0, window=(0, 31 / 30), period=1 / 30)
         self.assertEqual([sample["source_pts_seconds"] for sample in samples], pts)
+
+
+
+class DecodeTests(unittest.TestCase):
+    def setUp(self):
+        from PIL import Image
+
+        self.image = Image.new("RGB", (600, 400))
+        self.colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+        for color, box in zip(self.colors, [
+            (0, 0, 300, 200), (300, 0, 600, 200), (0, 200, 300, 400), (300, 200, 600, 400),
+        ]):
+            self.image.paste(color, box)
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        self.output = Path(temp.name)
+        self.frames = self.output / "frames"
+        self.frames.mkdir()
+        self.decode_count = 0
+
+    def decode(
+        self, first_rotation, second_rotation=None, *, matrix=None, duration=120,
+        time_base=Fraction(1, 30), start_time=330, times=None, clip=None,
+    ):
+        class Frame:
+            width, height = self.image.size
+            side_data = {"DISPLAYMATRIX": matrix} if matrix is not None else {}
+
+            def __init__(self, time, rotation):
+                self.time = time
+                self.rotation = rotation
+
+            def reformat(self, *, width, height, format):
+                return SimpleNamespace(to_image=lambda: image.resize((width, height)))
+
+        image = self.image
+        stream = SimpleNamespace(
+            width=600, height=400, start_time=start_time, duration=duration, time_base=time_base,
+        )
+        if times is None:
+            times = [11 + index / 30 for index in range(120)]
+
+        def container(rotation):
+            rotations = rotation if isinstance(rotation, list) else [rotation] * len(times)
+            result = MagicMock()
+            result.__enter__.return_value.streams.video = [stream]
+            result.__enter__.return_value.decode.return_value = iter(
+                Frame(time, angle) for time, angle in zip(times, rotations)
+            )
+            return result
+
+        av = SimpleNamespace(open=MagicMock(side_effect=[
+            container(first_rotation), container(first_rotation if second_rotation is None else second_rotation),
+        ]))
+        self.decode_count += 1
+        clip_id = f"fsboard-{self.decode_count:02d}"
+        with patch.dict(sys.modules, {"av": av}):
+            return decode_frames(
+                self.output / "source.mp4", self.output, clip_id, clip or candidates(row())[0],
+            )
+
+    def test_applies_counterclockwise_rotation_to_pixels_and_receipts(self):
+        from PIL import Image
+
+        for angle, corner_order, dimensions in [
+            (0, (0, 1, 2, 3), (MAX_EDGE, 256)),
+            (90, (1, 3, 0, 2), (256, MAX_EDGE)),
+            (-90, (2, 0, 3, 1), (256, MAX_EDGE)),
+            (180, (3, 2, 1, 0), (MAX_EDGE, 256)),
+            (-180, (3, 2, 1, 0), (MAX_EDGE, 256)),
+        ]:
+            with self.subTest(angle=angle):
+                receipt = self.decode(angle)
+                self.assertEqual(receipt["clip_pts_origin_seconds"], 11)
+                self.assertEqual(len(receipt["frames"]), FRAME_COUNT)
+                self.assertEqual(len({frame["source_pts_seconds"] for frame in receipt["frames"]}), FRAME_COUNT)
+                for frame in receipt["frames"]:
+                    self.assertAlmostEqual(frame["source_pts_seconds"] - 11, frame["actual_seconds"])
+                    path = self.output / frame["path"]
+                    with Image.open(path) as image:
+                        width, height = dimensions
+                        self.assertEqual(image.size, dimensions)
+                        self.assertEqual((frame["width"], frame["height"]), dimensions)
+                        corners = [(0, 0), (width - 1, 0), (0, height - 1), (width - 1, height - 1)]
+                        self.assertEqual([image.getpixel(corner) for corner in corners],
+                                         [self.colors[index] for index in corner_order])
+                    self.assertEqual(frame["source_display_rotation_degrees"], angle)
+                    self.assertEqual(frame["applied_display_rotation_counterclockwise_degrees"], angle)
+                self.assertEqual(receipt["source_display_rotation_degrees"], angle)
+                self.assertEqual(receipt["applied_display_rotation_counterclockwise_degrees"], angle)
+
+    def test_applies_real_mp4_track_display_matrix(self):
+        import av
+        from PIL import Image
+
+        source = io.BytesIO()
+        with av.open(source, "w", format="mp4") as container:
+            stream = container.add_stream("mpeg4", rate=30)
+            stream.width, stream.height, stream.pix_fmt = 64, 32, "yuv420p"
+            image = self.image.resize((64, 32), Image.Resampling.NEAREST)
+            for _ in range(120):
+                for packet in stream.encode(av.VideoFrame.from_image(image)):
+                    container.mux(packet)
+            for packet in stream.encode():
+                container.mux(packet)
+
+        # Supply a track display matrix to the recorded pixels without re-encoding.
+        # The matrix starts 40 bytes into a version-0 MP4 track header's payload.
+        data = bytearray(source.getvalue())
+        track_header = data.index(b"tkhd") + 4
+        self.assertEqual(data[track_header], 0)
+        unit = 1 << 16
+        offset = track_header + 40
+        self.assertEqual(struct.unpack_from(">9i", data, offset),
+                         (unit, 0, 0, 0, unit, 0, 0, 0, 1 << 30))
+        struct.pack_into(">9i", data, offset, 0, -unit, 0, unit, 0, 0, 0, 64 * unit, 1 << 30)
+        video = self.output / "source.mp4"
+        video.write_bytes(data)
+
+        receipt = decode_frames(video, self.output, "fsboard-01", candidates(row())[0])
+        with Image.open(self.output / receipt["frames"][0]["path"]) as frame:
+            self.assertEqual(frame.size, (32, 64))
+            for point, expected in zip([(4, 4), (24, 4), (4, 54), (24, 54)], [1, 3, 0, 2]):
+                for actual, channel in zip(frame.getpixel(point), self.colors[expected]):
+                    self.assertLessEqual(abs(actual - channel), 12)
+        self.assertEqual(receipt["source_display_rotation_degrees"], 90)
+
+    def test_rejects_invalid_or_changing_angles_without_publishing_frames(self):
+        for first, second in [
+            (37, None), (89.5, None), (math.nan, None), (math.inf, None),
+            ([0] * 119 + [90], None), (0, 90), (0, [0] * 119 + [90]),
+        ]:
+            with self.subTest(first=first, second=second):
+                with self.assertRaisesRegex(AdmissionError, "display rotation"):
+                    self.decode(first, second)
+                self.assertEqual(list(self.frames.iterdir()), [])
+
+    def test_rejects_reflection_shear_and_perspective_even_with_zero_angle(self):
+        unit = 1 << 16
+        for matrix in [
+            (unit, 0, 0, 0, -unit, 0, 0, 0, 1 << 30),
+            (unit, 0, 0, 1, unit, 0, 0, 0, 1 << 30),
+            (unit, 0, 1, 0, unit, 0, 0, 0, 1 << 30),
+        ]:
+            with self.subTest(matrix=matrix):
+                with self.assertRaisesRegex(AdmissionError, "display matrix"):
+                    self.decode(0, matrix=struct.pack("=9i", *matrix))
+                self.assertEqual(list(self.frames.iterdir()), [])
+
+    def test_duration_allows_two_ticks_of_endpoint_quantization(self):
+        time_base = Fraction(1, 90_000)
+        times = [float(index * 3000 * time_base) for index in range(120)]
+        times.append(float(360_068 * time_base))
+        clip = candidates(row(
+            clipEndTimeS=28.000757, annotationStartTimeS=24.2619, annotationEndTimeS=27.0289,
+        ))[0]
+        options = {"time_base": time_base, "start_time": 0, "times": times, "clip": clip}
+
+        receipt = self.decode(0, duration=363_070, **options)
+        self.assertEqual(receipt["decoded_timestamp_tick_seconds"], float(time_base))
+        self.assertAlmostEqual(receipt["decoded_duration_seconds"], 4.034111111)
+        self.assertEqual(len(receipt["frames"]), FRAME_COUNT)
+
+        with self.assertRaisesRegex(AdmissionError, "decoded clip timing disagrees with metadata"):
+            self.decode(0, duration=363_130, **options)
+
+    def test_invalid_timing_reports_numeric_context(self):
+        with self.assertRaisesRegex(
+            AdmissionError, r"duration=3[.]7.*expected_duration=4[.]0.*first_relative_pts=0[.]0"
+            r".*last_relative_pts_plus_period=4[.]0.*period=0[.]03.*annotation_end=3[.]5",
+        ):
+            self.decode(0, duration=111)
 
 
 class OutputTests(unittest.TestCase):

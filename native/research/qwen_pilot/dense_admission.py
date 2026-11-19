@@ -1,9 +1,10 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
-# dependencies = ["av>=14,<18", "Pillow>=11,<13", "huggingface_hub>=1,<2"]
+# dependencies = ["av>=17,<18", "Pillow>=11,<13", "huggingface_hub>=1,<2"]
 # ///
 """Resample the original ASL pilot cohort to 32 presentation-timed frames."""
 
+import argparse
 import hashlib
 import json
 import math
@@ -15,6 +16,9 @@ from urllib.error import HTTPError
 
 import admission_probe as probe
 from train_qwen_pilot import DENSE, SPARSE, SPARSE_ADMISSION_SHA256, validate_admission
+
+
+SCRATCH = Path("/tmp/sign-to-speak")
 
 
 def original_receipt(root):
@@ -65,7 +69,13 @@ def resample(receipt, root, scratch):
     return clip_receipts, frame_bytes
 
 
-def main():
+def main(argv=()):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--output", type=Path, default=DENSE.root,
+        help=f"New dense admission directory (default: {DENSE.root})",
+    )
+    root = parser.parse_args(argv).output.resolve()
     if sys.platform != "linux" or not SPARSE.root.is_dir():
         print("Dense admission requires the mounted cloud pilot directory.", file=sys.stderr)
         return 1
@@ -74,24 +84,24 @@ def main():
     try:
         receipt = original_receipt(SPARSE.root)
         stage = "creating dense output directory"
-        DENSE.root.mkdir(exist_ok=False)
+        root.mkdir(exist_ok=False)
         incomplete_output = True
         stage = "resampling original clips"
-        scratch = Path("/tmp/sign-to-speak")
-        scratch.mkdir(mode=0o700, exist_ok=True)
-        clips, frame_bytes = resample(receipt, DENSE.root, scratch)
+        SCRATCH.mkdir(mode=0o700, exist_ok=True)
+        clips, frame_bytes = resample(receipt, root, SCRATCH)
         stage = "validating and publishing dense admission"
         attribution_bytes = 0
         for key in ("license_path", "attribution_path"):
             name = receipt["dataset"][key]
             content = (SPARSE.root / name).read_bytes()
-            (DENSE.root / name).write_bytes(content)
+            (root / name).write_bytes(content)
             attribution_bytes += len(content)
         document = {
             **receipt,
             "source_admission_sha256": SPARSE_ADMISSION_SHA256,
             "frames_per_clip": DENSE.admitted_frames,
             "evaluation_role": DENSE.evaluation_role,
+            "orientation_policy": probe.ORIENTATION_POLICY,
             "derived_frame_bytes": frame_bytes,
             "attribution_bytes": attribution_bytes,
             "max_total_bytes": probe.TOTAL_BYTES,
@@ -101,7 +111,7 @@ def main():
         receipt_size = len((json.dumps(document, ensure_ascii=False, indent=2) + "\n").encode("utf-8"))
         if receipt["original_bytes"] + frame_bytes + attribution_bytes + receipt_size > probe.TOTAL_BYTES:
             raise probe.AdmissionError("original and derived bytes exceeded 1 GiB")
-        probe.write_receipt(DENSE.root, document)
+        probe.write_receipt(root, document)
         incomplete_output = False
         duplicate_count = sum(frame["duplicate"] for clip in clips for frame in clip["frames"])
         print(
@@ -119,10 +129,10 @@ def main():
         print(f"Dense admission failed while {stage} ({detail}).", file=sys.stderr)
         if incomplete_output:
             try:
-                shutil.rmtree(DENSE.root)
+                shutil.rmtree(root)
             except OSError as cleanup_error:
                 print(
-                    f"Dense admission failed while removing incomplete output at {DENSE.root} ({cleanup_error}).",
+                    f"Dense admission failed while removing incomplete output at {root} ({cleanup_error}).",
                     file=sys.stderr,
                 )
         return 1
@@ -130,4 +140,4 @@ def main():
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main(sys.argv[1:]))

@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
-# dependencies = ["av>=14,<18", "Pillow>=11,<13"]
+# dependencies = ["av>=17,<18", "Pillow>=11,<13"]
 # ///
 """Extract a bounded FSboard test sample for private evaluation review."""
 import argparse
@@ -15,6 +15,8 @@ from pathlib import Path
 from urllib.error import HTTPError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
+
+from video_orientation import VideoOrientationError, apply_display_rotation, display_rotation
 
 DATASET = "googleai/fsboard"
 DATASET_URL = "https://www.kaggle.com/datasets/googleai/fsboard/versions/13"
@@ -206,6 +208,18 @@ def annotation_window(clip):
     )
 
 
+def timing_tolerance(period, timestamp_tick):
+    """Allow one frame plus one container tick per duration endpoint."""
+    if not 0 < period < math.inf:
+        raise AdmissionError("invalid video frame period")
+    if timestamp_tick is None:
+        return period
+    # Distinct stream timestamps must be separated by at least one tick.
+    if type(timestamp_tick) not in (int, float) or not 0 < timestamp_tick <= period + 1e-9:
+        raise AdmissionError("invalid decoded timestamp tick")
+    return period + 2 * timestamp_tick
+
+
 def select_samples(pts, *, origin, window, period):
     start, end = window
     if (
@@ -266,10 +280,17 @@ def check_dimensions(image):
         raise AdmissionError("video dimensions out of bounds")
 
 
+def check_display_rotation(frame):
+    try:
+        return display_rotation(frame)
+    except VideoOrientationError as exc:
+        raise AdmissionError(str(exc)) from exc
+
 def decode_frames(video, output, clip_id, clip):
     import av
 
     timestamps = []
+    rotation = None
     with av.open(str(video), mode="r") as container:
         if len(container.streams.video) != 1:
             raise AdmissionError("expected a single video stream")
@@ -279,6 +300,11 @@ def decode_frames(video, output, clip_id, clip):
             check_dimensions(frame)
             if len(timestamps) == MAX_DECODED_FRAMES or frame.time is None:
                 raise AdmissionError("video frame count or timestamp out of bounds")
+            frame_rotation = check_display_rotation(frame)
+            if rotation is None:
+                rotation = frame_rotation
+            elif frame_rotation % 360 != rotation % 360:
+                raise AdmissionError("display rotation changed during first decode")
             timestamps.append(float(frame.time))
         if len(timestamps) < FRAME_COUNT or any(not math.isfinite(value) for value in timestamps):
             raise AdmissionError("missing timed video frames")
@@ -286,55 +312,82 @@ def decode_frames(video, output, clip_id, clip):
         if not gaps:
             raise AdmissionError("no positive presentation timestamp gaps")
         period = statistics.median(gaps)
-        origin = (float(stream.start_time * stream.time_base)
-                  if stream.start_time is not None and stream.time_base else timestamps[0])
-        duration = (float(stream.duration * stream.time_base)
-                    if stream.duration is not None and stream.time_base else timestamps[-1] - origin + period)
+        time_base = stream.time_base
+        timestamp_tick = float(time_base) if time_base is not None else None
+        duration_tolerance = timing_tolerance(period, timestamp_tick)
+        origin = (float(stream.start_time * time_base)
+                  if stream.start_time is not None and time_base is not None else timestamps[0])
+        duration = (float(stream.duration * time_base)
+                    if stream.duration is not None and time_base is not None else timestamps[-1] - origin + period)
 
     expected_duration = clip["clip_end_full_video_seconds"] - clip["clip_start_full_video_seconds"]
     window = annotation_window(clip)
+    first_relative_pts = timestamps[0] - origin
+    last_relative_pts_plus_period = timestamps[-1] - origin + period
     if (
-        not all(math.isfinite(value) for value in (origin, duration, period))
+        not all(math.isfinite(value) for value in (origin, duration))
         or duration <= 0
-        or period <= 0
-        or abs(duration - expected_duration) > period + 1e-9
-        or abs(timestamps[0] - origin) > period + 1e-9
-        or abs(timestamps[-1] - origin + period - duration) > period + 1e-9
+        or abs(duration - expected_duration) > duration_tolerance + 1e-9
+        or abs(first_relative_pts) > period + 1e-9
+        or abs(last_relative_pts_plus_period - duration) > period + 1e-9
         or window[1] > duration + period + 1e-9
     ):
-        raise AdmissionError("decoded clip timing disagrees with metadata")
+        raise AdmissionError(
+            f"decoded clip timing disagrees with metadata "
+            f"(duration={duration:.9f}, expected_duration={expected_duration:.9f}, "
+            f"first_relative_pts={first_relative_pts:.9f}, "
+            f"last_relative_pts_plus_period={last_relative_pts_plus_period:.9f}, "
+            f"period={period:.9f}, annotation_end={window[1]:.9f})"
+        )
 
     samples = select_samples(timestamps, origin=origin, window=window, period=period)
     directory = output / "frames" / clip_id
-    directory.mkdir()
+    if directory.exists():
+        raise FileExistsError(directory)
+    orientation = {
+        "source_display_rotation_degrees": rotation,
+        "applied_display_rotation_counterclockwise_degrees": rotation,
+    }
     by_index = {sample["frame_index"]: (slot, sample) for slot, sample in enumerate(samples)}
-    with av.open(str(video), mode="r") as container:
-        for index, frame in enumerate(container.decode(video=0)):
-            if index not in by_index:
-                continue
-            slot, sample = by_index.pop(index)
-            if frame.time is None or float(frame.time) != sample["source_pts_seconds"]:
-                raise AdmissionError("presentation timestamp changed between decodes")
-            check_dimensions(frame)
-            scale = min(1.0, MAX_EDGE / max(frame.width, frame.height))
-            width = max(1, round(frame.width * scale))
-            height = max(1, round(frame.height * scale))
-            path = directory / f"{slot:02d}.png"
-            image = frame.reformat(width=width, height=height, format="rgb24").to_image()
-            with path.open("xb") as handle:
-                image.save(handle, format="PNG")
-            sample.update({
-                "path": path.relative_to(output).as_posix(),
-                "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
-                "width": width,
-                "height": height,
-            })
-            if not by_index:
-                break
-    if by_index:
-        raise AdmissionError("selected frames missing on second decode")
+    with tempfile.TemporaryDirectory(prefix=f".{clip_id}-", dir=directory.parent) as staged:
+        count = 0
+        with av.open(str(video), mode="r") as container:
+            for index, frame in enumerate(container.decode(video=0)):
+                count += 1
+                if count > len(timestamps):
+                    raise AdmissionError("frame count changed between decodes")
+                if check_display_rotation(frame) % 360 != rotation % 360:
+                    raise AdmissionError("display rotation changed between decodes")
+                if index not in by_index:
+                    continue
+                slot, sample = by_index.pop(index)
+                if frame.time is None or float(frame.time) != sample["source_pts_seconds"]:
+                    raise AdmissionError("presentation timestamp changed between decodes")
+                check_dimensions(frame)
+                scale = min(1.0, MAX_EDGE / max(frame.width, frame.height))
+                width = max(1, round(frame.width * scale))
+                height = max(1, round(frame.height * scale))
+                path = Path(staged) / f"{slot:02d}.png"
+                image = frame.reformat(width=width, height=height, format="rgb24").to_image()
+                image = apply_display_rotation(image, rotation)
+                with path.open("xb") as handle:
+                    image.save(handle, format="PNG")
+                sample.update({
+                    **orientation,
+                    "path": (directory / path.name).relative_to(output).as_posix(),
+                    "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+                    "width": image.width,
+                    "height": image.height,
+                })
+        if by_index:
+            raise AdmissionError("selected frames missing on second decode")
+        if count != len(timestamps):
+            raise AdmissionError("frame count changed between decodes")
+        Path(staged).rename(directory)
     return {
+        **orientation,
         "decoded_duration_seconds": duration,
+        "decoded_timestamp_tick_seconds": timestamp_tick,
         "clip_pts_origin_seconds": origin,
         "frame_period_seconds": period,
         "annotation_start_clip_seconds": window[0],

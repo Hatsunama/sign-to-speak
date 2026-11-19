@@ -1,11 +1,20 @@
 import copy
+from contextlib import nullcontext
+from dataclasses import replace
 import hashlib
 import importlib
 import json
 from pathlib import Path
 import string
+import sys
 import tempfile
+from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock, patch
+
+from PIL import Image
+
+import test_train_qwen_temporal as temporal_tests
 
 
 def experiment():
@@ -142,6 +151,148 @@ class AdmissionTests(unittest.TestCase):
                 setattr(image, attribute, value)
                 with self.assertRaises(ValueError):
                     read(ImageModule(), self.root, rows["image_A"])
+
+
+class OrientedVideoInputs(unittest.TestCase):
+    def setUp(self):
+        scratch = tempfile.TemporaryDirectory()
+        self.addCleanup(scratch.cleanup)
+        self.root = Path(scratch.name)
+        self.admission = self.root / "selected-video" / "sample.json"
+        self.admission.parent.mkdir()
+        self.out = self.root / "output"
+        self.out.mkdir()
+        self.static = self.root / "static.json"
+        self.static.write_bytes(b"{}")
+        self.document = temporal_tests.dense_admission()
+        self.document["orientation_policy"] = "validated-displaymatrix-right-angle-v1"
+        for clip in self.document["clips"]:
+            for frame in clip["frames"]:
+                frame.update(display_rotation_degrees=180, applied_rotation_degrees_ccw=180)
+
+    def args(self):
+        ex = experiment()
+        payload = json.dumps(self.document).encode()
+        self.admission.write_bytes(payload)
+        return SimpleNamespace(
+            dense_admission=self.admission, dense_admission_sha256=ex.sha256(payload),
+            static_manifest=self.static, static_manifest_sha256=ex.sha256(b"{}"), steps=1,
+        )
+
+    def test_paired_run_rejects_legacy_dense_admission_before_static_input(self):
+        ex = experiment()
+        self.document.pop("orientation_policy")
+        for clip in self.document["clips"]:
+            for frame in clip["frames"]:
+                frame.pop("display_rotation_degrees")
+                frame.pop("applied_rotation_degrees_ccw")
+        self.admission = self.admission.with_name("admission.json")
+        args = self.args()
+        with patch.object(ex.pilot, "DENSE", replace(ex.pilot.DENSE, root=self.admission.parent)), \
+                patch.object(ex, "DENSE_ADMISSION_SHA256", args.dense_admission_sha256, create=True), \
+                patch.object(ex, "validate_static_manifest", side_effect=AssertionError("Legacy video accepted")):
+            with self.assertRaisesRegex(ValueError, "orientation"):
+                ex.run(args, self.out, {})
+
+    def test_rejects_incomplete_or_invalid_frame_orientation_and_mismatched_pin(self):
+        ex = experiment()
+        frame = self.document["clips"][-1]["frames"][-1]
+        for field, value in (
+            ("display_rotation_degrees", None), ("display_rotation_degrees", True),
+            ("display_rotation_degrees", 270), ("applied_rotation_degrees_ccw", 90),
+            ("applied_rotation_degrees_ccw", 180.0),
+        ):
+            with self.subTest(field=field, value=value):
+                if value is None:
+                    frame.pop(field)
+                else:
+                    frame[field] = value
+                args = self.args()
+                with self.assertRaisesRegex(ValueError, "orientation"):
+                    ex.load_dense_admission(args.dense_admission, args.dense_admission_sha256)
+                frame[field] = 180
+        self.args()
+        with self.assertRaisesRegex(ValueError, "digest mismatch"):
+            ex.load_dense_admission(self.admission, "0" * 64)
+
+    def test_paired_run_and_development_controls_read_selected_pngs(self):
+        ex = experiment()
+        expected_pixels = {}
+        for clip_index, clip in enumerate(self.document["clips"], 1):
+            pixels = []
+            for slot, frame in enumerate(clip["frames"]):
+                path = self.admission.parent / frame["path"]
+                path.parent.mkdir(exist_ok=True, parents=True)
+                image = Image.new("RGB", (2, 1), (clip_index, slot, 1))
+                image.putpixel((1, 0), (slot, clip_index, 2))
+                image.save(path)
+                pixels.append(image.tobytes())
+            expected_pixels[clip["id"]] = pixels
+
+        torch = Mock()
+        torch.equal.side_effect = lambda first, second: first.data == second.data
+        processor = Mock()
+        processor.tokenizer.eos_token_id = 3
+        processor.apply_chat_template.side_effect = temporal_tests.DenseTrainingTest.encode
+        training_clips = [clip for clip in self.document["clips"] if clip["split"] == "train"]
+        processor.tokenizer.decode.side_effect = [clip["reference"] for clip in training_clips]
+        fake_packages = {
+            "torch": torch,
+            "peft": SimpleNamespace(LoraConfig=None, PeftModel=None, get_peft_model=None),
+            "transformers": SimpleNamespace(
+                Qwen3_5ForConditionalGeneration=None,
+                AutoProcessor=SimpleNamespace(from_pretrained=lambda *args, **kwargs: processor),
+            ),
+        }
+        args = self.args()
+        with patch.dict(sys.modules, fake_packages), patch.object(ex, "validate_runtime"), \
+                patch.object(ex.pilot, "tensor_digest", side_effect=temporal_tests.DenseTrainingTest.pixel_digest), \
+                patch.object(ex, "validate_static_manifest", return_value={"static": {"label": "A"}}), \
+                patch.object(ex, "read_static_image", side_effect=StopIteration("Training inputs ready")):
+            with self.assertRaisesRegex(StopIteration, "Training inputs ready"):
+                ex.run(args, self.out, {})
+        receipt = json.loads((self.out / "experiment.json").read_bytes())
+        self.assertEqual(receipt["dense_admission_sha256"], args.dense_admission_sha256)
+        for clip in training_clips:
+            receipt = json.loads((self.out / "training_inputs" / f"{clip['id']}.json").read_bytes())
+            self.assertEqual(receipt["pixel_values_sha256"],
+                             ex.sha256(b"".join(expected_pixels[clip["id"]])))
+
+        _, _, development, profile = ex.load_dense_admission(self.admission, args.dense_admission_sha256)
+        self.assertEqual(profile.root, self.admission.parent)
+        donors = ex.wrong_video_donors(development)
+
+        def cpu_encode(*args, **kwargs):
+            tensors = temporal_tests.DenseTrainingTest.encode(*args, **kwargs)
+            for tensor in tensors.values():
+                tensor.to = lambda device, value=tensor: value
+            return tensors
+
+        processor.apply_chat_template.side_effect = cpu_encode
+        processor.tokenizer.decode.side_effect = None
+        processor.tokenizer.decode.return_value = "sample"
+        torch.inference_mode.return_value = nullcontext()
+        class Generated:
+            def __getitem__(self, key):
+                return temporal_tests.FakeTensor([3], (1,))
+
+        model = Mock()
+        model.generation_config.eos_token_id = 3
+        model.generate.return_value = Generated()
+        with patch.object(ex.pilot, "tensor_digest", side_effect=temporal_tests.DenseTrainingTest.pixel_digest):
+            ex.evaluate_development(torch, Image, processor, model, development, donors, self.out, profile)
+
+        for clip in development:
+            pixels = expected_pixels[clip["id"]]
+            expected = {
+                "matched": pixels, "shuffled": [pixels[i] for i in profile.shuffled],
+                "black": [bytes(6)] * len(pixels),
+                "wrong_video": expected_pixels[donors[clip["id"]]["id"]],
+            }
+            for condition, images in expected.items():
+                receipt = json.loads((self.out / clip["id"] / f"{condition}.json").read_bytes())
+                self.assertEqual(receipt["model_input"]["ordered_rgb_sha256"],
+                                 [ex.sha256(image) for image in images])
 
 
 class PairedTrainingTests(unittest.TestCase):

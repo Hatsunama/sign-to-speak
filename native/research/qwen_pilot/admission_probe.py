@@ -1,6 +1,6 @@
 # /// script
 # requires-python = ">=3.11,<3.14"
-# dependencies = ["av>=14,<18", "Pillow>=11,<13", "huggingface_hub>=1,<2"]
+# dependencies = ["av>=17,<18", "Pillow>=11,<13", "huggingface_hub>=1,<2"]
 # ///
 """Prepare bounded, independently grouped public ASL clips in a private HF Jobs bucket."""
 
@@ -19,6 +19,8 @@ from urllib.error import HTTPError
 from urllib.parse import quote, unquote, urlsplit
 from urllib.request import Request, urlopen
 
+from video_orientation import VideoOrientationError, apply_display_rotation, display_rotation
+
 
 HUB = "https://huggingface.co"
 DATASET = "facebook/2M-Flores-ASL"
@@ -31,6 +33,7 @@ TOTAL_BYTES = 1024 * MIB
 CLIP_BYTES = 150 * MIB
 FRAME_COUNT = 8
 MAX_EDGE = 384
+ORIENTATION_POLICY = "validated-displaymatrix-right-angle-v1"
 MIN_TRAIN = 4
 TARGET_TRAIN = 16
 TARGET_HOLDOUT = 4
@@ -213,6 +216,7 @@ def decode_frames(video, root, clip_id, *, frame_count=FRAME_COUNT):
     if frame_count < 2:
         raise AdmissionError("at least two sample slots are required")
     timestamps = []
+    rotations = []
     with av.open(str(video), mode="r") as container:
         if len(container.streams.video) != 1:
             raise AdmissionError("expected one video stream")
@@ -223,6 +227,10 @@ def decode_frames(video, root, clip_id, *, frame_count=FRAME_COUNT):
             if len(timestamps) == MAX_DECODED_FRAMES or frame.time is None:
                 raise AdmissionError("video frame count or timestamp out of bounds")
             timestamps.append(float(frame.time))
+            try:
+                rotations.append(display_rotation(frame))
+            except VideoOrientationError as error:
+                raise AdmissionError(str(error)) from error
         if len(timestamps) < 2:
             raise AdmissionError("video has fewer than two timed frames")
         origin = timestamps[0]
@@ -246,7 +254,8 @@ def decode_frames(video, root, clip_id, *, frame_count=FRAME_COUNT):
             scale = min(1.0, MAX_EDGE / max(frame.width, frame.height))
             width = max(1, round(frame.width * scale))
             height = max(1, round(frame.height * scale))
-            images[index] = frame.reformat(width=width, height=height, format="rgb24").to_image()
+            image = frame.reformat(width=width, height=height, format="rgb24").to_image()
+            images[index] = apply_display_rotation(image, rotations[index])
             if len(images) == len(needed):
                 break
     if len(images) != len(needed):
@@ -259,6 +268,8 @@ def decode_frames(video, root, clip_id, *, frame_count=FRAME_COUNT):
             "path": filename.relative_to(root).as_posix(),
             "requested_seconds": requests[slot], "actual_seconds": actual_seconds[index],
             "source_pts_seconds": timestamps[index], "duplicate": duplicate,
+            "display_rotation_degrees": rotations[index],
+            "applied_rotation_degrees_ccw": rotations[index],
         })
     return duration, frames
 
@@ -372,7 +383,7 @@ def main():
                 "license_url": LICENSE_URL, "license_path": "CC-BY-SA-4.0.txt",
                 "attribution_path": "UPSTREAM_README.md", "attribution": "Meta 2M-Flores-ASL and Flores200",
                 "citation": "https://arxiv.org/abs/2412.08274",
-                "modifications": "temporal sampling and RGB frame resizing",
+                "modifications": "temporal sampling, display orientation and RGB frame resizing",
                 "metadata": {
                     f"data/{split}/metadata.csv": hashlib.sha256(content).hexdigest()
                     for split, content in metadata.items()
@@ -382,6 +393,7 @@ def main():
             "prompt": PROMPT,
             "counts": counts,
             "frames_per_clip": FRAME_COUNT,
+            "orientation_policy": ORIENTATION_POLICY,
             "max_frame_edge": MAX_EDGE,
             "max_original_bytes": TOTAL_BYTES,
             "original_bytes": original_bytes,

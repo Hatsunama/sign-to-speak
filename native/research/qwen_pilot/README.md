@@ -1,13 +1,27 @@
-# Sign To Speak Qwen experiments
+# Sign To Speak Qwen research
 
-Cloud research pipeline for ASL video-to-English development. Run dependency-free checks with `python -B -m unittest discover -s native/research/qwen_pilot -p 'test_*.py'`.
+Bounded private cloud experiments, not a production translator. Keep customer data, credentials, signing keys, media, reference manifests, predictions and weights out of this source PR.
 
-`admission_probe.py` verifies revision-pinned public Meta dataset metadata, bounded individual downloads, source/prompt grouping, actual decoded timestamps and Qwen identity. It writes eight sampled RGB frames per selected clip, provenance and the admission receipt under the mounted private `/data/pilot` directory. Original videos use ephemeral storage. Preserve attribution and the applicable dataset/model terms.
+Run the full research suite with PyAV 17 and Pillow available:
+`python -B -m unittest discover -s native/research/qwen_pilot -p 'test_*.py'`.
+Use the pinned cloud CUDA environment for training and the opt-in `test_target_only_loss.py --cuda` for controlled loss/gradient equivalence.
 
-`dense_admission.py` verifies the original receipt and every original clip digest before resampling the same cohort to 32 frames under `/data/pilot_dense`. The shared decoder has an explicit sample-count parameter. The default trainer profile uses four selected images; `--profile dense` uses all 32, a fixed reordering and same-size black images, with a 6,144-token total budget including 64 reserved generation tokens. Previously inspected evaluation clips are explicitly development controls for the temporal comparison.
+## Current paired path
 
-`train_qwen_pilot.py` runs frozen-baseline generation before bounded LoRA training and compares the adapter with matched, reordered and blank visual inputs. Use `--run` with a fresh name and `--steps` between 1 and 40. It saves per-step losses, checkpoint weights, optimizer state, paired decoded outputs and provenance receipts. Run it in the separately authorized CUDA cloud environment with the pinned dependencies. Scheduler completion, parseable success and final checkpoint/evaluation inventory must all agree.
+1. Preserve historical inputs. Run `dense_admission.py --output /data/pilot_dense_oriented` against the original pinned cohort. The shared `video_orientation.py` validates and applies right-angle nonmirrored display rotation. Sampling retains actual timestamps and source/applied rotation fields.
+2. Run `static_admission.py --output /data/static-v1`. Intake verifies bounded original JPEGs, the source anchor, canonical/mirror equality and source provenance. The actual archive has a complete duplicate wrapper and four rectangular photos. Optional `--archive-file PATH --archive-sha256 SHA` verifies cached originals. Review the contact sheets before producing a separate eligible manifest.
+3. Freeze the paired protocol before predictions. `paired_experiment.py` requires explicit `--dense-admission`, `--dense-admission-sha256`, `--static-manifest`, `--static-manifest-sha256` and a fresh `--run`. Both arms reload one saved initialization and receive identical video batches/optimizer updates; only B adds static loss. Current consumers reject the old orientation contract.
+4. `fsboard_admission.py` prepares evaluation-only FSboard v13 clips with pinned source metadata/license, original MD5/SHA-256, annotation-window timestamps, display orientation and PNG hashes. Metadata-duration validation accounts for the recorded container timestamp tick. Review first, then create a separate eligible manifest.
+5. `fsboard_evaluate.py` requires a completed pair, matching dense/static manifests and the approved evaluation SHA. It compares the frozen base and both adapters on matched, reordered, black and unrelated-video inputs. It retains private completions, EOS/token-cap status, exact match, weighted character error and optional paired reference NLL.
 
-Handled dense-intake failures remove only unpublished output created by that invocation. Preexisting data and completed receipts are preserved. Cleanup errors report alongside the original error. A hard kill can leave partial output. Before retrying, confirm the earlier job is terminal, preserve its diagnostic evidence, verify that no completed admission was published, and explicitly preserve or retire the incomplete attempt. Never remove a completed admission or a checkpoint based on marker absence alone.
+The first feasibility protocol uses 80 updates per candidate: the pre-generation schedule audit found that 40 would expose only 21 of 24 static letters. The visual-screened set has 116 photos; four uncertain/poorly visible examples were excluded. AI visual screening is not independent ASL-fluent certification. The four general-text clips are reused development controls. A small fresh fingerspelling set cannot qualify everyday-ASL conversation coverage.
 
-Small size-selected samples, coarse temporal input, unverified signer independence and token-overlap metrics cannot qualify production translation. Record temporal gaps and inspect paired outputs. An experiment is complete only when its execution and failure evidence have been independently checked. Keep a spending ledger and an explicit timeout for every paid job. Application builds, mobile model integration and release acceptance continue through their own verification gates.
+## Failure and provenance boundaries
+
+Use exclusive fresh output directories and preserve failed attempts. Static publication preserves completed output after a reported post-rename failure; cleanup reports alongside the primary error. Video failures retain diagnostics. Terminal job state, parseable success and final artifact inventory must agree before accepting a run.
+
+`train_qwen_pilot.py` supplies tested shared tokenization/causal-loss helpers and historical single-run reproduction. Prior sparse/dense source snapshots and receipts remain private evidence. The paired path explicitly binds the orientation-correct admission.
+
+Every paid job requires a timeout and shared-budget check. US$14 covers both candidates and previous pilots, with US$2 reserved for storage/startup uncertainty. Android builds remain on GitHub. Research results do not authorize a release or establish phone behavior.
+
+See [teaching-material task](STATIC_ASL_CURRICULUM_TASK.md) and [research record](STATIC_ASL_RESEARCH.md).

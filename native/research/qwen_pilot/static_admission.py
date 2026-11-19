@@ -35,7 +35,9 @@ SOURCE_GROUP = "danrasband-asl-alphabet-test-v1"
 ANCHOR = "A/A0001_test.jpg"
 ANCHOR_BYTES = 10_570
 ANCHOR_SHA256 = "4c22cf21532007e15036d69e6d511ed050cea28eeb6bbb65488fe19dd70bba71"
-ARCHIVE_CAP = 20 * MIB
+# The version 1 full ZIP includes a mirrored tree and was observed at 25,489,344 bytes.
+ARCHIVE_CAP = 32 * MIB
+ARCHIVE_WRAPPER = "asl-alphabet-test/"
 EXPANDED_CAP = 64 * MIB
 IMAGE_CAP = 128 * 1024
 IMAGE_EDGE = 200
@@ -70,18 +72,38 @@ def download_archive(target):
         return bounded_copy(response, target, ARCHIVE_CAP, declared)
 
 
+def verify_local_archive(path, expected_digest, target):
+    if not re.fullmatch(r"[0-9a-fA-F]{64}", expected_digest):
+        raise AdmissionError("archive SHA-256 must be 64 hexadecimal digits")
+    if not path.is_file():
+        raise AdmissionError("local archive must be a regular file")
+    with path.open("rb") as source:
+        info = os.fstat(source.fileno())
+        if not stat.S_ISREG(info.st_mode):
+            raise AdmissionError("local archive must be a regular file")
+        size, digest = bounded_copy(source, target, ARCHIVE_CAP, info.st_size)
+    if digest != expected_digest.lower():
+        raise AdmissionError("local archive SHA-256 does not match")
+    return size, digest
+
+
 def archive_members(archive):
     entries = archive.infolist()
-    if len(entries) > len(CLASSES) * (PER_CLASS + 1):
+    if len(entries) > 2 * len(CLASSES) * (PER_CLASS + 1):
         raise AdmissionError("too many archive paths")
     members = {}
+    wrapped_members = {}
+    has_wrapper = False
     seen = set()
     counts = dict.fromkeys(CLASSES, 0)
     expanded = 0
     for member in entries:
         path = member.orig_filename
         directory = member.is_dir()
-        folder, separator, name = path.partition("/")
+        source_path = path.removeprefix(ARCHIVE_WRAPPER)
+        wrapped = source_path != path
+        has_wrapper = has_wrapper or wrapped
+        folder, separator, name = source_path.partition("/")
         if (not separator or folder not in counts or path != member.filename
                 or (directory and name)
                 or (not directory and not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,79}\.jpg", name))):
@@ -105,41 +127,60 @@ def archive_members(archive):
         expanded += member.file_size
         if expanded > EXPANDED_CAP:
             raise AdmissionError("expanded archive exceeds byte cap")
-        counts[folder] += 1
-        members[path] = member
+        if wrapped:
+            wrapped_members[source_path] = member
+        else:
+            counts[folder] += 1
+            members[source_path] = member
     if any(count != PER_CLASS for count in counts.values()) or not SELECTED.keys() <= members.keys():
         raise AdmissionError("missing expected archive files or class counts differ from version 1")
-    return members
+    if has_wrapper and wrapped_members.keys() != members.keys():
+        raise AdmissionError("wrapped archive photos must form a complete mirror")
+    return members, wrapped_members
 
 
 def verify_jpeg(data):
-    error_message = "expected single-frame 200x200 RGB JPEG"
+    error_message = f"expected single-frame RGB JPEG with edges between 1 and {IMAGE_EDGE} pixels"
     try:
         with Image.open(data, formats=("JPEG",)) as image:
-            if (image.format != "JPEG" or image.mode != "RGB" or image.size != (IMAGE_EDGE, IMAGE_EDGE)
-                    or getattr(image, "n_frames", 1) != 1):
+            width, height = image.size
+            if (image.format != "JPEG" or image.mode != "RGB" or getattr(image, "n_frames", 1) != 1
+                    or not (0 < width <= IMAGE_EDGE and 0 < height <= IMAGE_EDGE)):
                 raise AdmissionError(error_message)
             image.load()
+            return width, height
     except (OSError, SyntaxError, Image.DecompressionBombError) as error:
         raise AdmissionError(error_message) from error
 
 
+def read_image(archive, source_path, member, original):
+    with archive.open(member) as source:
+        size, digest = bounded_copy(source, original, IMAGE_CAP, member.file_size)
+    if source_path == ANCHOR and (size != ANCHOR_BYTES or digest != ANCHOR_SHA256):
+        raise AdmissionError("archive does not match the pinned source photo")
+    original.seek(0)
+    dimensions = verify_jpeg(original)
+    return size, digest, dimensions
+
+
 def read_members(archive, output):
-    members = archive_members(archive)
+    members, wrapped_members = archive_members(archive)
     seen_digests = set()
     samples = {}
     (output / "images").mkdir()
     for source_path, member in members.items():
         original = io.BytesIO()
-        with archive.open(member) as source:
-            size, digest = bounded_copy(source, original, IMAGE_CAP, member.file_size)
-        if source_path == ANCHOR and (size != ANCHOR_BYTES or digest != ANCHOR_SHA256):
-            raise AdmissionError("archive does not match the pinned source photo")
+        size, digest, (width, height) = read_image(archive, source_path, member, original)
         if digest in seen_digests:
             raise AdmissionError("duplicate image bytes in archive")
         seen_digests.add(digest)
-        original.seek(0)
-        verify_jpeg(original)
+        if wrapped_members:
+            with io.BytesIO() as wrapped:
+                wrapped_size, wrapped_digest, _ = read_image(
+                    archive, source_path, wrapped_members[source_path], wrapped
+                )
+            if (wrapped_size, wrapped_digest) != (size, digest):
+                raise AdmissionError(f"wrapped copy differs from canonical photo: {source_path}")
         if source_path in SELECTED:
             sample_id = f"static-{digest}"
             path = f"images/{sample_id}.jpg"
@@ -154,11 +195,16 @@ def read_members(archive, output):
                 "original_bytes": size,
                 "source_group": SOURCE_GROUP,
                 "role": ROLE,
-                "width": IMAGE_EDGE,
-                "height": IMAGE_EDGE,
+                "width": width,
+                "height": height,
                 "split": "train",
             }
-    return [samples[path] for path in SELECTED]
+    archive_counts = {
+        "image_count": len(members),
+        "transport_entry_count": len(archive.infolist()),
+        "wrapper_copy_count": len(wrapped_members),
+    }
+    return [samples[path] for path in SELECTED], archive_counts
 
 
 def write_sheets(output, samples):
@@ -184,7 +230,11 @@ def write_sheets(output, samples):
                 sheet.save(page, format="PNG")
 
 
-def prepare(output):
+def prepare(output, *, archive_file=None, archive_sha256=None):
+    if (archive_file is None) != (archive_sha256 is None):
+        raise AdmissionError("--archive-file and --archive-sha256 must be supplied together")
+    if archive_file is not None:
+        archive_file = Path(archive_file).resolve(strict=True)
     output = Path(output).absolute()
     output.mkdir(mode=0o700)
     created = output.lstat()
@@ -193,12 +243,19 @@ def prepare(output):
     staged_manifest = None
     try:
         with io.BytesIO() as payload:
-            size, digest = download_archive(payload)
-            downloaded_at = datetime.now(timezone.utc).isoformat()
+            if archive_file is None:
+                size, digest = download_archive(payload)
+                provenance = {"retrieved_at_utc": datetime.now(timezone.utc).isoformat()}
+            else:
+                size, digest = verify_local_archive(archive_file, archive_sha256, payload)
+                provenance = {
+                    "input": "verified_local_archive",
+                    "verified_at_utc": datetime.now(timezone.utc).isoformat(),
+                }
             payload.seek(0)
             try:
                 with zipfile.ZipFile(payload) as archive:
-                    samples = read_members(archive, output)
+                    samples, archive_counts = read_members(archive, output)
             except (zipfile.BadZipFile, UnicodeError, zlib.error) as error:
                 raise AdmissionError(f"invalid ZIP archive ({type(error).__name__})") from error
 
@@ -220,10 +277,10 @@ def prepare(output):
                     "url": API_URL,
                     "method": "POST",
                     "request": dict(REQUEST),
-                    "retrieved_at_utc": downloaded_at,
+                    **provenance,
                     "sha256": digest,
                     "bytes": size,
-                    "image_count": len(CLASSES) * PER_CLASS,
+                    **archive_counts,
                 },
                 "anchor": {"path": ANCHOR, "sha256": ANCHOR_SHA256, "bytes": ANCHOR_BYTES},
             },
@@ -263,9 +320,13 @@ def prepare(output):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", required=True, type=Path, help="Fresh review directory in the private pilot mount")
+    parser.add_argument("--archive-file", type=Path, help="Previously retrieved version 1 ZIP")
+    parser.add_argument("--archive-sha256", help="Expected SHA-256 of the local ZIP")
     args = parser.parse_args()
+    if (args.archive_file is None) != (args.archive_sha256 is None):
+        parser.error("--archive-file and --archive-sha256 must be supplied together")
     try:
-        manifest = prepare(args.output)
+        manifest = prepare(args.output, archive_file=args.archive_file, archive_sha256=args.archive_sha256)
     except (OSError, AdmissionError) as error:
         print(f"Static photo preparation failed ({error}).", file=sys.stderr)
         for note in getattr(error, "__notes__", ()):

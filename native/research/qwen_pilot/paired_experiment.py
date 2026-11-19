@@ -2,7 +2,7 @@
 
 import argparse
 from collections import Counter
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, replace
 import gc
 import hashlib
 from importlib.metadata import version
@@ -24,7 +24,8 @@ import train_qwen_pilot as pilot
 
 
 OUTPUT_ROOT = Path("/data/out")
-DENSE_ADMISSION_SHA256 = "9e9995e7813e31b3784af4445e96fbe84d33c98e92fea6b338fe79501542e3d3"
+ORIENTATION_POLICY = "validated-displaymatrix-right-angle-v1"
+RIGHT_ANGLE_ROTATIONS = frozenset({-180, -90, 0, 90, 180})
 STATIC_LETTERS = frozenset(string.ascii_uppercase) - {"J", "Z"}
 STATIC_PROMPT = "Identify the static American Sign Language fingerspelling handshape. Reply with only the uppercase letter."
 STATIC_PROFILE = SimpleNamespace(name="static", matched=(0,), max_sequence_tokens=1024)
@@ -47,6 +48,22 @@ def read_pinned_json(path, expected_sha256):
     if sha256(payload) != expected_sha256:
         raise ValueError(f"Admission digest mismatch for {path.name}")
     return json.loads(payload)
+
+
+def load_dense_admission(path, expected_sha256):
+    document = read_pinned_json(path, expected_sha256)
+    if document.get("orientation_policy") != ORIENTATION_POLICY:
+        raise ValueError("Dense admission lacks the required display orientation policy")
+    profile = replace(pilot.DENSE, root=path.parent)
+    training, development = pilot.validate_admission(document, profile)
+    for clip in [*training, *development]:
+        for frame in clip["frames"]:
+            display = frame.get("display_rotation_degrees")
+            applied = frame.get("applied_rotation_degrees_ccw")
+            if (type(display) is not int or display not in RIGHT_ANGLE_ROTATIONS
+                    or type(applied) is not int or applied != display):
+                raise ValueError(f"Invalid display orientation for admitted frame {frame['path']}")
+    return document, training, development, profile
 
 
 def group_key(group):
@@ -289,13 +306,13 @@ def wrong_video_donors(clips):
     raise ValueError("Development controls lack unrelated wrong-video donors")
 
 
-def wrong_video_input(image_module, processor, donor):
-    frames = [donor["frames"][index] for index in pilot.DENSE.matched]
-    images = [pilot.frame_image(image_module, frame["path"], pilot.DENSE) for frame in frames]
-    encoded = pilot.tokenize_messages(processor, pilot.inference_messages(images), True, pilot.DENSE)
+def wrong_video_input(image_module, processor, donor, profile):
+    frames = [donor["frames"][index] for index in profile.matched]
+    images = [pilot.frame_image(image_module, frame["path"], profile) for frame in frames]
+    encoded = pilot.tokenize_messages(processor, pilot.inference_messages(images), True, profile)
     return encoded, {
         "donor_clip_id": donor["id"], "donor_reference": donor["reference"],
-        "donor_source_group": donor["source_group"], "frame_indices": pilot.DENSE.matched,
+        "donor_source_group": donor["source_group"], "frame_indices": profile.matched,
         "frames": frames, "rgb_sizes": [image.size for image in images],
         "ordered_rgb_sha256": [sha256(image.tobytes()) for image in images],
         "pixel_values_sha256": pilot.tensor_digest(encoded["pixel_values"]),
@@ -313,15 +330,15 @@ def generation_status(tokens, eos_token_ids, max_tokens):
     raise RuntimeError("Unexpected generation stop without EOS or the token cap")
 
 
-def evaluate_development(torch, image_module, processor, model, clips, donors, output):
+def evaluate_development(torch, image_module, processor, model, clips, donors, output, profile):
     model.eval()
     results = {condition: [] for condition in CONDITIONS}
     eos_token_ids = model.generation_config.eos_token_id
     with torch.inference_mode():
         for clip in clips:
-            inputs = pilot.condition_inputs(image_module, processor, clip, pilot.DENSE)
+            inputs = pilot.condition_inputs(image_module, processor, clip, profile)
             inputs["black"] = inputs.pop("blank")
-            inputs["wrong_video"] = wrong_video_input(image_module, processor, donors[clip["id"]])
+            inputs["wrong_video"] = wrong_video_input(image_module, processor, donors[clip["id"]], profile)
             if len({details["pixel_values_sha256"] for _, details in inputs.values()}) != len(CONDITIONS):
                 raise ValueError("Two development controls encode indistinguishable visual inputs")
             matched_words = None
@@ -410,8 +427,9 @@ def create_initial_adapter(torch, base, lora_config, wrap, revision, path):
 def run(args, output, status):
     started = time.monotonic()
     status["stage"] = "admission"
-    dense = read_pinned_json(pilot.DENSE.root / "admission.json", DENSE_ADMISSION_SHA256)
-    training, development = pilot.validate_admission(dense, pilot.DENSE)
+    dense, training, development, profile = load_dense_admission(
+        args.dense_admission, args.dense_admission_sha256,
+    )
     donors = wrong_video_donors(development)
     manifest = read_pinned_json(args.static_manifest, args.static_manifest_sha256)
     static_root = args.static_manifest.parent
@@ -421,7 +439,8 @@ def run(args, output, status):
     pilot.save_json(schedule_path, {arm: [asdict(step) for step in steps] for arm, steps in schedules.items()})
     pilot.save_json(output / "experiment.json", {
         "model": dense["model"], "dataset": dense["dataset"],
-        "dense_admission_sha256": DENSE_ADMISSION_SHA256, "static_manifest_sha256": args.static_manifest_sha256,
+        "dense_admission_sha256": args.dense_admission_sha256,
+        "static_manifest_sha256": args.static_manifest_sha256,
         "schedule_sha256": sha256(schedule_path.read_bytes()),
         "source_sha256": {path.name: sha256(path.read_bytes()) for path in (
             Path(__file__), Path(pilot.__file__), Path(__file__).with_name("requirements-train-cloud.txt"),
@@ -431,7 +450,7 @@ def run(args, output, status):
         "wrong_video_donors": {clip_id: donor["id"] for clip_id, donor in donors.items()},
         "static_samples_by_letter": Counter(row["label"] for row in samples.values()),
         "static_prompt": STATIC_PROMPT, "video_prompt": pilot.INSTRUCTION,
-        "evaluation_role": pilot.DENSE.evaluation_role, "evaluation_conditions": CONDITIONS,
+        "evaluation_role": profile.evaluation_role, "evaluation_conditions": CONDITIONS,
         "seed": pilot.SEED, "static_sampler_seed": STATIC_SEED, "learning_rate": pilot.LEARNING_RATE,
         "video_microbatches_per_step": pilot.GRAD_ACCUMULATION, "auxiliary_weight": AUXILIARY_WEIGHT,
         "clip_norm": CLIP_NORM, "planned_optimizer_steps_per_arm": args.steps,
@@ -460,7 +479,7 @@ def run(args, output, status):
         pilot.MODEL_ID, revision=revision, token=False, trust_remote_code=False,
     )
     video = {
-        clip["id"]: pilot.training_example(torch, Image, processor, clip, output, pilot.DENSE)
+        clip["id"]: pilot.training_example(torch, Image, processor, clip, output, profile)
         for clip in training
     }
     sampled = {step.static_id for step in schedules["B"]}
@@ -512,7 +531,7 @@ def run(args, output, status):
 
         status["stage"] = "development_evaluation"
         summary["development"] = evaluate_development(
-            torch, Image, processor, model, development, donors, arm_path / "development",
+            torch, Image, processor, model, development, donors, arm_path / "development", profile,
         )
         summary["peak_gpu_allocated_bytes"] = torch.cuda.max_memory_allocated()
         pilot.save_json(arm_path / "summary.json", summary)
@@ -523,7 +542,7 @@ def run(args, output, status):
     status["stage"] = "completion"
     status.pop("arm")
     pilot.save_json(output / "success.json", {
-        "status": "completed_exploratory_pair", "evaluation_role": pilot.DENSE.evaluation_role,
+        "status": "completed_exploratory_pair", "evaluation_role": profile.evaluation_role,
         "initialization_sha256": initialization["adapter_sha256"], "arms": summaries,
         "elapsed_seconds": time.monotonic() - started,
     })
@@ -532,18 +551,25 @@ def run(args, output, status):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", required=True, help="Unique directory under /data/out")
+    parser.add_argument("--dense-admission", required=True, type=Path,
+                        help="Orientation-validated dense manifest beside its frame tree")
+    parser.add_argument("--dense-admission-sha256", required=True)
     parser.add_argument("--static-manifest", required=True, type=Path)
     parser.add_argument("--static-manifest-sha256", required=True)
     parser.add_argument("--steps", type=int, default=pilot.MAX_OPTIMIZER_STEPS)
     args = parser.parse_args()
     if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,63}", args.run):
         parser.error("run must be a lowercase directory name")
+    if not SHA256.fullmatch(args.dense_admission_sha256):
+        parser.error("dense admission digest must be a lowercase SHA-256")
     if not SHA256.fullmatch(args.static_manifest_sha256):
         parser.error("static manifest digest must be a lowercase SHA-256")
     if not 1 <= args.steps <= MAX_STEPS:
         parser.error(f"steps must be between 1 and {MAX_STEPS}")
-    if sys.platform != "linux" or not pilot.DENSE.root.is_dir() or not OUTPUT_ROOT.is_dir():
-        parser.error("The cloud job must mount dense input at /data/pilot_dense and output at /data/out")
+    if sys.platform != "linux" or not OUTPUT_ROOT.is_dir():
+        parser.error("The cloud job must mount output at /data/out on Linux")
+    if not args.dense_admission.is_file():
+        parser.error("The selected dense admission must be a readable file")
     output = OUTPUT_ROOT / args.run
     try:
         output.mkdir(exist_ok=False)
