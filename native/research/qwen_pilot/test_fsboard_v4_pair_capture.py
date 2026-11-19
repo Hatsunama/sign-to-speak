@@ -1,5 +1,6 @@
 """Exercise the paired trainer's capture contract with small synthetic files."""
 
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
@@ -48,6 +49,44 @@ class PairCaptureTests(unittest.TestCase):
 
     def poll(self, strict=False):
         capture.capture_completed(self.source, self.destination, self.copied, strict=strict)
+
+    def fail_destination_write(self, relative, error):
+        original_open = Path.open
+        target = self.destination / relative
+
+        @contextmanager
+        def failing_writer(stream):
+            with stream:
+                def fail_after_prefix(data):
+                    original_write(data[:1])
+                    raise error
+
+                original_write = stream.write
+                with patch.object(stream, "write", fail_after_prefix):
+                    yield stream
+
+        def open_with_write_failure(path, mode="r", *args, **kwargs):
+            stream = original_open(path, mode, *args, **kwargs)
+            if path == target and mode == "xb":
+                return failing_writer(stream)
+            return stream
+
+        return patch.object(Path, "open", open_with_write_failure)
+
+    def partially_copy_checkpoint(self):
+        checkpoint = Path("A/checkpoint-010")
+        self.adapter(checkpoint.as_posix(), step=10)
+        first = checkpoint / "adapter_config.json"
+        second = checkpoint / "adapter_model.safetensors"
+        write_error = OSError("transient checkpoint write error")
+        with self.fail_destination_write(second, write_error):
+            with self.assertRaises(OSError) as caught:
+                self.poll()
+        self.assertIs(caught.exception, write_error)
+        self.assertEqual(set(self.copied), {first})
+        self.assertEqual((self.destination / first).read_bytes(), (self.source / first).read_bytes())
+        self.assertFalse((self.destination / second).exists())
+        return checkpoint, first, second
 
     def completed_pair(self):
         experiment = {
@@ -249,6 +288,63 @@ class PairCaptureTests(unittest.TestCase):
         self.assertIn(str(cleanup_error), notes)
         self.assertIn(str(self.destination / "experiment.json"), notes)
         self.assertFalse(self.copied)
+
+    def test_retries_partial_checkpoint_at_exact_total_budget(self):
+        checkpoint, _, _ = self.partially_copy_checkpoint()
+        members = set((self.source / checkpoint).iterdir())
+        budget = sum(member.stat().st_size for member in members)
+
+        with patch.object(capture, "MAX_TOTAL_BYTES", budget):
+            self.poll(strict=True)
+
+        self.assertEqual(set(self.copied), {member.relative_to(self.source) for member in members})
+        for member in members:
+            self.assertEqual((self.destination / member.relative_to(self.source)).read_bytes(),
+                             member.read_bytes())
+
+    def test_retry_refuses_corrupt_checkpoint_prefix(self):
+        checkpoint, first, second = self.partially_copy_checkpoint()
+        target = self.destination / first
+        corrupted = b"x" * target.stat().st_size
+        target.write_bytes(corrupted)
+
+        with self.assertRaisesRegex(capture.CaptureError, "Captured artifact changed"):
+            self.poll()
+
+        self.assertEqual(set(self.copied), {first})
+        self.assertEqual(target.read_bytes(), corrupted)
+        self.assertFalse((self.destination / second).exists())
+        self.assertFalse((self.destination / checkpoint / "receipt.json").exists())
+
+    def test_retry_refuses_unindexed_checkpoint_member(self):
+        checkpoint, first, second = self.partially_copy_checkpoint()
+        existing = self.destination / second
+        original = (self.source / second).read_bytes()
+        existing.write_bytes(original)
+
+        with self.assertRaisesRegex(capture.CaptureError, "already exists.*adapter_model"):
+            self.poll()
+
+        self.assertEqual(set(self.copied), {first})
+        self.assertEqual(existing.read_bytes(), original)
+        self.assertFalse((self.destination / checkpoint / "optimizer.pt").exists())
+        self.assertFalse((self.destination / checkpoint / "receipt.json").exists())
+
+    def test_strict_copy_error_preserves_later_siblings_and_blocks_success(self):
+        self.completed_pair()
+        self.adapter("A/checkpoint-010", step=10)
+        relative = Path("A/checkpoint-010/adapter_model.safetensors")
+        write_error = OSError("strict checkpoint write error")
+        with self.fail_destination_write(relative, write_error):
+            with self.assertRaises(OSError) as caught:
+                self.poll(strict=True)
+
+        self.assertIs(caught.exception, write_error)
+        for path in ("A/checkpoint-192/receipt.json", "B/checkpoint-192/receipt.json", "B/summary.json"):
+            self.assertEqual((self.destination / path).read_bytes(), (self.source / path).read_bytes())
+        self.assertFalse((self.destination / relative).exists())
+        self.assertFalse((self.destination / relative.parent / "receipt.json").exists())
+        self.assertFalse((self.destination / "success.json").exists())
 
     def test_incomplete_json_and_checkpoint_are_skipped_then_rejected_at_final_capture(self):
         step = self.write("A/steps/010.json", b'{"optimizer_steps":10}')

@@ -90,16 +90,30 @@ def _read_json(path):
     return document, (sha256(payload).hexdigest(), len(payload))
 
 
+def _verify_copied_entry(source, destination, relative, expected):
+    for root in (source, destination):
+        path = root / relative
+        if not _directory(path.parent) or _fingerprint(path, expected[1]) != expected:
+            raise CaptureError(f"Captured artifact changed: {path}")
+
+
 def _save_entries(source, destination, entries, copied):
-    if sum(size for _, size in copied.values()) + sum(size for _, size in entries.values()) > MAX_TOTAL_BYTES:
+    pending = {relative: expected for relative, expected in entries.items() if relative not in copied}
+    total_size = sum(size for _, size in copied.values()) + sum(size for _, size in pending.values())
+    if total_size > MAX_TOTAL_BYTES:
         raise CaptureError("Paired output exceeds the capture size limit")
-    for relative in entries:
+    for relative, expected in entries.items():
+        if relative in copied:
+            if copied[relative] != expected:
+                raise CaptureError(f"Captured artifact changed: {source / relative}")
+            _verify_copied_entry(source, destination, relative, expected)
+            continue
         target = destination / relative
         _directory(target.parent, create=True)
         if _path_info(target, stat.S_ISREG) is not None:
             raise CaptureError(f"Artifact already exists: {target}")
 
-    for relative, expected in entries.items():
+    for relative, expected in pending.items():
         target = destination / relative
         created = False
         try:
@@ -245,7 +259,7 @@ def capture_completed(pair_root, destination, copied, strict=False):
     def attempt(capture, relative, step=None):
         try:
             capture(source, destination, relative, copied, step)
-        except CaptureError as error:
+        except (OSError, CaptureError) as error:
             if strict:
                 errors.append(error)
             elif not isinstance(error, _Incomplete):
@@ -268,10 +282,7 @@ def capture_completed(pair_root, destination, copied, strict=False):
 
     if strict:
         for relative, expected in copied.items():
-            for root in (source, destination):
-                path = root / relative
-                if not _directory(path.parent) or _fingerprint(path, expected[1]) != expected:
-                    raise CaptureError(f"Captured artifact changed: {path}")
+            _verify_copied_entry(source, destination, relative, expected)
         if errors:
             raise errors[0]
         success = Path("success.json")

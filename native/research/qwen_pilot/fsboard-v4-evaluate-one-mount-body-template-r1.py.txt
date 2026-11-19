@@ -10,6 +10,7 @@ import sys
 import tarfile
 import tempfile
 import time
+from types import SimpleNamespace
 
 CPU_THREADS = {name: "1" for name in (
     "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS",
@@ -209,12 +210,10 @@ except (Exception, KeyboardInterrupt) as error:
 def capture_records(local, remote, expected, copied, *, strict=False):
     from fsboard_v4_evaluation_launch import JSON_LIMIT, read_object
 
-    for relative in sorted(expected):
-        if relative in copied:
-            continue
+    def capture(relative):
         source = local / relative
         if not source.exists() and not source.is_symlink():
-            continue
+            return
         require(source.is_file() and not source.is_symlink() and source.resolve() == source,
                 "Unexpected non-regular evaluation result")
         with source.open("rb") as stream:
@@ -223,21 +222,47 @@ def capture_records(local, remote, expected, copied, *, strict=False):
         if relative == "runtime_receipt.json":
             # The direct writer ends its indented object with a closing brace on its own line.
             if not strict and not payload.endswith((b"\n}\n", b"\n}\r\n")):
-                continue
+                return
             require(payload.endswith(b"\n"), "Incomplete evaluation runtime receipt")
         require(payload, "Unexpected evaluation result size")
         read_object(payload, relative)
         target = remote / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        with target.open("xb") as stream:
-            stream.write(payload)
-        require(target.read_bytes() == payload, "Captured evaluation result readback failed")
+        created = False
+        try:
+            with target.open("xb") as stream:
+                created = True
+                require(stream.write(payload) == len(payload), "Incomplete evaluation result write")
+            require(target.read_bytes() == payload, "Captured evaluation result readback failed")
+        except (Exception, KeyboardInterrupt) as error:
+            if created:
+                try:
+                    target.unlink(missing_ok=True)
+                except OSError as cleanup_error:
+                    error.add_note(f"Could not remove partial evaluation capture {target}: {cleanup_error}")
+            raise
         copied[relative] = {"sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
+
+    errors = []
+    for relative in sorted(expected):
+        if relative in copied:
+            continue
+        try:
+            capture(relative)
+        except Exception as error:
+            if not strict:
+                raise
+            errors.append(error)
     if strict:
         for relative, receipt in copied.items():
             target = remote / relative
-            require(target.stat().st_size == receipt["bytes"] and file_sha(target) == receipt["sha256"],
-                    "Captured evaluation result changed")
+            try:
+                require(target.stat().st_size == receipt["bytes"] and file_sha(target) == receipt["sha256"],
+                        "Captured evaluation result changed")
+            except Exception as error:
+                errors.append(error)
+        if errors:
+            raise errors[0]
 
 
 def verify_complete(remote, copied, candidates, clips, plan, controls):
@@ -291,7 +316,7 @@ def verify_complete(remote, copied, candidates, clips, plan, controls):
     return summaries
 
 
-def run_and_capture(argv, work, env, output, out, candidates, clips, plan, controls):
+def run_and_capture(argv, work, env, output, out, candidates, clips, plan, controls, *, terminal=None):
     import fsboard_task_evaluate as evaluation
 
     remote = out / "artifacts"
@@ -314,9 +339,13 @@ def run_and_capture(argv, work, env, output, out, candidates, clips, plan, contr
     deadline = None
     strict = False
     summaries = None
+    if terminal is None:
+        terminal = SimpleNamespace(finalized=False)
 
     def terminate(signum, frame):
         nonlocal deadline
+        if terminal.finalized:
+            return
         if deadline is None:
             deadline = time.monotonic() + 15
         if child is not None and child.poll() is None:
@@ -359,10 +388,13 @@ def run_and_capture(argv, work, env, output, out, candidates, clips, plan, contr
                 if error is None:
                     error = failure
         rc = None if child is None else child.returncode
-        completed = rc == 0 and deadline is None and error is None and strict and summaries is not None
+        # Close cancellation before publication and carry that boundary through bootstrap cleanup.
+        terminal.finalized = True
+        cancelled = deadline is not None
+        completed = rc == 0 and not cancelled and error is None and strict and summaries is not None
         report = {
             "status": "completed_holdout_evaluation" if completed else "evaluation_incomplete",
-            "returncode": rc, "strict_capture_complete": strict, "cancellation_requested": deadline is not None,
+            "returncode": rc, "strict_capture_complete": strict, "cancellation_requested": cancelled,
             "orchestration_error_type": None if error is None else type(error).__name__,
             "saved_artifacts": copied,
         }
@@ -376,12 +408,12 @@ def run_and_capture(argv, work, env, output, out, candidates, clips, plan, contr
             )
         write_json(out / "child-exit.json", report)
         print(report["status"], flush=True)
-        return 0 if completed else 130 if deadline is not None else 1
+        return 0 if completed else 130 if cancelled else 1
     finally:
         signal.signal(signal.SIGTERM, previous)
 
 
-def main(out, work):
+def main(out, work, *, terminal):
     if not __debug__:
         raise RuntimeError("Evaluation bootstrap requires enabled integrity checks")
 
@@ -474,24 +506,30 @@ def main(out, work):
     child_script = work / "evaluate_child.py"
     child_script.write_text(child_header + INPUT_LOADER_SOURCE + CHILD_BODY, encoding="utf-8")
     return run_and_capture([sys.executable, "-B", str(child_script)], work, env, output, out, candidates,
-                           verified.clips["holdout"], plan, controls)
+                           verified.clips["holdout"], plan, controls, terminal=terminal)
 
 
-def cancel_bootstrap(signum, frame):
-    raise KeyboardInterrupt
+def bootstrap(out):
+    terminal = SimpleNamespace(finalized=False)
+
+    def cancel_bootstrap(signum, frame):
+        if not terminal.finalized:
+            raise KeyboardInterrupt
+
+    signal.signal(signal.SIGTERM, cancel_bootstrap)
+    with tempfile.TemporaryDirectory(prefix="sign-to-speak-evaluation-", dir="/tmp") as scratch:
+        try:
+            return main(out, Path(scratch), terminal=terminal)
+        except (Exception, KeyboardInterrupt) as error:
+            terminal.finalized = True
+            write_json(out / "bootstrap-failure.json", {
+                "status": "evaluation_incomplete", "error_type": type(error).__name__, "detail": str(error)[:4096],
+            })
+            print(f"Evaluation bootstrap stopped ({type(error).__name__})", file=sys.stderr, flush=True)
+            return 130 if isinstance(error, KeyboardInterrupt) else 1
 
 
 if __name__ == "__main__":
     out = JOB / "out/run"
     out.mkdir(mode=0o700)
-    signal.signal(signal.SIGTERM, cancel_bootstrap)
-    with tempfile.TemporaryDirectory(prefix="sign-to-speak-evaluation-", dir="/tmp") as scratch:
-        try:
-            returncode = main(out, Path(scratch))
-        except (Exception, KeyboardInterrupt) as error:
-            write_json(out / "bootstrap-failure.json", {
-                "status": "evaluation_incomplete", "error_type": type(error).__name__, "detail": str(error)[:4096],
-            })
-            print(f"Evaluation bootstrap stopped ({type(error).__name__})", file=sys.stderr, flush=True)
-            returncode = 130 if isinstance(error, KeyboardInterrupt) else 1
-    raise SystemExit(returncode)
+    raise SystemExit(bootstrap(out))

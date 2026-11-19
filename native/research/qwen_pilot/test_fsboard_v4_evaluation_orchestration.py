@@ -1,5 +1,6 @@
 """Offline tests for the evaluation job's child/result contract."""
 import ast
+from contextlib import contextmanager
 from hashlib import sha256
 import json
 import os
@@ -186,3 +187,185 @@ class OrchestrationTests(unittest.TestCase):
         self.assertTrue(report["cancellation_requested"])
         self.assertEqual(report["status"], "evaluation_incomplete")
         self.assertEqual(report["saved_artifacts"].keys(), {"base/clip-000/matched.json", "failure.json"})
+
+    def test_final_capture_preserves_records_after_a_malformed_record(self):
+        first = "A/clip-000/black.json"
+        corrupt = "A/clip-000/matched.json"
+        last = "B/clip-063/wrong_video.json"
+        self.write_local(first, {"record": "first"})
+        (self.output / corrupt).write_bytes(b"{invalid}")
+        self.write_local(last, {"record": "last"})
+
+        code, report = self.finish()
+
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "evaluation_incomplete")
+        self.assertFalse(report["strict_capture_complete"])
+        self.assertIn("matched.json", report["orchestration_error_detail"])
+        self.assertEqual(report["saved_artifacts"].keys(), {first, last})
+        self.assertEqual((self.out / "artifacts" / last).read_bytes(), (self.output / last).read_bytes())
+        self.assertFalse((self.out / "artifacts" / corrupt).exists())
+
+    def test_failed_exclusive_write_allows_strict_retry(self):
+        relative = "A/clip-000/matched.json"
+        self.write_local(relative, {"record": "completed"})
+        payload = (self.output / relative).read_bytes()
+        destination = self.out / "artifacts" / relative
+        open_file = Path.open
+        attempted = False
+
+        @contextmanager
+        def short_write(path, mode, *args, **kwargs):
+            with open_file(path, mode, *args, **kwargs) as stream:
+                yield SimpleNamespace(write=lambda data: stream.write(data[:-1]))
+
+        def open_with_short_write(path, mode="r", *args, **kwargs):
+            nonlocal attempted
+            if path == destination and mode == "xb" and not attempted:
+                attempted = True
+                return short_write(path, mode, *args, **kwargs)
+            return open_file(path, mode, *args, **kwargs)
+
+        polls = iter((None, 0))
+        child = SimpleNamespace(poll=lambda: next(polls, 0), returncode=0)
+        with (
+            patch.dict(sys.modules, {"fsboard_task_evaluate": self.evaluator}),
+            patch("subprocess.Popen", return_value=child),
+            patch.object(Path, "open", open_with_short_write),
+        ):
+            code = self.body["run_and_capture"]([], self.work, {}, self.output, self.out, self.candidates,
+                                                self.clips, self.plan, self.controls)
+
+        report = json.loads((self.out / "child-exit.json").read_bytes())
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "evaluation_incomplete")
+        self.assertTrue(report["strict_capture_complete"])
+        self.assertEqual(report["orchestration_error_type"], "RuntimeError")
+        self.assertEqual(report["saved_artifacts"][relative], {"sha256": sha256(payload).hexdigest(),
+                                                              "bytes": len(payload)})
+        self.assertEqual(destination.read_bytes(), payload)
+
+    def test_capture_cleanup_error_preserves_the_readback_error(self):
+        relative = "A/clip-000/matched.json"
+        self.write_local(relative, {"record": "completed"})
+        target = self.out / relative
+
+        with (
+            patch.object(Path, "read_bytes", side_effect=OSError("readback unavailable")),
+            patch.object(Path, "unlink", autospec=True, side_effect=PermissionError("cleanup unavailable")) as unlink,
+            self.assertRaisesRegex(OSError, "readback unavailable") as failure,
+        ):
+            self.body["capture_records"](self.output, self.out, {relative}, {}, strict=True)
+
+        self.assertEqual(unlink.call_args.args, (target,))
+        self.assertIn("cleanup unavailable", failure.exception.__notes__[0])
+
+    def test_strict_retry_never_removes_an_existing_target(self):
+        relative = "A/clip-000/matched.json"
+        self.write_local(relative, {"record": "completed"})
+        target = self.out / relative
+        target.parent.mkdir(parents=True)
+        target.write_bytes(b"existing bytes")
+        copied = {}
+
+        with self.assertRaises(FileExistsError):
+            self.body["capture_records"](self.output, self.out, {relative}, copied, strict=True)
+
+        self.assertEqual(copied, {})
+        self.assertEqual(target.read_bytes(), b"existing bytes")
+
+    def test_signal_before_terminal_publication_cancels_with_all_artifacts(self):
+        self.populate()
+        body_globals = self.body["run_and_capture"].__globals__
+        verify = body_globals["verify_complete"]
+
+        def verify_and_cancel(*args):
+            summaries = verify(*args)
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            return summaries
+
+        with patch.dict(body_globals, {"verify_complete": verify_and_cancel}):
+            code, report = self.finish()
+        self.assertEqual(code, 130)
+        self.assertEqual(report["status"], "evaluation_incomplete")
+        self.assertTrue(report["cancellation_requested"])
+        self.assertEqual(len(report["saved_artifacts"]), 967)
+        self.assertNotIn("scored_records", report)
+
+    def test_signal_during_terminal_publication_preserves_the_committed_outcome(self):
+        relative = "A/clip-000/matched.json"
+        self.write_local(relative, {"record": "completed"})
+        body_globals = self.body["run_and_capture"].__globals__
+        write = body_globals["write_json"]
+
+        def write_and_signal(path, report):
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            write(path, report)
+
+        with patch.dict(body_globals, {"write_json": write_and_signal}):
+            code, report = self.finish(child_returncode=1)
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "evaluation_incomplete")
+        self.assertFalse(report["cancellation_requested"])
+        self.assertEqual(report["saved_artifacts"].keys(), {relative})
+
+    def run_bootstrap(self, *, cleanup_signal=False, publication_error=False):
+        body_globals = self.body["run_and_capture"].__globals__
+        write = body_globals["write_json"]
+        entry_point = ast.parse(TEMPLATE.read_bytes()).body[-1]
+        entry = compile(ast.Module(body=[entry_point], type_ignores=[]), str(TEMPLATE), "exec")
+        child = SimpleNamespace(poll=lambda: 0, returncode=0)
+
+        def main(out, work, *args, **kwargs):
+            return body_globals["run_and_capture"]([], work, {}, self.output, out, self.candidates,
+                                                   self.clips, self.plan, self.controls, *args, **kwargs)
+
+        def write_receipt(path, report):
+            if publication_error:
+                if path.name == "child-exit.json":
+                    signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+                    raise OSError("terminal receipt write failed")
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+            write(path, report)
+
+        @contextmanager
+        def temporary_directory(**kwargs):
+            yield str(self.work)
+            if cleanup_signal:
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+        (self.work / "out").mkdir()
+        previous = signal.getsignal(signal.SIGTERM)
+        try:
+            with (
+                patch.dict(body_globals, {"__name__": "__main__", "JOB": self.work,
+                                          "main": main, "write_json": write_receipt}),
+                patch.dict(sys.modules, {"fsboard_task_evaluate": self.evaluator}),
+                patch("subprocess.Popen", return_value=child),
+                patch("tempfile.TemporaryDirectory", temporary_directory),
+                self.assertRaises(SystemExit) as exit_,
+            ):
+                exec(entry, body_globals)
+        except KeyboardInterrupt:
+            self.fail("A late SIGTERM escaped bootstrap terminal handling")
+        finally:
+            signal.signal(signal.SIGTERM, previous)
+        return exit_.exception.code, self.work / "out/run"
+
+    def test_cleanup_signal_cannot_override_published_success(self):
+        self.populate()
+        code, out = self.run_bootstrap(cleanup_signal=True)
+        report = json.loads((out / "child-exit.json").read_bytes())
+        self.assertEqual(code, 0)
+        self.assertEqual(report["status"], "completed_holdout_evaluation")
+        self.assertFalse((out / "bootstrap-failure.json").exists())
+
+    def test_signal_during_failed_publication_cannot_mask_the_write_error(self):
+        self.populate()
+        code, out = self.run_bootstrap(publication_error=True, cleanup_signal=True)
+        report = json.loads((out / "bootstrap-failure.json").read_bytes())
+        self.assertEqual(code, 1)
+        self.assertEqual(report["status"], "evaluation_incomplete")
+        self.assertEqual(report["error_type"], "OSError")
+        self.assertEqual(report["detail"], "terminal receipt write failed")
+        self.assertFalse((out / "child-exit.json").exists())

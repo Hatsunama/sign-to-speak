@@ -1,6 +1,6 @@
 # FSboard v4 verification status — November 19, 2026
 
-The unchanged 288-clip cohort has passed full media and actual processor verification. The six-clip GPU engineering fit passed at update 100 on the verified L40S runtime. The fresh 192-update A/B pair is running; independent accuracy and commercial readiness remain unqualified. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
+The unchanged 288-clip cohort passed full media and actual processor verification. The six-clip GPU engineering fit passed at update 100 on the verified L40S runtime. Both fresh A/B arms completed their frozen 192 updates; the independent base/A/B holdout job has been submitted. Accuracy and commercial readiness remain unqualified. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
 
 ## Frozen experiment and completed input evidence
 
@@ -19,7 +19,7 @@ Inputs are 8–32 distinct ordered RGB stills at actual in-window PTS, maximum e
 
 The [completed processor continuation](https://huggingface.co/jobs/Hatsunama/6aff4c27efaf5e14f4b1eb18) independently rehashed/extracted the private 2,030,178,907-byte media archive, verified all 288 matched encodings and all 320 controls, encoded the 80 selected static images, and exercised both lazy video consumers. Independent remote readback and matched/control comparisons passed; no control pixel collisions were found. Its Linux prerequisite suite passed 163 checks without skips. It loaded no model weights or scores. Training-eligibility flags remain false because input validity is not model qualification.
 
-Both future arms use common initialization, two identical complete video passes and 192 optimizer updates. Only B adds static-letter loss at weight 0.05. The pinned prior schedule fixes the same 80 distinct static images and order; the lazy consumer rechecks image bytes and attested encodings rather than retaining every pixel tensor. [Protocol](fsboard_task_protocol.py) · [Input gate](fsboard_task_inputs.py) · [Training consumer](fsboard_task_training.py)
+Both trained arms used common initialization, two identical complete video passes and 192 optimizer updates. Only B adds static-letter loss at weight 0.05. The pinned prior schedule fixes the same 80 distinct static images and order; the lazy consumer rechecks image bytes and attested encodings rather than retaining every pixel tensor. [Protocol](fsboard_task_protocol.py) · [Input gate](fsboard_task_inputs.py) · [Training consumer](fsboard_task_training.py)
 
 ## Repairs and cascading checks
 
@@ -35,7 +35,7 @@ Source packaging also exposed missing transitive imports, incorrect Windows text
 
 The pinned model's text EOS is 248044, while assistant teacher targets use 248046. Fit and evaluation now explicitly stop at either token and reject continuation past the boundary. All 24 inspected historical matched scores reproduce unchanged. Input encoding and teacher targets are unchanged. [Stop evidence and export responsibilities](GENERATION_STOP_CONTRACT.md)
 
-## Pending fit, pair and evaluation
+## Engineering fit and qualification path
 
 The frozen [fit policy v2](FSBOARD_V4_FIT_SMOKE_PROTOCOL.json) selects six distinct training references and evaluates updates 0, 50 and 100. Its engineering guard requires six exact outputs and at least 25% mean teacher-NLL reduction, stopping at 50 if met. No holdout/development model calls are allowed. The fit adapter is discarded.
 
@@ -43,11 +43,11 @@ Single-L4 allocation stayed queued and was cancelled before execution. An actual
 
 R3 GPU source: 201,692 bytes, SHA-256 `30e21395dddb5e84dd2e062005d12e8035532be680e3b1d12db90e51b636f1cf`; source manifest `5b2df533e3d36fc29a7df820e4e9e069cbd1e739b48e44e69fb4db7c052e95aa`. The original R2 archive remains preserved. The CPU input producer remains separately bound to R2; the encoder and its attestation contract did not change.
 
-The first multi-mount L40S fit request stayed unallocated and was cancelled. The [single-workspace fit](https://huggingface.co/jobs/Hatsunama/6aff5cd6efaf5e14f4b205f8) uses server-side copies of only the required assets under one private mount; authoritative originals are not mounted. Every copied Xet hash and size matches. Source, media, processor, controls, precision and fit rules are unchanged. This request progressed to execution; the scheduling cause is not proven. It passed 176 Linux prerequisite checks without skips and actual checkpoint-zero generation/finite teacher NLL, then reached optimizer update 5. Four initial generations stopped at EOS and two hit the token cap, with no continuation past the first effective EOS. All six initial exact scores were zero. No fit pass is claimed before the frozen trained checkpoints. The running cap remains 30 minutes. [Fit](fsboard_task_fit.py)
+The first multi-mount L40S fit request stayed unallocated and was cancelled. The [single-workspace fit](https://huggingface.co/jobs/Hatsunama/6aff5cd6efaf5e14f4b205f8) uses server-side copies of only the required assets under one private mount; authoritative originals are not mounted. Every copied Xet hash and size matches. Source, media, processor, controls, precision and fit rules are unchanged. This request progressed to execution; the scheduling cause is not proven. It passed 176 Linux prerequisite checks without skips and completed the frozen engineering fit described below. Four initial generations stopped at EOS and two hit the token cap, with no continuation past the first effective EOS. All six initial exact scores were zero. The historical timeout cap was 30 minutes. [Fit](fsboard_task_fit.py)
 
 The [pair launcher](fsboard_v4_pair_launch.py) rechecks fit success, child exit, exact checkpoint hashes, effective EOS and source/data/processor pins, and recomputes the six-clip guard before emitting the existing complete-pair command with a new common initialization. Scoring separately binds final A/B adapters and the base revision, then evaluates the frozen 64-by-five controls. None of those stages is qualified by a mock test. [Pair](fsboard_task_cloud_training.py) · [Evaluator](fsboard_task_evaluate.py)
 
-## Completed engineering fit and current pair
+## Completed engineering fit and paired training
 
 Independent private readback verified the fit process exit, every saved checkpoint, source/data pins and the actual pair-launch gate against the frozen R3 runtime.
 
@@ -61,7 +61,7 @@ The same optimizer continued through both trained checkpoints. No holdout/develo
 
 Fit success SHA-256: `ba48fd3925b2067692a9f8f00110574652c2898be1b7ebce2fc23b4cbefc0b9e`; outer zero-exit receipt: `d825a05b4ec51ea3550d5bfc5ccb0fb3154f34ebc0adefa88fd7aed8fc39badc`.
 
-The [fresh pair](https://huggingface.co/jobs/Hatsunama/6aff619b4fdc5ab3c55a4fab) uses another isolated one-mount workspace, copied server-side and verified without large local downloads. Arm A completed 192 updates and 384 video microbatches; B reached update 40. Actual persisted initialization receipts match, observed video batches match, and B's static forward/backward path executed with finite loss. The pair is not complete yet. No comparison outcome or static-transfer benefit is claimed.
+The [fresh pair](https://huggingface.co/jobs/Hatsunama/6aff619b4fdc5ab3c55a4fab) completed in another isolated one-mount workspace. Both arms completed 192 updates and 384 video microbatches; only B performed 192 static updates. Independent readback verified the exact SHA-256 of all 474 captured training JSON files, and every step matched its scheduled video/static IDs with finite losses. Common initialization matched and both final parameter digests changed. All 596 captured objects matched indexed sizes. Each arm's final outputs were separately copied to its labelled private bucket and checked by Xet content hash and size. The evaluation loader must independently stream-check terminal adapter/optimizer bytes and reproduce the loaded parameter digest before scoring. No static-transfer benefit is claimed.
 
 The trained reference uses Transformers' Torch implementation; optional fused linear-attention/convolution packages are absent. Evaluation keeps that implementation and sets an explicit owned kernel-cache directory while excluding ambient credentials.
 
@@ -71,11 +71,21 @@ The candidate verifier binds every final adapter to the exact completed pair, so
 
 Review found and reproduced two additional edges before use: a cross-arm inequality guard incorrectly rejected a legitimate identical-arm null outcome, and live capture could treat a partially written runtime receipt as corruption. Identical arms are now accepted when each has its own valid evidence; swapped or tampered artifacts still reject. Live polling defers the directly written runtime receipt until completion, and final capture requires valid complete JSON. The helper/template byte-pin connection is checked in the extracted source closure.
 
-The full workspace source/requirements/declared-program-template suite passed 365 checks with no failures or errors and four Windows filesystem-link skips; 18 focused binding/orchestration checks also passed in isolated delivery. Actual held-out scoring remains pending. [Binding verifier](fsboard_v4_evaluation_launch.py) · [Evaluation template](fsboard-v4-evaluate-one-mount-body-template-r1.py.txt)
+The subsequent independent source/requirements/declared-program-template suite passed 377 checks with no failures or errors and four Windows filesystem-link skips, without importing Torch. Actual held-out scoring remains pending. [Binding verifier](fsboard_v4_evaluation_launch.py) · [Evaluation template](fsboard-v4-evaluate-one-mount-body-template-r1.py.txt)
 
 ## Durable paired-output capture
 
-The paired-output collector initially could copy a terminal success receipt even when final model files were absent. Regressions reproduced that incomplete success before repair. The collector now requires shared records, all 192 step records per arm, both final checkpoint adapters/optimizers and matching receipt hashes before publishing success. Conflicting success/failure receipts reject. Completed checkpoint and failure evidence survives rejected completion; cleanup errors attach to the original I/O error. This verifies stored output completeness, not model accuracy. Sixteen synthetic cases pass, including real Windows junction rejection; actual GPU pair and bucket capture still require verification. [Collector](fsboard_v4_pair_capture.py) · [Regressions](test_fsboard_v4_pair_capture.py)
+The paired-output collector initially could copy a terminal success receipt even when final model files were absent. Regressions reproduced that incomplete success before repair. The collector now requires shared records, all 192 step records per arm, both final checkpoint adapters/optimizers and matching receipt hashes before publishing success. Conflicting success/failure receipts reject. Completed checkpoint and failure evidence survives rejected completion; cleanup errors attach to the original I/O error. This verifies stored output completeness, not model accuracy. The original collector completed the actual GPU pair capture described above; this does not establish held-out quality. The follow-up recovery repair below has 20 focused cases, including real Windows junction rejection. [Collector](fsboard_v4_pair_capture.py) · [Regressions](test_fsboard_v4_pair_capture.py)
+
+## Terminal publication and recovery follow-up
+
+Before scoring, failing regressions reproduced a late-SIGTERM receipt/exit contradiction, a cleanup signal overwriting a committed outcome, a corrupt record preventing later private records from being saved, and a short-write/readback failure leaving an unretryable partial destination. Evaluation now seals cancellation at one terminal boundary through cleanup, preserves the original I/O error if scoped cleanup fails, and finishes strict sibling capture before rejecting the run. The model-loading, input-loader, frozen scorer and all other validation function ASTs are unchanged. The 26 focused binding/orchestration checks passed. New support is privately read back byte-for-byte; historical sources and completed job commands remain preserved.
+
+The same-pattern checkpoint audit reproduced a multi-file retry rejecting its own already-verified prefix and counting its bytes twice. Retries now reverify source and destination against the recorded digest before skipping known files, preserve unindexed existing files, and continue strict sibling capture after per-record I/O errors while withholding success. All four new cases failed before repair; all 20 collector checks passed afterward. This repaired collector is for future reuse; it does not replace the exact source that produced the completed pair.
+
+The [base/A/B evaluation](https://huggingface.co/jobs/Hatsunama/6aff6db34fdc5ab3c55a5ccf) uses the unchanged R3 model runtime and 64-by-five frozen controls per candidate. Its wrapper requires all 960 records, exact adapter binding and recomputed summaries. The source command also rechecks the 26 focused cases on Linux before model loading. Its running-compute cap is 120 minutes / $3.60, within the shared $14 budget and $2 reserve; startup, storage and invoice usage remain unverified. A successful training job or source suite cannot qualify this pending evaluation.
+
+The cascade also flagged prospective cancellation/cleanup handling in retained pair/fit launcher templates and post-rename admission cleanup. These are not evidence that a signal occurred in the completed jobs. They must be repaired or retired before those paths are reused; the frozen executed commands remain audit evidence.
 
 ## Validation limits and release status
 
