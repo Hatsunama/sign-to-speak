@@ -13,7 +13,7 @@ The exact pinned original Qwen base ran offline on Samsung Galaxy S24 (API 37) a
 
 The 32 inputs were distinct 200Ã—200 PNG variants of the same permitted hand photograph, with small synthetic background patches. Each run consumed all 32 positive image batches and 1,152 image tokens, with positive generation timing and exit 0. Context was 6,144 tokens; the single-image profile used 1,024. These are still images, not native video or representative motion/accuracy tests. Filesystem caches were warm from staging and hash verification. Each measured process started fresh; neither phone was rebooted or cache-flushed.
 
-The current two-thread CPU route took 55.35 and 101.78 seconds for this low-resolution sequence workload. Memory fit, but interactive conversation latency is unqualified. A standard Vulkan companion was built in GitHub run 44458051361. Its default vision-offload output then failed the predeclared engineering comparison on both phones; a supported precision-setting probe subsequently met that same embedding guard on both phones. Full text-logit parity and application integration remain unverified. Driver capability declarations alone do not establish working offload, finite multimodal logits, numerical parity, speed or ASL quality. Preserve the CPU result as the comparator.
+The current two-thread CPU route took 55.35 and 101.78 seconds for this low-resolution sequence workload. Memory fit, but interactive conversation latency is unqualified. A standard Vulkan companion was built in GitHub run 44458051361. Its default vision-offload output then failed the predeclared engineering comparison on both phones; a supported precision-setting probe subsequently met that same embedding guard on both phones. Subsequent full-model raw-logit comparisons failed the frozen guard. Production app integration remains unqualified. Driver capability declarations alone do not establish working offload, finite multimodal logits, numerical parity, speed or ASL quality. Preserve the CPU result as the comparator.
 
 ## Verification repairs and remaining limits
 
@@ -33,7 +33,7 @@ The initial GPU projector output failed the predeclared normalized-MSE â‰¤ 1
 
 Samsung's separate text-GPU run aborted during warmup with `compute pipeline creation failed for mul_mat_vec_q4_k_f32_f32` and `vk::Device::createComputePipeline: ErrorUnknown`. The selected pipeline is already F32 and is independent of the FP16-disable setting. It has not been repaired. Seeker's text-GPU path completed both default and FP16-disabled profiles, but successful captions and finite embeddings do not establish text-logit parity. A native QA tool now captures full-vocabulary logits after multimodal prefill and four CPU-forced continuation tokens so that the actual numerical behavior can be compared. GitHub run 44464130811 built that exact tool and the companion CLI. The downloaded archive digest and all 33 file digests were independently verified before Samsung execution.
 
-The failed pipeline family is being retained as all three generated SPIR-V variants for validation and driver diagnosis. A valid SPIR-V module would not prove that a vendor driver can create its specialized pipeline. Shell-process results also require an intended-APK-context check before adoption. Both phones remained at Home and their changed radio settings were restored after these probes. These Vulkan CLI probes ran from a shell process.
+The three generated SPIR-V variants for the failed pipeline family were retained for validation and driver diagnosis. A valid SPIR-V module would not prove that a vendor driver can create its specialized pipeline. Shell-process results also require an intended-APK-context check before adoption. Both phones remained at Home and their changed radio settings were restored after these probes. These Vulkan CLI probes ran from a shell process.
 
 ## Full-vocabulary Samsung follow-up
 
@@ -80,8 +80,22 @@ GitHub run 44474477241 built the test-only JNI probe from source `7ba384d5efae7a
 
 The Samsung N=1 pipeline failure therefore reproduced inside the test APK. The N=2 test reached the numerical comparison and failed it. Seeker's synthetic operator passes and its earlier full-model Vulkan parity failures both stand.
 
-## Shaderc follow-up in progress
+## Shaderc v2026.4 follow-up
 
-GitHub build 44480464845 failed during host CMake generation before compilation, with source `fc1ce54d6c05a4ee163b293d36acc329beb3439a`. The workflow uses Shaderc v2026.4 buildable source `b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc`, pinned by release manifest commit `75137cca3b41a59b8b3e5c42177da8a9490c042f`. The candidate workflow checks compiler integer-dot support and retention of the baseline F32 and packed-dot Q4_K shader families in the APK. The failed generation exposed inconsistent dependency install-export options. A configure-only regression reproduced the exact optimizer export errors; enabling the matching export sets passed it. The corrected full build and new phone results remain pending.
+GitHub build 44480464845 failed during host CMake generation before compilation, with source `fc1ce54d6c05a4ee163b293d36acc329beb3439a`. The failure exposed inconsistent dependency install-export options. A configure-only regression reproduced the optimizer export errors and passed after the dependency export sets were enabled together.
 
-The probe defines four Vulkan process modes. `baseline` clears both controls, `f32` sets `GGML_VK_DISABLE_F16=1`, `mmvq` sets `GGML_VK_FORCE_MMVQ=1`, and `f32_mmvq` sets both. A Samsung repair remains unverified pending numerical and execution checks on the new APK. [Shader compiler preflight](SHADER_COMPILER_PREFLIGHT.md) Â· [Probe process modes](backend_app/README.md)
+The corrected GitHub build 44481814847 completed at source `7838d6947770aa3b046120759b0004552dcced65`. It used Shaderc v2026.4 buildable source `b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc`, pinned by release manifest commit `75137cca3b41a59b8b3e5c42177da8a9490c042f`. The archive SHA-256 was `6fc7cabd30e679256b756018f030d274ca8bb58a7ec32c7f9d8b2d2ffa4d3370`. Verification covered 65 manifest files, matched the APK's native payload to the standalone library, and found all six expected baseline F32 and packed-dot shader modules in that library. Native compilation ran on GitHub. The existing QA debug key was used only for local APK signing. The key stayed in its protected keystore, with no export or production key use. Each of the 13 captured runs matched signed APK SHA-256 `7e59902bc7fb22fd42846c5c106d4cfe09e1ad20abfbd135ef79a84c537c9843`. [Shader compiler preflight](SHADER_COMPILER_PREFLIGHT.md) Â· [Probe process modes](backend_app/README.md)
+
+| App-process operator and mode | Samsung (API 37) | Seeker (API 36) |
+| --- | --- | --- |
+| CPU Q4_K N=1, baseline | Passed 1/1 | Passed 1/1 |
+| Vulkan Q4_K N=1, baseline | Pipeline creation `ErrorUnknown`, native exit 70 | Passed 1/1 |
+| Vulkan Q4_K N=1, `f32` | Pipeline creation `ErrorUnknown`, native exit 70 | No capture |
+| Vulkan Q4_K N=1, `mmvq` | Numerical error 15.681660930, native exit 1 | Passed 1/1 |
+| Vulkan Q4_K N=1, `f32_mmvq` | Numerical error 2.843326668, native exit 1 | Passed 1/1 |
+| Vulkan Q4_K N=2, baseline | Numerical error 1.170434364, native exit 1 | Passed 1/1 |
+| Vulkan Q6_K, baseline | Numerical errors 264518.813343281 and 280064.594685293, native exit 1 | Passed 2/2 |
+
+The upstream numeric limit was 0.0005. Both Samsung Q4_K N=1 pipeline failures named `mul_mat_vec_q4_k_f32_f32`. The `f32` profile sets `GGML_VK_DISABLE_F16=1`, and `mmvq` sets `GGML_VK_FORCE_MMVQ=1`. The `f32_mmvq` profile sets both, and baseline clears both. The forced modes reached numeric comparison on Samsung and failed. The Q6_K rows are the two selected cases without and with `weights=1`, respectively.
+
+The new APK exercised synthetic operators. The earlier full-model raw-logit guard failures still govern GPU qualification, and the controls provide no new full-model parity or ASL quality evidence. Production app UI and main were untouched. At the recorded 08:01 UTC readback on November 19, both phones were at Home, media volume was 0 and the diagnostic processes were absent. The readback recorded no radio or volume changes.
