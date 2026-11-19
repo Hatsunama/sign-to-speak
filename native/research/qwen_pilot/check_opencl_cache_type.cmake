@@ -1,0 +1,7 @@
+set(flag GGML_OPENCL_USE_ADRENO_BIN_KERNELS)
+get_property(flag_type CACHE "${flag}" PROPERTY TYPE)
+get_property(flag_value CACHE "${flag}" PROPERTY VALUE)
+message(STATUS "${flag}:${flag_type}=${flag_value}")
+if(NOT flag_type STREQUAL "BOOL" OR NOT flag_value STREQUAL "OFF")
+    message(FATAL_ERROR "Expected ${flag}:BOOL=OFF")
+endif()

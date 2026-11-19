@@ -154,7 +154,7 @@ jobs:
             -DGGML_CANN=OFF -DGGML_ET=OFF -DGGML_MUSA=OFF -DGGML_VIRTGPU=OFF
             -DGGML_VIRTGPU_BACKEND=OFF -DGGML_ZDNN=OFF -DGGML_ZENDNN=OFF -DGGML_OPENVINO=OFF
             -DGGML_OPENCL_EMBED_KERNELS=ON -DGGML_OPENCL_USE_ADRENO_KERNELS=ON
-            -DGGML_OPENCL_USE_ADRENO_BIN_KERNELS=OFF
+            -DGGML_OPENCL_USE_ADRENO_BIN_KERNELS:BOOL=OFF
           )
 
           run_build_command runtime-configure cmake -S "$qa_source" -B "$build_dir" \
@@ -163,6 +163,7 @@ jobs:
             -DOpenCL_INCLUDE_DIR:PATH="$opencl_include" -DOpenCL_LIBRARY:FILEPATH="$opencl_library"
 
           cache="$build_dir/CMakeCache.txt"
+          cp "$cache" "$diagnostics/runtime-CMakeCache.txt"
           grep -Fx \
             -e "LLAMA_SOURCE_DIR:PATH=$PWD/llama.cpp" \
             -e "CMAKE_TOOLCHAIN_FILE:FILEPATH=$toolchain" \
