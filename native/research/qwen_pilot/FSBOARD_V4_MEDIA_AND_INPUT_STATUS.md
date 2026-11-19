@@ -1,6 +1,6 @@
 # FSboard v4 verification status — November 19, 2026
 
-The unchanged 288-clip cohort has passed full media and actual processor verification. The six-clip GPU fit is queued on a separately verified L40S runtime; no fit result, new paired model or independent accuracy result is qualified yet. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
+The unchanged 288-clip cohort has passed full media and actual processor verification. The six-clip GPU fit is executing on a separately verified L40S runtime; no completed fit result, new paired model or independent accuracy result is qualified yet. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
 
 ## Frozen experiment and completed input evidence
 
@@ -43,13 +43,17 @@ Single-L4 allocation stayed queued and was cancelled before execution. An actual
 
 R3 GPU source: 201,692 bytes, SHA-256 `30e21395dddb5e84dd2e062005d12e8035532be680e3b1d12db90e51b636f1cf`; source manifest `5b2df533e3d36fc29a7df820e4e9e069cbd1e739b48e44e69fb4db7c052e95aa`. The original R2 archive remains preserved. The CPU input producer remains separately bound to R2; the encoder and its attestation contract did not change.
 
-The [L40S fit job](https://huggingface.co/jobs/Hatsunama/6aff561f4fdc5ab3c55a41b9) requires the exact completed input/control receipts before loading weights. It has a 30-minute running cap. Capacity preflight does not reserve the next allocation; the fit is currently queued. [Fit](fsboard_task_fit.py)
+The first multi-mount L40S fit request stayed unallocated and was cancelled. The [single-workspace fit](https://huggingface.co/jobs/Hatsunama/6aff5cd6efaf5e14f4b205f8) uses server-side copies of only the required assets under one private mount; authoritative originals are not mounted. Every copied Xet hash and size matches. Source, media, processor, controls, precision and fit rules are unchanged. This request progressed to execution; the scheduling cause is not proven. It passed 176 Linux prerequisite checks without skips and actual checkpoint-zero generation/finite teacher NLL, then reached optimizer update 5. Four initial generations stopped at EOS and two hit the token cap, with no continuation past the first effective EOS. All six initial exact scores were zero. No fit pass is claimed before the frozen trained checkpoints. The running cap remains 30 minutes. [Fit](fsboard_task_fit.py)
 
 The [pair launcher](fsboard_v4_pair_launch.py) rechecks fit success, child exit, exact checkpoint hashes, effective EOS and source/data/processor pins, and recomputes the six-clip guard before emitting the existing complete-pair command with a new common initialization. Scoring separately binds final A/B adapters and the base revision, then evaluates the frozen 64-by-five controls. None of those stages is qualified by a mock test. [Pair](fsboard_task_cloud_training.py) · [Evaluator](fsboard_task_evaluate.py)
 
+## Durable paired-output capture
+
+The paired-output collector initially could copy a terminal success receipt even when final model files were absent. Regressions reproduced that incomplete success before repair. The collector now requires shared records, all 192 step records per arm, both final checkpoint adapters/optimizers and matching receipt hashes before publishing success. Conflicting success/failure receipts reject. Completed checkpoint and failure evidence survives rejected completion; cleanup errors attach to the original I/O error. This verifies stored output completeness, not model accuracy. Sixteen synthetic cases pass, including real Windows junction rejection; actual GPU pair and bucket capture still require verification. [Collector](fsboard_v4_pair_capture.py) · [Regressions](test_fsboard_v4_pair_capture.py)
+
 ## Validation limits and release status
 
-The complete local workspace source-only suite has 331 checks, no failures/errors and four Windows filesystem-link skips. It ran without private historical fixtures, local Torch imports or native builds. R3 separately passed 176 extracted-source checks with two host link skips; Linux execution must exercise them. The private continuous-media probe separately passed its 15 Linux checks without skips.
+The complete local workspace source-only suite has 347 checks, no failures/errors and four Windows filesystem-link skips. It ran without private historical fixtures, local Torch imports or native builds. R3 separately passed 176 extracted-source checks with two host link skips; Linux execution must exercise them. The private continuous-media probe separately passed its 15 Linux checks without skips.
 
 The [continuous-ASL intake plan](CONTINUOUS_ASL_DATA_INTAKE_PLAN.md) tracks sentence/discourse data, rights, reference alignment and cross-source leakage. Its first one-recording operational probe passed actual access and two-pass decoding; this does not establish signed meaning. [Metadata and media evidence](FLEURS_METADATA_ACCESS.md)
 
