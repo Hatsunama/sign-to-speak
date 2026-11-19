@@ -57,7 +57,7 @@ class MetadataTests(unittest.TestCase):
         good = row()
         invalid_cases = [
             {"sensitiveContent": 0}, {"sensitiveContent": True}, {"sensitiveContent": None},
-            {"signingType": "random"}, {"phrase": "NotLower"}, {"phrase": "abcdÃ©f"},
+            {"signingType": "random"}, {"phrase": "NotLower"}, {"phrase": "abcdéf"},
             {"phrase": "abc\n"}, {"phrase": "ab"}, {"phrase": "abcdefghi"},
             {"clipFileMd5": "g" * 32}, {"clipFileMd5": "a" * 31},
             {"clipFilename": "../video.mp4"}, {"clipFilename": "sub\\video.mp4"},

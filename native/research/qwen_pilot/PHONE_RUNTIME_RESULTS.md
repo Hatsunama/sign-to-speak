@@ -1,4 +1,4 @@
-# Android CPU and Vulkan runtime checkpoint â€” November 19, 2026
+# Android CPU and Vulkan runtime checkpoint — November 19, 2026
 
 The exact pinned original Qwen base ran offline on Samsung Galaxy S24 (API 37) and Seeker (API 36). Both passed single-image inference, PID-verified cancellation, fresh-process recovery and a bounded 32-still workload. This is a native CLI engineering result, not an app release or ASL recognition result.
 
@@ -11,7 +11,7 @@ The exact pinned original Qwen base ran offline on Samsung Galaxy S24 (API 37) a
 | 32-still peak RSS, KiB | 946728 | 947024 |
 | Confirmed SIGINT to exit, seconds | 0.625 | 1.656 |
 
-The 32 inputs were distinct 200Ã—200 PNG variants of the same permitted hand photograph, with small synthetic background patches. Each run consumed all 32 positive image batches and 1,152 image tokens, with positive generation timing and exit 0. Context was 6,144 tokens; the single-image profile used 1,024. These are still images, not native video or representative motion/accuracy tests. Filesystem caches were warm from staging and hash verification. Each measured process started fresh; neither phone was rebooted or cache-flushed.
+The 32 inputs were distinct 200×200 PNG variants of the same permitted hand photograph, with small synthetic background patches. Each run consumed all 32 positive image batches and 1,152 image tokens, with positive generation timing and exit 0. Context was 6,144 tokens; the single-image profile used 1,024. These are still images, not native video or representative motion/accuracy tests. Filesystem caches were warm from staging and hash verification. Each measured process started fresh; neither phone was rebooted or cache-flushed.
 
 The current two-thread CPU route took 55.35 and 101.78 seconds for this low-resolution sequence workload. Memory fit, but interactive conversation latency is unqualified. A standard Vulkan companion was built in GitHub run 44458051361. Its default vision-offload output then failed the predeclared engineering comparison on both phones; a supported precision-setting probe subsequently met that same embedding guard on both phones. Subsequent full-model raw-logit comparisons failed the frozen guard. Production app integration remains unqualified. Driver capability declarations alone do not establish working offload, finite multimodal logits, numerical parity, speed or ASL quality. Preserve the CPU result as the comparator.
 
@@ -29,7 +29,7 @@ The image/model/binary SHA-256 chain is unchanged from [export evidence](RUNTIME
 
 ## Vulkan numerical diagnosis
 
-The initial GPU projector output failed the predeclared normalized-MSE â‰¤ 1e-4 and cosine â‰¥ 0.999 guard on both phones. With only `GGML_VK_DISABLE_F16=1` changed, normalized MSE was 1.035e-6 on Samsung and 1.084e-6 on Seeker, with cosine above 0.9999994 on both. All 287 observed vision graph nodes remained on Vulkan0; there was no CPU fallback. This disables FP16 shader arithmetic; it does not make the F16 projector weights or the whole model FP32. These are one-fixture engineering comparisons, not general numerical or ASL qualification.
+The initial GPU projector output failed the predeclared normalized-MSE ≤ 1e-4 and cosine ≥ 0.999 guard on both phones. With only `GGML_VK_DISABLE_F16=1` changed, normalized MSE was 1.035e-6 on Samsung and 1.084e-6 on Seeker, with cosine above 0.9999994 on both. All 287 observed vision graph nodes remained on Vulkan0; there was no CPU fallback. This disables FP16 shader arithmetic; it does not make the F16 projector weights or the whole model FP32. These are one-fixture engineering comparisons, not general numerical or ASL qualification.
 
 Samsung's separate text-GPU run aborted during warmup with `compute pipeline creation failed for mul_mat_vec_q4_k_f32_f32` and `vk::Device::createComputePipeline: ErrorUnknown`. The selected pipeline is already F32 and is independent of the FP16-disable setting. It has not been repaired. Seeker's text-GPU path completed both default and FP16-disabled profiles, but successful captions and finite embeddings do not establish text-logit parity. A native QA tool now captures full-vocabulary logits after multimodal prefill and four CPU-forced continuation tokens so that the actual numerical behavior can be compared. GitHub run 44464130811 built that exact tool and the companion CLI. The downloaded archive digest and all 33 file digests were independently verified before Samsung execution.
 
@@ -41,7 +41,7 @@ The exact QA binary recorded five rows of 248,320 logits after still-image prefi
 
 All three retained Q4_K F32 SPIR-V variants passed `spirv-val --target-env vulkan1.2 --scalar-block-layout` and disassembly in that build. Samsung's earlier driver pipeline-creation failure remains unresolved. Seeker was initially occupied by another app and was left untouched. After it returned to Home, the new captures were completed as described below. Both source and device evidence distinguish completed CPU checks from pending GPU qualification.
 
-## OpenCL alternative â€” verified failure before adoption
+## OpenCL alternative — verified failure before adoption
 
 The supported OpenCL alternative built in GitHub run 44466748756 from source c0613186f52b40f604c6fd96770cb2ea44be3266. The exact archive SHA-256 is `27f3beb7cce2617a7b55325948f3a5ba9af2179631c9b20e44ff3c5f9f73a216`; all 18 manifest files were verified. It contains the CLI, native logit probe and pinned upstream operation tester, with direct OEM `libOpenCL.so` linkage and no packaged loader. Samsung enumerated the expected Adreno 750. CPU forced replay again reproduced all 1,241,600 logits exactly.
 
@@ -59,7 +59,7 @@ The configured fast CPU path is a comparator, not an exact-arithmetic oracle. So
 
 ## Samsung OpenCL workgroup follow-up
 
-The isolated default Q4_K `m=4096,n=1,k=1024` case reproduced a numerical failure and returned the normal test failure code 1. With only `GGML_OPENCL_Q4K_GEMV_WIDE=0` changed, that same case passed at the unchanged upstream tolerance. The four Q4_K cases at n=1â€“4 then passed, and both selected Q6_K cases passed. This validates those sampled operations for the supported workgroup setting; it does not identify every failing launch or qualify a model.
+The isolated default Q4_K `m=4096,n=1,k=1024` case reproduced a numerical failure and returned the normal test failure code 1. With only `GGML_OPENCL_Q4K_GEMV_WIDE=0` changed, that same case passed at the unchanged upstream tolerance. The four Q4_K cases at n=1–4 then passed, and both selected Q6_K cases passed. This validates those sampled operations for the supported workgroup setting; it does not identify every failing launch or qualify a model.
 
 The Q6 verifier originally expected one case although its prefix filter selects two distinct cases, with and without `weights=1`. Recorded hardware output showed both numeric OK and 2/2. Tests reproduced rejection of the valid capture and acceptance of a misleading one-case capture before the verifier was repaired to require both. The original log/result were preserved; a separate revalidation receipt binds the accepted capture and new checker hashes.
 
@@ -84,7 +84,7 @@ The Samsung N=1 pipeline failure therefore reproduced inside the test APK. The N
 
 GitHub build 44480464845 failed during host CMake generation before compilation, with source `fc1ce54d6c05a4ee163b293d36acc329beb3439a`. The failure exposed inconsistent dependency install-export options. A configure-only regression reproduced the optimizer export errors and passed after the dependency export sets were enabled together.
 
-The corrected GitHub build 44481814847 completed at source `7838d6947770aa3b046120759b0004552dcced65`. It used Shaderc v2026.4 buildable source `b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc`, pinned by release manifest commit `75137cca3b41a59b8b3e5c42177da8a9490c042f`. The archive SHA-256 was `6fc7cabd30e679256b756018f030d274ca8bb58a7ec32c7f9d8b2d2ffa4d3370`. Verification covered 65 manifest files, matched the APK's native payload to the standalone library, and found all six expected baseline F32 and packed-dot shader modules in that library. Native compilation ran on GitHub. The existing QA debug key was used only for local APK signing. The key stayed in its protected keystore, with no export or production key use. Each of the 13 captured runs matched signed APK SHA-256 `7e59902bc7fb22fd42846c5c106d4cfe09e1ad20abfbd135ef79a84c537c9843`. [Shader compiler preflight](SHADER_COMPILER_PREFLIGHT.md) Â· [Probe process modes](backend_app/README.md)
+The corrected GitHub build 44481814847 completed at source `7838d6947770aa3b046120759b0004552dcced65`. It used Shaderc v2026.4 buildable source `b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc`, pinned by release manifest commit `75137cca3b41a59b8b3e5c42177da8a9490c042f`. The archive SHA-256 was `6fc7cabd30e679256b756018f030d274ca8bb58a7ec32c7f9d8b2d2ffa4d3370`. Verification covered 65 manifest files, matched the APK's native payload to the standalone library, and found all six expected baseline F32 and packed-dot shader modules in that library. Native compilation ran on GitHub. The existing QA debug key was used only for local APK signing. The key stayed in its protected keystore, with no export or production key use. Each of the 13 captured runs matched signed APK SHA-256 `7e59902bc7fb22fd42846c5c106d4cfe09e1ad20abfbd135ef79a84c537c9843`. [Shader compiler preflight](SHADER_COMPILER_PREFLIGHT.md) · [Probe process modes](backend_app/README.md)
 
 | App-process operator and mode | Samsung (API 37) | Seeker (API 36) |
 | --- | --- | --- |

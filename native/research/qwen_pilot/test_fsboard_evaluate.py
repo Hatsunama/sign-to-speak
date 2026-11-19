@@ -29,7 +29,7 @@ class Scores(unittest.TestCase):
         self.assertFalse(evaluation.score("unknown", "word")["exact"])
 
     def test_unicode_case_whitespace_and_reference_weighting(self):
-        self.assertTrue(evaluation.score("  ï¼¡\n StraÃŸe\t", "a STRASSE")["exact"])
+        self.assertTrue(evaluation.score("  Ａ\n Straße\t", "a STRASSE")["exact"])
         first = evaluation.score("ab", "a")
         second = evaluation.score("bbbbbbbbb", "bbbbbbbbb")
         rows = [{"scores": scores, "stop": "eos", "output_equals_matched": True}
