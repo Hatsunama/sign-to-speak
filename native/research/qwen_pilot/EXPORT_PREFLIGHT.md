@@ -1,6 +1,6 @@
 # Qwen3.5 Android export preflight
 
-**Status.** Source review, GitHub compilation, cloud F16 conversion and Q4_K_M quantization completed. Android execution is pending. See RUNTIME_PREFLIGHT_RESULTS.md for exact measured hashes and limits. This checks fully local static-image inference on Android CPU. The prior ASL evaluation scored 0/8 for the original model and both tuned candidates. This procedure uses the original model for runtime feasibility. It provides no ASL accuracy or release result and does not exercise native video or change the existing decoder.
+**Status.** Source review, GitHub compilation, cloud F16 conversion and Q4_K_M quantization completed. CPU static-image execution is verified on both phones; see PHONE_RUNTIME_RESULTS.md for scope and limitations. Vulkan execution remains unqualified. See RUNTIME_PREFLIGHT_RESULTS.md for exact measured hashes and limits. This checks fully local static-image inference on Android CPU. The prior ASL evaluation scored 0/8 for the original model and both tuned candidates. This procedure uses the original model for runtime feasibility. It provides no ASL accuracy or release result and does not exercise native video or change the existing decoder.
 
 ## Inputs and provenance
 

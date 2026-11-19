@@ -1,6 +1,6 @@
 # Qwen Android runtime preflight results
 
-GitHub build and cloud conversion/quantization completed on November 18, 2026. Android inference is **unverified and blocked by missing connected phones**. This is a technical feasibility probe of the original base, not a new app release or a successful signing model. The failed A/B adapters remain separate.
+GitHub build and cloud conversion/quantization completed on November 18, 2026. The exact original base passed CPU CLI image, cancellation, recovery and 32-still checks on both phones. See [phone results](PHONE_RUNTIME_RESULTS.md) for measured limits. This is a technical feasibility probe of the original base, not a new app release or a successful signing model. The failed A/B adapters remain separate.
 
 ## Exact artifact chain
 
@@ -19,6 +19,6 @@ F16 conversion used the pinned upstream requirements with a CPU-only Torch wheel
 
 The two final GGUF files total 752,295,520 bytes before the executable and runtime buffers. They remain in private project storage; they were not downloaded to this low-memory Windows PC. No local application/native build or model load was performed. Complete estimated execution for 19 project jobs is US$0.611818, excluding unverified invoice/storage/startup charges, within the shared US$14 authorization.
 
-The host ADB check listed no devices. Neither phone was opened, changed, installed, sounded or taken from another agent. Reconnect and unlock them at Home when free before continuing. Recheck Home, lock state and competing instrumentation immediately before use. Verify hashes after USB transfer, then prove CPU text/vision initialization, actual nonzero image tokens, generated output, offline behavior, resource use and scoped cancellation/recovery. Return owned free phones to Home. Never treat a CLI smoke pass as final app acceptance.
+Both phones reconnected and were freshly verified at Home. The exact input/binary hashes matched after USB transfer. CPU text/vision/image-token checks, verified-PID cancellation and fresh-process recovery passed. A 32-still synthetic workload took 55.35 seconds on Samsung and 101.78 seconds on Seeker. Original settings were restored and Home was verified after testing. No app was installed or opened. This is not final APK acceptance or native-video qualification; a GPU companion remains under numerical investigation.
 
 The original model and both research adapters failed the small ASL task evaluation. A technically loadable Q4 file cannot remedy that quality failure. Model-format support, conversion, ELF alignment and successful installation are not translation, live-camera, full-app lifecycle, 16 KiB runtime or commercial-readiness evidence. No app appearance, behavior, signing identity or main-branch content changed.
