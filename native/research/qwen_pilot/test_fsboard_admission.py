@@ -121,6 +121,65 @@ class TimelineTests(unittest.TestCase):
         with self.assertRaises(AdmissionError):
             select_samples([i / 60 for i in range(60)], origin=0, window=(0, 2), period=1 / 60)
 
+    def test_adaptive_samples_short_annotation_windows(self):
+        scenarios = [
+            (30, 31, (.15, .85), 21),
+            (23.94, 61, (.2, 1.4), 29),
+        ]
+        for rate, total, window, expected_count in scenarios:
+            with self.subTest(rate=rate, window=window):
+                pts = [index / rate for index in range(total)]
+                options = {"origin": 0, "window": window, "period": 1 / rate}
+                with self.assertRaisesRegex(AdmissionError, "fewer than 32 distinct"):
+                    select_samples(pts, **options)
+
+                samples = select_samples(pts, min_frames=8, max_frames=32, **options)
+                eligible = [timestamp for timestamp in pts if window[0] <= timestamp <= window[1]]
+                self.assertEqual(len(samples), expected_count)
+                self.assertEqual([sample["source_pts_seconds"] for sample in samples], eligible)
+                for slot, sample in enumerate(samples):
+                    expected_time = window[0] + (window[1] - window[0]) * slot / (expected_count - 1)
+                    self.assertAlmostEqual(sample["requested_seconds"], expected_time)
+                    self.assertLessEqual(abs(sample["actual_seconds"] - expected_time), 1 / rate)
+                    self.assertFalse(sample["duplicate"])
+
+    def test_adaptive_samples_require_eight_unique_frames(self):
+        options = {"origin": 0, "window": (0, .07), "period": .01, "min_frames": 8, "max_frames": 32}
+        pts = [index / 100 for index in range(8) for _ in range(2)]
+        samples = select_samples(pts, **options)
+        self.assertEqual([sample["frame_index"] for sample in samples], list(range(0, 16, 2)))
+        with self.assertRaisesRegex(AdmissionError, "fewer than 8 distinct"):
+            select_samples(pts[:-2], **options)
+
+    def test_adaptive_samples_cap_count_and_preserve_fixed_slots(self):
+        pts = [index / 60 for index in range(121)]
+        options = {"origin": 0, "window": (0, 2), "period": 1 / 60}
+        samples = select_samples(pts, min_frames=8, max_frames=32, **options)
+        self.assertEqual(samples, select_samples(pts, **options))
+        self.assertEqual(len(samples), FRAME_COUNT)
+        self.assertEqual(samples[0]["frame_index"], 0)
+        self.assertEqual(samples[-1]["frame_index"], 120)
+
+    def test_adaptive_samples_reject_unmatchable_timing_gaps(self):
+        pts = [index / 30 for index in range(20) if index not in range(7, 13)]
+        with self.assertRaisesRegex(AdmissionError, "cannot match 14 timed slots"):
+            select_samples(pts, origin=0, window=(0, 19 / 30), period=1 / 30,
+                           min_frames=8, max_frames=32)
+
+    def test_frame_bounds_are_integers_in_order_and_within_model_cap(self):
+        for minimum, maximum in [(0, 8), (9, 8), (8, 33), (True, 8), (8, 8.0)]:
+            with self.subTest(minimum=minimum, maximum=maximum):
+                with self.assertRaisesRegex(AdmissionError, "invalid frame count bounds"):
+                    select_samples([0], origin=0, window=(0, 1), period=1,
+                                   min_frames=minimum, max_frames=maximum)
+
+    def test_single_frame_slot_uses_annotation_midpoint(self):
+        samples = select_samples([0, .1, .2, .3, .4], origin=0, window=(.1, .4), period=.1,
+                                 min_frames=1, max_frames=1)
+        self.assertEqual(len(samples), 1)
+        self.assertAlmostEqual(samples[0]["requested_seconds"], .25)
+        self.assertLessEqual(abs(samples[0]["actual_seconds"] - .25), .1)
+
     def test_unique_match_when_two_requests_have_same_nearest_frame(self):
         pts = [i / 30 for i in range(32)]
         pts[15] += .012
@@ -150,14 +209,17 @@ class DecodeTests(unittest.TestCase):
     def decode(
         self, first_rotation, second_rotation=None, *, matrix=None, duration=120,
         time_base=Fraction(1, 30), start_time=330, times=None, clip=None,
+        terminal_duration=None, terminal_time_base=None, **frame_bounds,
     ):
         class Frame:
             width, height = self.image.size
             side_data = {"DISPLAYMATRIX": matrix} if matrix is not None else {}
 
-            def __init__(self, time, rotation):
+            def __init__(self, time, rotation, duration=None, time_base=None):
                 self.time = time
                 self.rotation = rotation
+                self.duration = duration
+                self.time_base = time_base
 
             def reformat(self, *, width, height, format):
                 return SimpleNamespace(to_image=lambda: image.resize((width, height)))
@@ -173,9 +235,9 @@ class DecodeTests(unittest.TestCase):
             rotations = rotation if isinstance(rotation, list) else [rotation] * len(times)
             result = MagicMock()
             result.__enter__.return_value.streams.video = [stream]
-            result.__enter__.return_value.decode.return_value = iter(
-                Frame(time, angle) for time, angle in zip(times, rotations)
-            )
+            frames = [Frame(time, angle) for time, angle in zip(times[:-1], rotations[:-1])]
+            frames.append(Frame(times[-1], rotations[-1], terminal_duration, terminal_time_base))
+            result.__enter__.return_value.decode.return_value = iter(frames)
             return result
 
         av = SimpleNamespace(open=MagicMock(side_effect=[
@@ -186,6 +248,7 @@ class DecodeTests(unittest.TestCase):
         with patch.dict(sys.modules, {"av": av}):
             return decode_frames(
                 self.output / "source.mp4", self.output, clip_id, clip or candidates(row())[0],
+                **frame_bounds,
             )
 
     def test_applies_counterclockwise_rotation_to_pixels_and_receipts(self):
@@ -217,6 +280,38 @@ class DecodeTests(unittest.TestCase):
                     self.assertEqual(frame["applied_display_rotation_counterclockwise_degrees"], angle)
                 self.assertEqual(receipt["source_display_rotation_degrees"], angle)
                 self.assertEqual(receipt["applied_display_rotation_counterclockwise_degrees"], angle)
+
+    def test_adaptive_decode_writes_only_selected_rotated_real_frames(self):
+        from PIL import Image
+
+        clip = {
+            "clip_start_full_video_seconds": 0,
+            "clip_end_full_video_seconds": 31 / 30,
+            "annotation_start_full_video_seconds": .15,
+            "annotation_end_full_video_seconds": .85,
+        }
+        times = [index / 30 for index in range(31)]
+        options = {"duration": 31, "start_time": 0, "times": times, "clip": clip}
+        with self.assertRaisesRegex(AdmissionError, "missing timed video frames"):
+            self.decode(90, **options)
+        self.assertEqual(list(self.frames.iterdir()), [])
+
+        receipt = self.decode(90, min_frames=8, max_frames=32, **options)
+        frames = receipt["frames"]
+        self.assertEqual(len(frames), 21)
+        self.assertEqual([frame["frame_index"] for frame in frames], list(range(5, 26)))
+        self.assertEqual([frame["source_pts_seconds"] for frame in frames], times[5:26])
+        self.assertEqual(receipt["applied_display_rotation_counterclockwise_degrees"], 90)
+        directory = self.frames / "fsboard-02"
+        self.assertEqual(sorted(path.name for path in directory.iterdir()),
+                         [f"{slot:02d}.png" for slot in range(21)])
+        for frame in frames:
+            path = self.output / frame["path"]
+            self.assertEqual(frame["sha256"], hashlib.sha256(path.read_bytes()).hexdigest())
+            self.assertEqual((frame["width"], frame["height"]), (256, MAX_EDGE))
+            with Image.open(path) as image:
+                self.assertEqual(image.size, (256, MAX_EDGE))
+                self.assertEqual(image.getpixel((0, 0)), self.colors[1])
 
     def test_applies_real_mp4_track_display_matrix(self):
         import av
@@ -292,6 +387,84 @@ class DecodeTests(unittest.TestCase):
 
         with self.assertRaisesRegex(AdmissionError, "decoded clip timing disagrees with metadata"):
             self.decode(0, duration=363_130, **options)
+
+    def terminal_endpoint_fixture(self):
+        time_base = Fraction(1, 90_000)
+        # Preserve the measured median gap, frame count, and terminal PTSs.
+        ticks = [index * 2999 - min(index, 37) for index in range(119)]
+        ticks.extend((356_837, 359_845))
+        return {
+            "duration": 362_853, "time_base": time_base, "start_time": 0,
+            "times": [float(tick * time_base) for tick in ticks],
+            "terminal_duration": 3008, "terminal_time_base": time_base,
+            "clip": candidates(row(
+                clipStartTimeS=808.422878, clipEndTimeS=812.421157,
+                annotationStartTimeS=809.0, annotationEndTimeS=811.533,
+            ))[0],
+            "min_frames": 8, "max_frames": 32,
+        }
+
+    def test_terminal_pts_endpoint_requires_explicit_opt_in(self):
+        options = self.terminal_endpoint_fixture()
+        with self.assertRaisesRegex(
+            AdmissionError, r"duration=4[.]031700000, expected_duration=3[.]998279000"
+        ):
+            self.decode(0, **options)
+        self.assertEqual(list(self.frames.iterdir()), [])
+
+        receipt = self.decode(0, allow_terminal_pts_endpoint=True, **options)
+        self.assertAlmostEqual(receipt["frame_period_seconds"], 2999 / 90_000)
+        self.assertAlmostEqual(receipt["decoded_duration_seconds"], 362_853 / 90_000)
+        self.assertAlmostEqual(receipt["decoded_timestamp_tick_seconds"], 1 / 90_000)
+        corroboration = receipt["terminal_endpoint_corroboration"]
+        self.assertAlmostEqual(corroboration["publisher_clip_duration_seconds"], 3.998279)
+        self.assertAlmostEqual(corroboration["last_relative_pts_seconds"], 359_845 / 90_000)
+        self.assertEqual(corroboration["last_frame_duration_ticks"], 3008)
+        self.assertAlmostEqual(corroboration["last_frame_time_base_seconds"], 1 / 90_000)
+        self.assertAlmostEqual(corroboration["last_frame_duration_seconds"], 3008 / 90_000)
+        self.assertAlmostEqual(corroboration["preceding_distinct_pts_gap_seconds"], 3008 / 90_000)
+        self.assertAlmostEqual(corroboration["last_frame_end_seconds"], 362_853 / 90_000)
+        self.assertAlmostEqual(corroboration["tolerance_seconds"], 2 / 90_000)
+        sampled = receipt["frames"]
+        self.assertEqual(len(sampled), 32)
+        pts = [frame["actual_seconds"] for frame in sampled]
+        self.assertEqual(pts, sorted(set(pts)))
+        self.assertTrue(all(
+            receipt["annotation_start_clip_seconds"] <= value <= receipt["annotation_end_clip_seconds"]
+            for value in pts
+        ))
+        for frame in sampled:
+            self.assertFalse(frame["duplicate"])
+            self.assertEqual(frame["source_pts_seconds"], options["times"][frame["frame_index"]])
+            self.assertTrue((self.output / frame["path"]).is_file())
+        self.assertEqual(len(list(self.frames.rglob("*.png"))), 32)
+
+    def test_terminal_pts_endpoint_rejects_uncorroborated_overruns_before_publication(self):
+        options = self.terminal_endpoint_fixture()
+        widened_gap = list(options["times"])
+        widened_gap[-2] = 353_847 / 90_000
+        shifted_end = dict(options["clip"])
+        shifted_end["clip_end_full_video_seconds"] -= 0.000050
+
+        for description, change in (
+            ("missing duration", {"terminal_duration": None}),
+            ("missing time base", {"terminal_time_base": None}),
+            ("wrong time base", {"terminal_time_base": Fraction(1, 45_000)}),
+            ("non-finite duration", {"terminal_duration": math.nan}),
+            ("non-finite time base", {"terminal_time_base": math.nan}),
+            ("zero duration", {"terminal_duration": 0}),
+            ("large final gap", {"times": widened_gap}),
+            ("publisher end moved 50 microseconds", {"clip": shifted_end}),
+            ("terminal duration extended by eight ticks", {"terminal_duration": 3016}),
+            ("stream overrun without matching frame end", {"duration": 362_861}),
+            ("stream and terminal frame extended by one period", {
+                "duration": 365_852, "terminal_duration": 6007,
+            }),
+        ):
+            with self.subTest(description=description):
+                with self.assertRaisesRegex(AdmissionError, "decoded clip timing disagrees with metadata"):
+                    self.decode(0, allow_terminal_pts_endpoint=True, **{**options, **change})
+                self.assertEqual(list(self.frames.iterdir()), [])
 
     def test_invalid_timing_reports_numeric_context(self):
         with self.assertRaisesRegex(

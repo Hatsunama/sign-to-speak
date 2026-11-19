@@ -4,6 +4,8 @@ import io
 import os
 from pathlib import Path
 import stat
+import subprocess
+import sys
 import tarfile
 import tempfile
 from types import SimpleNamespace
@@ -61,19 +63,76 @@ class SourcePackageTests(unittest.TestCase):
             package.collect_sources(self.root)
 
     def test_private_byte_digest_and_path_boundary(self):
-        data = codecs.BOM_UTF8 + b'{"private": true}\r\n'
+        plain = b'{"version": 3}\n'
+        data = codecs.BOM_UTF8 + plain.replace(b"\n", b"\r\n")
         path = self.root / "private-proposal.json"
         path.write_bytes(data)
-        sha256 = hashlib.sha256(data).hexdigest()
-        with patch.dict(package.PRIVATE_SHA256, {path.name: sha256}):
-            self.assertEqual(package.read_private(self.root, path, path.name), data)
-            path.write_bytes(data.replace(b"\r\n", b"\n"))
-            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
-                package.read_private(self.root, path, path.name)
-            outside = self.root.parent / path.name
-            outside.write_bytes(data)
-            with self.assertRaisesRegex(ValueError, "outside the source root"):
-                package.read_private(self.root, outside, path.name)
+        trusted_sha256 = hashlib.sha256(data).hexdigest()
+        self.assertEqual(package.read_private(self.root, path, path.name, trusted_sha256), data)
+        for changed in (plain, codecs.BOM_UTF8 + plain, data[len(codecs.BOM_UTF8):]):
+            with self.subTest(changed=changed), self.assertRaisesRegex(ValueError, "SHA-256 mismatch"):
+                path.write_bytes(changed)
+                package.read_private(self.root, path, path.name, trusted_sha256)
+        outside = self.root.parent / path.name
+        outside.write_bytes(data)
+        with self.assertRaisesRegex(ValueError, "outside the source root"):
+            package.read_private(self.root, outside, path.name, trusted_sha256)
+        with self.assertRaisesRegex(ValueError, "Expected private input named private-proposal.json"):
+            package.read_private(self.root, self.root / "wrong.json", path.name, trusted_sha256)
+
+    def test_build_uses_the_explicit_proposal_pin_and_preserves_bytes(self):
+        proposal = self.root / "private-proposal.json"
+        proposal_bytes = codecs.BOM_UTF8 + b'{"version": 3}\r\n'
+        proposal.write_bytes(proposal_bytes)
+        trusted_sha256 = hashlib.sha256(proposal_bytes).hexdigest()
+        receipt = self.root / "fsboard-eval-v3-approved.json"
+        receipt.write_bytes(b'{"approved": true}\n')
+        receipt_sha256 = hashlib.sha256(receipt.read_bytes()).hexdigest()
+        output = self.root.parent / "release"
+
+        with patch.object(package, "collect_sources", return_value={}) as collect:
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch for private-proposal.json"):
+                package.build_source_archive(self.root, proposal, receipt, output, proposal_sha256="0" * 64)
+            with self.assertRaisesRegex(ValueError, "64 lowercase hexadecimal"):
+                package.build_source_archive(self.root, proposal, receipt, output, proposal_sha256="Z" * 64)
+            with self.assertRaisesRegex(ValueError, "SHA-256 mismatch for fsboard-eval-v3-approved.json"):
+                package.build_source_archive(self.root, proposal, receipt, output, proposal_sha256=trusted_sha256)
+            self.assertFalse(output.exists())
+            collect.assert_not_called()
+
+            with patch.object(package, "APPROVED_RECEIPT_SHA256", receipt_sha256):
+                with patch.object(package, "validate_archive", return_value={"tests": 73}) as verify:
+                    report = package.build_source_archive(
+                        self.root, proposal, receipt, output, proposal_sha256=trusted_sha256,
+                    )
+
+        verify.assert_called_once()
+        self.assertEqual(report["private_input_sha256"], {
+            proposal.name: trusted_sha256,
+            receipt.name: receipt_sha256,
+        })
+        with tarfile.open(output / report["archive"], mode="r:gz") as archive:
+            with archive.extractfile(proposal.name) as stream:
+                self.assertEqual(stream.read(), proposal_bytes)
+
+    def test_cli_requires_a_lowercase_hex_pin_before_writing(self):
+        output = self.root.parent / "release"
+        command = [
+            sys.executable, "-B", "-X", "utf8", str(Path(package.__file__).resolve()),
+            "--source-root", str(self.root),
+            "--proposal", str(self.root / "private-proposal.json"),
+            "--approved-receipt", str(self.root / "fsboard-eval-v3-approved.json"),
+            "--output-dir", str(output),
+        ]
+        for args in ([], ["--proposal-sha256", "1" * 63], ["--proposal-sha256", "A" * 64],
+                     ["--proposal-sha256", "g" * 64]):
+            with self.subTest(args=args):
+                result = subprocess.run(command + args, capture_output=True, encoding="utf-8", timeout=10)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn("--proposal-sha256", result.stderr)
+                if args:
+                    self.assertIn("64 lowercase hexadecimal", result.stderr)
+                self.assertFalse(output.exists())
 
     @unittest.skipIf(os.name == "nt", "The Windows host may restrict creating a real symlink")
     def test_rejects_directory_link_even_when_target_is_inside_root(self):

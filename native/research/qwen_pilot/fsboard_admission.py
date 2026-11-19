@@ -225,7 +225,18 @@ def timing_tolerance(period, timestamp_tick):
     return period + 2 * timestamp_tick
 
 
-def select_samples(pts, *, origin, window, period):
+def check_frame_bounds(min_frames, max_frames):
+    if (
+        type(min_frames) is not int
+        or type(max_frames) is not int
+        or not 1 <= min_frames <= max_frames <= FRAME_COUNT
+    ):
+        raise AdmissionError("invalid frame count bounds")
+
+
+def select_samples(pts, *, origin, window, period, min_frames=FRAME_COUNT, max_frames=FRAME_COUNT):
+    """Match uniformly timed slots to distinct decoded frames within the annotation."""
+    check_frame_bounds(min_frames, max_frames)
     start, end = window
     if (
         not all(math.isfinite(value) for value in (origin, start, end, period))
@@ -241,10 +252,14 @@ def select_samples(pts, *, origin, window, period):
         relative = timestamp - origin
         if start <= relative <= end and (not available or timestamp != available[-1][1]):
             available.append((index, timestamp, relative))
-    if len(available) < FRAME_COUNT:
-        raise AdmissionError("fewer than 32 distinct presentation timestamps in the annotation")
+    if len(available) < min_frames:
+        raise AdmissionError(f"fewer than {min_frames} distinct presentation timestamps in the annotation")
 
-    requested = [start + (end - start) * slot / (FRAME_COUNT - 1) for slot in range(FRAME_COUNT)]
+    frame_count = min(max_frames, len(available))
+    if frame_count == 1:
+        requested = [start + (end - start) / 2]
+    else:
+        requested = [start + (end - start) * slot / (frame_count - 1) for slot in range(frame_count)]
     # Minimize total time error over increasing, unique frame indices. Each slot
     # must be within a frame period, even if two slots share the nearest PTS.
     previous = [0.0] * len(available)
@@ -264,9 +279,9 @@ def select_samples(pts, *, origin, window, period):
         previous = costs
     index = min(range(len(previous)), key=previous.__getitem__)
     if not math.isfinite(previous[index]):
-        raise AdmissionError("cannot match 32 timed slots within one frame period")
+        raise AdmissionError(f"cannot match {frame_count} timed slots within one frame period")
     samples = []
-    for slot in reversed(range(FRAME_COUNT)):
+    for slot in reversed(range(frame_count)):
         frame_index, source_pts, relative = available[index]
         samples.append({
             "frame_index": frame_index,
@@ -291,9 +306,51 @@ def check_display_rotation(frame):
     except VideoOrientationError as exc:
         raise AdmissionError(str(exc)) from exc
 
-def decode_frames(video, output, clip_id, clip):
+def _corroborate_terminal_pts_endpoint(
+    frame, *, time_base, last_relative_pts, preceding_gap, expected_duration, stream_duration,
+):
+    """Verify that the publisher endpoint marks the start of the final frame."""
+    duration_ticks = getattr(frame, "duration", None)
+    if (
+        getattr(frame, "time_base", None) != time_base
+        or type(duration_ticks) not in (int, float)
+        or not 0 < duration_ticks < math.inf
+    ):
+        return None
+    timestamp_tick = float(time_base)
+    tolerance = 2 * timestamp_tick
+    frame_duration = float(duration_ticks * time_base)
+    frame_end = last_relative_pts + frame_duration
+    if any(
+        abs(difference) > tolerance + 1e-9
+        for difference in (
+            last_relative_pts - expected_duration,
+            frame_duration - preceding_gap,
+            frame_end - stream_duration,
+        )
+    ):
+        return None
+    return {
+        "publisher_clip_duration_seconds": expected_duration,
+        "last_relative_pts_seconds": last_relative_pts,
+        "last_frame_duration_ticks": duration_ticks,
+        "last_frame_time_base_seconds": timestamp_tick,
+        "last_frame_duration_seconds": frame_duration,
+        "preceding_distinct_pts_gap_seconds": preceding_gap,
+        "last_frame_end_seconds": frame_end,
+        "tolerance_seconds": tolerance,
+    }
+
+
+def decode_frames(
+    video, output, clip_id, clip, *, min_frames=FRAME_COUNT, max_frames=FRAME_COUNT,
+    allow_terminal_pts_endpoint=False,
+):
     import av
 
+    check_frame_bounds(min_frames, max_frames)
+    expected_duration = clip["clip_end_full_video_seconds"] - clip["clip_start_full_video_seconds"]
+    endpoint_corroboration = None
     timestamps = []
     rotation = None
     with av.open(str(video), mode="r") as container:
@@ -311,7 +368,7 @@ def decode_frames(video, output, clip_id, clip):
             elif frame_rotation % 360 != rotation % 360:
                 raise AdmissionError("display rotation changed during first decode")
             timestamps.append(float(frame.time))
-        if len(timestamps) < FRAME_COUNT or any(not math.isfinite(value) for value in timestamps):
+        if len(timestamps) < min_frames or any(not math.isfinite(value) for value in timestamps):
             raise AdmissionError("missing timed video frames")
         gaps = [after - before for before, after in zip(timestamps, timestamps[1:]) if after > before]
         if not gaps:
@@ -322,17 +379,29 @@ def decode_frames(video, output, clip_id, clip):
         duration_tolerance = timing_tolerance(period, timestamp_tick)
         origin = (float(stream.start_time * time_base)
                   if stream.start_time is not None and time_base is not None else timestamps[0])
-        duration = (float(stream.duration * time_base)
-                    if stream.duration is not None and time_base is not None else timestamps[-1] - origin + period)
+        duration_ticks = stream.duration
+        last_relative_pts = timestamps[-1] - origin
+        duration = (float(duration_ticks * time_base)
+                    if duration_ticks is not None and time_base is not None else last_relative_pts + period)
+        duration_delta = duration - expected_duration
+        if (
+            allow_terminal_pts_endpoint
+            and time_base is not None
+            and duration_ticks is not None
+            and duration_delta > duration_tolerance + 1e-9
+        ):
+            endpoint_corroboration = _corroborate_terminal_pts_endpoint(
+                frame, time_base=time_base, last_relative_pts=last_relative_pts,
+                preceding_gap=gaps[-1], expected_duration=expected_duration, stream_duration=duration,
+            )
 
-    expected_duration = clip["clip_end_full_video_seconds"] - clip["clip_start_full_video_seconds"]
     window = annotation_window(clip)
     first_relative_pts = timestamps[0] - origin
-    last_relative_pts_plus_period = timestamps[-1] - origin + period
+    last_relative_pts_plus_period = last_relative_pts + period
     if (
         not all(math.isfinite(value) for value in (origin, duration))
         or duration <= 0
-        or abs(duration - expected_duration) > duration_tolerance + 1e-9
+        or (abs(duration_delta) > duration_tolerance + 1e-9 and endpoint_corroboration is None)
         or abs(first_relative_pts) > period + 1e-9
         or abs(last_relative_pts_plus_period - duration) > period + 1e-9
         or window[1] > duration + period + 1e-9
@@ -345,7 +414,9 @@ def decode_frames(video, output, clip_id, clip):
             f"period={period:.9f}, annotation_end={window[1]:.9f})"
         )
 
-    samples = select_samples(timestamps, origin=origin, window=window, period=period)
+    samples = select_samples(
+        timestamps, origin=origin, window=window, period=period, min_frames=min_frames, max_frames=max_frames,
+    )
     directory = output / "frames" / clip_id
     if directory.exists():
         raise FileExistsError(directory)
@@ -389,7 +460,7 @@ def decode_frames(video, output, clip_id, clip):
         if count != len(timestamps):
             raise AdmissionError("frame count changed between decodes")
         Path(staged).rename(directory)
-    return {
+    receipt = {
         **orientation,
         "decoded_duration_seconds": duration,
         "decoded_timestamp_tick_seconds": timestamp_tick,
@@ -399,6 +470,9 @@ def decode_frames(video, output, clip_id, clip):
         "annotation_end_clip_seconds": window[1],
         "frames": samples,
     }
+    if endpoint_corroboration is not None:
+        receipt["terminal_endpoint_corroboration"] = endpoint_corroboration
+    return receipt
 
 
 def artifact_info(path, output, identity):

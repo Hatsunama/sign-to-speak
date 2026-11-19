@@ -20,9 +20,8 @@ from PIL import Image
 import fsboard_task_protocol as protocol
 import fsboard_training_intake as intake
 from fsboard_admission import (
-    AdmissionError, CLIP_BYTES, ENDPOINT, FRAME_COUNT, HTTPSRedirects, MAX_EDGE, MIB,
-    SAFE_BASENAME, copy_verified, decode_frames, safe_error, validated_fingerspelling_clip,
-    write_json,
+    AdmissionError, CLIP_BYTES, ENDPOINT, HTTPSRedirects, MAX_EDGE, MIB,
+    SAFE_BASENAME, copy_verified, decode_frames, safe_error, write_json,
 )
 
 PROPOSAL_BYTES = 2 * MIB
@@ -60,10 +59,8 @@ def validate_clip(clip, split):
     # marked non-sensitive. Those two implicit predicates are not fields in the proposal.
     row = {publisher: clip[normalized] for normalized, publisher in CLIP_FIELDS.items()}
     row.update(signingType="fs", sensitiveContent=False)
-    normalized = validated_fingerspelling_clip(
-        row, video_dir=protocol.video_directory(split), target_pattern=protocol.TARGET_PATTERN,
-    )
-    if normalized is None or clip != {**normalized, "split": f"daun_v3-{split}"}:
+    normalized = protocol.task_candidate(row, split)
+    if normalized is None or clip != normalized:
         raise AdmissionError("invalid clip metadata or publisher split")
 
 
@@ -112,7 +109,7 @@ def read_proposal(path, proposal_sha256, protocol_sha256, previous_receipt):
         payload = handle.read(PROPOSAL_BYTES + 1)
     if len(payload) > PROPOSAL_BYTES or hashlib.sha256(payload).hexdigest() != proposal_sha256:
         raise AdmissionError("private proposal integrity check failed")
-    document = json.loads(payload)
+    document = json.loads(payload.decode("utf-8"))
     if (
         not isinstance(document, dict)
         or type(document.get("schema_version")) is not int
@@ -179,10 +176,10 @@ def fetch_clip(clip, role, target):
 
 
 def verify_frames(staging, clip_id, frames):
-    if not isinstance(frames, list) or len(frames) != FRAME_COUNT:
-        raise AdmissionError("expected exactly 32 decoded frames")
+    if not isinstance(frames, list) or not protocol.MIN_FRAMES <= len(frames) <= protocol.MAX_FRAMES:
+        raise AdmissionError(f"expected {protocol.MIN_FRAMES} to {protocol.MAX_FRAMES} decoded frames")
     directory = staging / "frames" / clip_id
-    if {path.name for path in directory.iterdir()} != {f"{slot:02d}.png" for slot in range(FRAME_COUNT)}:
+    if {path.name for path in directory.iterdir()} != {f"{slot:02d}.png" for slot in range(len(frames))}:
         raise AdmissionError("decoded frame files do not match the manifest")
     previous_index, previous_pts = -1, -math.inf
     for slot, sample in enumerate(frames):
@@ -268,13 +265,19 @@ def admit(*, proposal, proposal_sha256, protocol_sha256, previous_receipt, outpu
                     progress["attempted_original_bytes"] += clip["original_bytes"]
                     size, sha256 = fetch_clip(clip, role, original)
                     progress["stage"] = "decode"
-                    decoded = decode_frames(original, staging, clip_id, clip)
+                    decoded = decode_frames(
+                        original, staging, clip_id, clip,
+                        min_frames=protocol.MIN_FRAMES, max_frames=protocol.MAX_FRAMES,
+                        allow_terminal_pts_endpoint=True,
+                    )
                     progress["stage"] = "frame_verification"
-                    verify_frames(staging, clip_id, decoded["frames"])
+                    frames = decoded["frames"]
+                    verify_frames(staging, clip_id, frames)
                     admitted[role].append({
                         **clip, **decoded, "id": clip_id, "role": role,
                         "original_path": original.relative_to(staging).as_posix(),
                         "original_bytes": size, "original_sha256": sha256,
+                        "sampled_frame_count": len(frames),
                     })
                     progress["clips_verified"][role] += 1
 
@@ -289,7 +292,12 @@ def admit(*, proposal, proposal_sha256, protocol_sha256, previous_receipt, outpu
                 "previous_receipt_sha256": intake.PREVIOUS_RECEIPT_SHA256,
                 "clips_verified": progress["clips_verified"],
                 "original_bytes": declared_bytes,
-                "frames_per_clip": FRAME_COUNT,
+                "min_frames_per_clip": protocol.MIN_FRAMES,
+                "max_frames_per_clip": protocol.MAX_FRAMES,
+                "sampled_frame_counts": {
+                    role: [clip["sampled_frame_count"] for clip in clips]
+                    for role, clips in admitted.items()
+                },
                 "max_frame_edge": MAX_EDGE,
                 "training_media_complete": mode == "full",
                 "training_eligible": False,

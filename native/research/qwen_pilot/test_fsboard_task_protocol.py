@@ -51,7 +51,20 @@ class CandidatePolicyTest(unittest.TestCase):
         self.assertEqual(scorer.score("AB CDEF\tGHIJ", spaced["phrase"])["edits"], 0)
         self.assertEqual(scorer.score("abcdefghij", spaced["phrase"])["edits"], 2)
 
-    def test_v2_rejects_invalid_targets_and_preserves_shared_clip_checks(self):
+    def test_v4_uses_shared_metadata_duration_bounds(self):
+        durations = (0.499, 0.5, 0.7, 0.917, 1.199, 1.2, 3.2, 3.201)
+        rows = [
+            row(index, annotationStartTimeS=10, annotationEndTimeS=10 + duration,
+                clipStartTimeS=9, clipEndTimeS=14)
+            for index, duration in enumerate(durations, start=1)
+        ]
+        candidates, stats, groups = read_split("validation", *rows)
+        self.assertEqual([clip["clip_filename"] for clip in candidates], [
+            f"clip-{index}.mp4" for index in range(2, 8)
+        ])
+        self.assertEqual((stats["rows"], stats["candidates"], len(groups)), (8, 6, 8))
+
+    def test_v4_rejects_invalid_targets_and_preserves_shared_clip_checks(self):
         targets = ("ab", "ab cdef ghijk", "ab  c", " ab", "ab ", "ab\tc", "abc\n", "abC", "ab-c", "?b?")
         rows = [row(index, target) for index, target in enumerate(targets, start=1)]
         for index, bad in enumerate((
@@ -134,6 +147,19 @@ class ProtocolSelectionTest(unittest.TestCase):
 
 
 class FrozenProtocolTest(unittest.TestCase):
+    def test_v4_freezes_the_variable_still_policy_under_a_new_experiment_id(self):
+        protocol = task.frozen_protocol()
+        self.assertEqual(protocol["experiment_id"], "sts-fsboard-whole-prompt-static-ablation-20261119-v4")
+        self.assertEqual(protocol["selection"]["annotation_duration_seconds"], [0.5, 3.2])
+        self.assertEqual(protocol["input"], {
+            "native_video": False,
+            "min_ordered_rgb_stills": 8,
+            "max_ordered_rgb_stills": 32,
+            "sampling": "distinct_pts_uniform_no_padding",
+            "max_frame_edge": 384,
+            "dense_max_sequence_tokens": 6144,
+        })
+
     def test_two_full_shared_video_passes_and_fixed_static_cycle(self):
         protocol = task.frozen_protocol()
         training = protocol["training"]
@@ -156,10 +182,13 @@ class FrozenProtocolTest(unittest.TestCase):
         evaluation = protocol["evaluation"]
         controls = evaluation["conditions"]
         self.assertEqual(list(controls), ["matched", "reordered", "repeated_middle_frame", "black", "wrong_video"])
-        self.assertEqual(controls["reordered"]["source"], "same_clip")
-        self.assertEqual(controls["reordered"]["frame_indices"], list(reversed(range(32))))
-        self.assertEqual(controls["repeated_middle_frame"]["source"], "same_clip")
-        self.assertEqual(controls["repeated_middle_frame"]["frame_indices"], [16] * 32)
+        self.assertEqual(controls["matched"], {"source": "same_clip", "frame_indices": "range(N)"})
+        self.assertEqual(controls["reordered"], {
+            "source": "same_clip", "frame_indices": "reversed(range(N))",
+        })
+        self.assertEqual(controls["repeated_middle_frame"], {
+            "source": "same_clip", "frame_indices": "[N // 2] * N",
+        })
         self.assertEqual(controls["wrong_video"]["source"], "different_clip")
         self.assertFalse(protocol["input"]["native_video"])
         self.assertFalse(protocol["training"]["runtime_hook_implemented"])

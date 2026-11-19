@@ -1,5 +1,7 @@
 # FSboard training intake metadata preflight — November 19, 2026
 
+Current v4 status is in [FSBOARD_V4_MEDIA_AND_INPUT_STATUS.md](FSBOARD_V4_MEDIA_AND_INPUT_STATUS.md). The sections below preserve the initial preflight and v2 history.
+
 The metadata preflight verified the byte lengths and SHA-256 pins for the FSboard v13 license and the three publisher `daun_v3` metadata files. It downloaded zero video bytes, started no training, and returned `metadata_proposal_with_shortfalls`. The proposal uses Google AI's FSboard v13 metadata under CC BY 4.0 with attribution to Google and FSboard and the publisher's responsible-use guidance. [Pinned dataset release](https://www.kaggle.com/datasets/googleai/fsboard/versions/13) · [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) · [FSboard paper](https://arxiv.org/abs/2407.15806)
 
 | Publisher split | Metadata rows | Candidates before prior and cross-split exclusions | Proposed clips / requested | Proposed signer IDs / minimum | Proposed recordings |

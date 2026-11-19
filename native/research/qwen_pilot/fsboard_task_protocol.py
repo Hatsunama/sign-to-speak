@@ -12,11 +12,14 @@ import fsboard_training_intake as intake
 import paired_experiment as paired
 import train_qwen_pilot as pilot
 from fsboard_admission import (
-    AdmissionError, CLIP_BYTES, FRAME_COUNT, MAX_EDGE, safe_error,
+    AdmissionError, CLIP_BYTES, MAX_EDGE, safe_error,
     validated_fingerspelling_clip, write_json,
 )
 
-EXPERIMENT_ID = "sts-fsboard-whole-prompt-static-ablation-20261119-v2"
+EXPERIMENT_ID = "sts-fsboard-whole-prompt-static-ablation-20261119-v4"
+MIN_ANNOTATION_SECONDS = 0.5
+MIN_FRAMES = 8
+MAX_FRAMES = 32
 ROLE_SOURCES = {"holdout": "validation", "development": "train", "training": "train"}
 QUOTAS = {
     "holdout": intake.QUOTAS["test"],
@@ -36,6 +39,19 @@ def video_directory(split):
     return f"daun_v3/video_clips/daun_v3-{split}"
 
 
+def task_candidate(row, split):
+    """Validate and normalize one publisher row for the task cohort."""
+    if split not in ROLE_SOURCES.values():
+        raise AdmissionError("unsupported publisher split for task candidate")
+    clip = validated_fingerspelling_clip(
+        row, video_dir=video_directory(split), target_pattern=TARGET_PATTERN,
+    )
+    if clip is None:
+        return None
+    # Shared metadata bounds determine eligibility. Decoding verifies the available frame count.
+    return {**clip, "split": f"daun_v3-{split}"}
+
+
 def read_release_split(handle, split):
     if split not in intake.ROLES:
         raise AdmissionError("unsupported publisher split")
@@ -49,11 +65,8 @@ def read_release_split(handle, split):
         groups.add((signer.strip().casefold(), recording.strip().casefold()))
         if split == "test":
             continue
-        clip = validated_fingerspelling_clip(
-            row, video_dir=video_directory(split), target_pattern=TARGET_PATTERN,
-        )
+        clip = task_candidate(row, split)
         if clip is not None:
-            clip["split"] = f"daun_v3-{split}"
             previous = by_path.setdefault(clip["source_path"].casefold(), clip)
             if previous != clip:
                 raise AdmissionError("conflicting metadata for a clip path")
@@ -143,14 +156,16 @@ def frozen_protocol():
             "cross_role_and_prior_separation": list(intake.SEPARATION_FIELDS),
             "target_pattern": TARGET_PATTERN,
             "target": "Whole publisher fingerspelling prompt, 3 to 12 lowercase ASCII characters including single interword spaces.",
-            "annotation_duration_seconds": [0.5, 3.2],
+            "annotation_duration_seconds": [MIN_ANNOTATION_SECONDS, 3.2],
             "max_clip_bytes": CLIP_BYTES,
             "ordinary_category": "Target with neither j, z nor identical adjacent letters.",
         },
         "model": {"id": pilot.MODEL_ID, "revision": intake.MODEL_REVISION},
         "input": {
             "native_video": False,
-            "ordered_rgb_stills": FRAME_COUNT,
+            "min_ordered_rgb_stills": MIN_FRAMES,
+            "max_ordered_rgb_stills": MAX_FRAMES,
+            "sampling": "distinct_pts_uniform_no_padding",
             "max_frame_edge": MAX_EDGE,
             "dense_max_sequence_tokens": evaluation.PROFILE.max_sequence_tokens,
         },
@@ -192,16 +207,25 @@ def frozen_protocol():
             "candidates": list(evaluation.CANDIDATES),
             "runtime_hook_implemented": False,
             "conditions": {
-                "matched": {"source": "same_clip", "frame_indices": list(range(FRAME_COUNT))},
-                "reordered": {"source": "same_clip", "frame_indices": list(reversed(range(FRAME_COUNT)))},
-                "repeated_middle_frame": {"source": "same_clip", "frame_indices": [FRAME_COUNT // 2] * FRAME_COUNT},
+                "matched": {"source": "same_clip", "frame_indices": "range(N)"},
+                "reordered": {"source": "same_clip", "frame_indices": "reversed(range(N))"},
+                "repeated_middle_frame": {"source": "same_clip", "frame_indices": "[N // 2] * N"},
                 "black": {"source": "black_frames_with_matched_geometry"},
                 "wrong_video": {
                     "source": "different_clip",
-                    "donor_policy": "Preassign a distinct frozen holdout clip with a different signer ID, recording and reference.",
+                    "donor_policy": (
+                        "Before model scoring, deterministically preassign a frozen holdout donor with a different "
+                        "signer ID, recording and reference and at least N admitted stills. Fail if no donor qualifies."
+                    ),
+                    "frame_selection": "Use N unique ordered indices uniformly spaced across the donor stills.",
+                    "donor_reuse": "Allow reuse and report each donor's usage count.",
+                    "geometry": "Keep donor geometry and report the visual grid and token counts.",
                 },
             },
-            "condition_pairing": "Keep target, visual slot count, prompt and generation settings fixed within each example.",
+            "condition_pairing": (
+                "N is the clip's admitted still count. Keep N, target, prompt and generation settings fixed "
+                "across conditions and A/B arms for each example."
+            ),
             "report_per_category": list(intake.CATEGORIES),
             "max_new_tokens": evaluation.MAX_NEW_TOKENS,
             "do_sample": False,

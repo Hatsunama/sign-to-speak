@@ -1,4 +1,4 @@
-"""Build and verify the private FSBoard v2 sentinel source archive."""
+"""Build and verify a private FSBoard sentinel source archive."""
 
 import argparse
 import ast
@@ -8,6 +8,7 @@ import io
 import json
 import os
 from pathlib import Path
+import re
 import stat
 import subprocess
 import sys
@@ -35,10 +36,7 @@ SEED_SOURCES = (
     *(f"{module}.py" for module in SUITE),
 )
 RELEASE_SOURCES = frozenset((*SEED_SOURCES, "test_train_qwen_temporal.py", "test_train_qwen_pilot.py"))
-PRIVATE_SHA256 = {
-    "private-proposal.json": "abc506b6edc91d23fbdf416b36f38fd0c739d5e0c2bfff891fa41aef64bc667c",
-    "fsboard-eval-v3-approved.json": "5be4dd8a5d5225c8131eab855f521a83382a4da3f18804170e917ff381ebd8ac",
-}
+APPROVED_RECEIPT_SHA256 = "5be4dd8a5d5225c8131eab855f521a83382a4da3f18804170e917ff381ebd8ac"
 MANIFEST = "SOURCE-MANIFEST.json"
 
 
@@ -99,11 +97,11 @@ def collect_sources(root):
     return sources
 
 
-def read_private(root, path, name):
+def read_private(root, path, name, expected_sha256):
     if path.name != name:
         raise ValueError(f"Expected private input named {name}")
     data = read_input(root, path)
-    if sha256(data).hexdigest() != PRIVATE_SHA256[name]:
+    if sha256(data).hexdigest() != expected_sha256:
         raise ValueError(f"SHA-256 mismatch for {name}")
     return data
 
@@ -201,24 +199,27 @@ def validate_archive(data, files, manifest):
         return json.loads(process.stdout)
 
 
-def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--source-root", required=True, type=Path)
-    parser.add_argument("--proposal", required=True, type=Path)
-    parser.add_argument("--approved-receipt", required=True, type=Path)
-    parser.add_argument("--output-dir", required=True, type=Path)
-    arguments = parser.parse_args()
+def build_source_archive(root, proposal, approved_receipt, output, *, proposal_sha256):
+    """Build an archive pinned to a trusted digest of the proposal's original bytes."""
+    if not isinstance(proposal_sha256, str) or not re.fullmatch(r"[0-9a-f]{64}", proposal_sha256):
+        raise ValueError("--proposal-sha256 must be 64 lowercase hexadecimal characters")
 
-    root = Path(os.path.abspath(arguments.source_root))
-    output = arguments.output_dir.absolute()
+    root = Path(os.path.abspath(root))
+    output = Path(output).absolute()
     if os.path.lexists(output):
-        parser.error(f"Output directory already exists: {output}")
+        raise ValueError(f"Output directory already exists: {output}")
     if not root.is_dir() or root.resolve() != root:
-        parser.error(f"Source root must be a real directory: {root}")
+        raise ValueError(f"Source root must be a real directory: {root}")
 
-    files = collect_sources(root)
-    files["private-proposal.json"] = read_private(root, arguments.proposal, "private-proposal.json")
-    files["fsboard-eval-v3-approved.json"] = read_private(root, arguments.approved_receipt, "fsboard-eval-v3-approved.json")
+    private_inputs = {
+        "private-proposal.json": (proposal, proposal_sha256),
+        "fsboard-eval-v3-approved.json": (approved_receipt, APPROVED_RECEIPT_SHA256),
+    }
+    files = {
+        name: read_private(root, Path(path), name, expected_sha256)
+        for name, (path, expected_sha256) in private_inputs.items()
+    }
+    files.update(collect_sources(root))
     archive, manifest = archive_source(files)
     suite = validate_archive(archive, files, manifest)
 
@@ -234,12 +235,35 @@ def main():
         "bytes": len(readback),
         "sha256": sha256(readback).hexdigest(),
         "files": manifest,
-        "private_input_sha256": PRIVATE_SHA256,
+        "private_input_sha256": {
+            name: expected_sha256 for name, (_, expected_sha256) in private_inputs.items()
+        },
         "unicode_fixture_verified": True,
         "isolated_archive_suite": suite,
     }
     with (output / "source-receipt.json").open("xb") as stream:
         stream.write(json_bytes(report))
+    return report
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source-root", required=True, type=Path)
+    parser.add_argument("--proposal", required=True, type=Path)
+    parser.add_argument(
+        "--proposal-sha256", required=True, metavar="SHA256",
+        help="Trusted SHA-256 of the raw proposal bytes (64 lowercase hexadecimal characters)",
+    )
+    parser.add_argument("--approved-receipt", required=True, type=Path)
+    parser.add_argument("--output-dir", required=True, type=Path)
+    arguments = parser.parse_args()
+    try:
+        report = build_source_archive(
+            arguments.source_root, arguments.proposal, arguments.approved_receipt, arguments.output_dir,
+            proposal_sha256=arguments.proposal_sha256,
+        )
+    except ValueError as error:
+        parser.error(str(error))
     print(json_bytes(report).decode("utf-8"), end="")
 
 

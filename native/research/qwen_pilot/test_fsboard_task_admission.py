@@ -84,17 +84,17 @@ class Response(io.BytesIO):
         return super().read(size)
 
 
-def decode_fixture(video, output, clip_id, clip):
+def decode_fixture(video, output, clip_id, clip, *, count=32, **bounds):
     assert video.read_bytes().startswith(b"fixture-video-")
     folder = output / "frames" / clip_id
     folder.mkdir()
     samples = []
     start, end = shared.annotation_window(clip)
-    for slot in range(shared.FRAME_COUNT):
+    for slot in range(count):
         path = folder / f"{slot:02d}.png"
         Image.new("RGB", (4, 3), (slot, 0, 0)).save(path, format="PNG")
         payload = path.read_bytes()
-        actual = start + (end - start) * slot / (shared.FRAME_COUNT - 1)
+        actual = start + (end - start) * slot / (count - 1)
         samples.append({
             "frame_index": slot,
             "requested_seconds": actual,
@@ -152,6 +152,13 @@ class TaskAdmissionTests(unittest.TestCase):
 
     def test_sentinel_requests_first_clip_per_role_and_publishes_bound_receipts(self):
         args = self.arguments()
+        counts = {"holdout": [29], "development": [21], "training": [8]}
+
+        def variable_decode(*args, **kwargs):
+            role = args[2].rsplit("-", 1)[0]
+            return decode_fixture(*args, count=counts[role][0], **kwargs)
+
+        self.decode.side_effect = variable_decode
         summary = admission.admit(**args)
         self.read_previous.assert_called_once_with(self.previous_path)
         self.assertEqual(self.open.call_count, 3)
@@ -162,6 +169,11 @@ class TaskAdmissionTests(unittest.TestCase):
         self.assertEqual(summary["protocol_sha256"], args["protocol_sha256"])
         receipt = json.loads((self.output / "admission.json").read_bytes())
         self.assertEqual(set(receipt["clips"]), set(protocol.ROLE_SOURCES))
+        for header in (summary, receipt):
+            self.assertEqual(header["min_frames_per_clip"], 8)
+            self.assertEqual(header["max_frames_per_clip"], 32)
+            self.assertEqual(header["sampled_frame_counts"], counts)
+            self.assertNotIn("frames_per_clip", header)
         for index, role in enumerate(protocol.ROLE_SOURCES):
             with self.subTest(role=role):
                 expected = self.document["clips"][role][0]
@@ -178,7 +190,13 @@ class TaskAdmissionTests(unittest.TestCase):
                 self.assertEqual(admitted["role"], role)
                 original = self.output / admitted["original_path"]
                 self.assertEqual(hashlib.sha256(original.read_bytes()).hexdigest(), admitted["original_sha256"])
-                self.assertEqual(len(admitted["frames"]), 32)
+                self.assertEqual(self.decode.call_args_list[index].kwargs, {
+                    "min_frames": 8, "max_frames": 32, "allow_terminal_pts_endpoint": True,
+                })
+                self.assertEqual(admitted["sampled_frame_count"], counts[role][0])
+                self.assertEqual(len(admitted["frames"]), counts[role][0])
+                self.assertEqual([Path(frame["path"]).name for frame in admitted["frames"]],
+                                 [f"{slot:02d}.png" for slot in range(counts[role][0])])
         public_bytes = (self.output / "summary.json").read_bytes()
         self.assertNotIn(b"private-clip", public_bytes)
         self.assertNotIn(b"private-signer", public_bytes)
@@ -296,6 +314,18 @@ class TaskAdmissionTests(unittest.TestCase):
         self.open.assert_not_called()
         self.assertFalse(self.output.exists())
 
+    def test_clip_validation_accepts_the_shared_metadata_duration_range(self):
+        for role, split in protocol.ROLE_SOURCES.items():
+            clip = self.document["clips"][role][0]
+            start = clip["annotation_start_full_video_seconds"]
+            for duration in (0.5, 0.7, 0.917, 1.199, 1.2):
+                with self.subTest(role=role, duration=duration):
+                    candidate = {**clip, "annotation_end_full_video_seconds": start + duration}
+                    admission.validate_clip(candidate, split)
+            too_short = {**clip, "annotation_end_full_video_seconds": start + 0.499}
+            with self.assertRaises(shared.AdmissionError):
+                admission.validate_clip(too_short, split)
+
     def test_semantic_gates_check_full_roster_before_sentinel_download(self):
         cases = {
             "publisher test path": ("source_path", "daun_v3/video_clips/daun_v3-test/other.mp4"),
@@ -363,10 +393,41 @@ class TaskAdmissionTests(unittest.TestCase):
                 self.assertFalse(list(self.directory.glob(".fsboard-media-*")))
         self.decode.assert_not_called()
 
+    def test_out_of_range_frame_counts_fail_before_publication(self):
+        for count in (7, 33):
+            with self.subTest(count=count):
+                self.output = self.directory / f"count-{count}"
+
+                def out_of_range(*args, **kwargs):
+                    return decode_fixture(*args, count=count, **kwargs)
+
+                self.decode.side_effect = out_of_range
+                with self.assertRaises(shared.AdmissionError):
+                    admission.admit(**self.arguments())
+                self.assertFalse(self.output.exists())
+                failure = json.loads(admission.failure_path(self.output).read_text(encoding="utf-8"))
+                self.assertEqual(failure["stage"], "frame_verification")
+
+    def test_padding_and_repeated_presentation_timestamps_fail_before_publication(self):
+        for field in ("duplicate", "source_pts_seconds", "frame_index"):
+            with self.subTest(field=field):
+                self.output = self.directory / field
+
+                def invalid_frame(*args, **kwargs):
+                    result = decode_fixture(*args, count=21, **kwargs)
+                    first, second = result["frames"][:2]
+                    second[field] = True if field == "duplicate" else first[field]
+                    return result
+
+                self.decode.side_effect = invalid_frame
+                with self.assertRaisesRegex(shared.AdmissionError, "out of order or out of scope"):
+                    admission.admit(**self.arguments())
+                self.assertFalse(self.output.exists())
+
     def test_receipt_requires_complete_ordered_frame_artifacts(self):
-        def remove_frame(*args):
-            result = decode_fixture(*args)
-            (args[1] / result["frames"][31]["path"]).unlink()
+        def remove_frame(*args, **kwargs):
+            result = decode_fixture(*args, count=21, **kwargs)
+            (args[1] / result["frames"][-1]["path"]).unlink()
             return result
 
         self.decode.side_effect = remove_frame
@@ -376,8 +437,8 @@ class TaskAdmissionTests(unittest.TestCase):
         self.assertFalse(list(self.directory.glob(".fsboard-media-*")))
 
     def test_png_content_and_dimensions_are_verified_even_when_the_digest_matches(self):
-        def invalid_frame(*args):
-            result = decode_fixture(*args)
+        def invalid_frame(*args, **kwargs):
+            result = decode_fixture(*args, **kwargs)
             sample = result["frames"][0]
             path = args[1] / sample["path"]
             if defect == "dimensions":
