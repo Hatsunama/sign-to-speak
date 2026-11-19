@@ -8,6 +8,7 @@ name: Sign Qwen Android backend app smoke build
     paths:
       - '.github/workflows/sign-qwen-backend-app-smoke.yml'
       - 'native/research/qwen_pilot/backend_app/**'
+      - 'native/research/qwen_pilot/runtime_qa/test_shaderc_install_config.py'
 
 permissions:
   contents: read
@@ -78,6 +79,15 @@ jobs:
             "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "${sdk_packages[@]}"
           fi
 
+      - name: Check Shaderc install export configuration
+        shell: bash
+        run: |
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          mkdir -p "$diagnostics"
+          python3 "$GITHUB_WORKSPACE/native/research/qwen_pilot/runtime_qa/test_shaderc_install_config.py" \
+            "$GITHUB_WORKSPACE/.github/workflows/sign-qwen-backend-app-smoke.yml" \
+            2>&1 | tee "$diagnostics/shaderc-install-config.log"
+
       - name: Build pinned host glslc and compile the integer-dot feature test
         shell: bash
         run: |
@@ -125,8 +135,9 @@ jobs:
               print(f"{name} {actual} https://github.com/{entry['subrepo']} {checkout}")
           PY
 
+          # Keep dependency exports enabled together. This target is built without running install.
           cmake -S shaderc -B "$host_build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-            -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_INSTALL=ON
+            -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_INSTALL=OFF
           cmake --build "$host_build" --target glslc_exe --parallel 2
           test -x "$glslc"
           {
