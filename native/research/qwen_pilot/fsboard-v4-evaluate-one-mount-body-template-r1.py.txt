@@ -1,0 +1,497 @@
+# Runtime image: pytorch/pytorch@sha256:dab81780fd94483b67b4b5679cc0024939b08e48540d39476d284cb29002ed69
+import hashlib
+import json
+import os
+from pathlib import Path, PurePosixPath
+import shutil
+import signal
+import subprocess
+import sys
+import tarfile
+import tempfile
+import time
+
+CPU_THREADS = {name: "1" for name in (
+    "OMP_NUM_THREADS", "MKL_NUM_THREADS", "OPENBLAS_NUM_THREADS", "NUMEXPR_NUM_THREADS",
+)}
+os.environ.update(CPU_THREADS)
+os.umask(0o077)
+JOB = Path("/job")
+SOURCE_ARCHIVE_SHA = "30e21395dddb5e84dd2e062005d12e8035532be680e3b1d12db90e51b636f1cf"
+SOURCE_MANIFEST_SHA = "5b2df533e3d36fc29a7df820e4e9e069cbd1e739b48e44e69fb4db7c052e95aa"
+MEDIA_SHA = "ee33d492621f354af9857a07b14fe6207b8f333a1f4086a4b2aea6f145f35c85"
+INPUT_SUCCESS_SHA = "0bae4476559f73990649dff0e98131fdded508d63de47ac31ca744ddb47fb517"
+PROCESSOR_SHA = "551c2e637dfe5a4132c537c3dd8398e0a58cc76750573b2882e30afa5a14db61"
+CONTROL_INPUTS_SHA = "eac4dbc65d1a4a5309c22fe32c63c144744a392aeaa4be3762e2f847ae2aaf6e"
+PAIR_SUCCESS_SHA = "__PAIR_SUCCESS_SHA__"
+PAIR_EXIT_SHA = "__PAIR_EXIT_SHA__"
+SUPPORT_NAME = "fsboard_v4_evaluation_launch.py"
+SUPPORT_BYTES = 12253
+SUPPORT_SHA = "4918cd9f23575578eefde2a19f29d765751f61bf3c092a595a4aabaec68537c3"
+CANDIDATES = ("base", "A", "B")
+
+
+def require(condition, message):
+    if not condition:
+        raise RuntimeError(message)
+
+
+def file_sha(path):
+    require(path.is_file() and not path.is_symlink(), f"Missing regular file: {path.name}")
+    with path.open("rb") as stream:
+        return hashlib.file_digest(stream, "sha256").hexdigest()
+
+
+def read_pinned(path, digest):
+    payload = path.read_bytes()
+    require(hashlib.sha256(payload).hexdigest() == digest, f"Payload pin mismatch: {path.name}")
+    return payload
+
+
+def write_json(path, report):
+    with path.open("x", encoding="utf-8") as stream:
+        json.dump(report, stream, indent=2, allow_nan=False)
+        stream.write("\n")
+
+
+def extract_checked(archive, destination, max_files, max_bytes):
+    with tarfile.open(archive, "r:gz") as tar:
+        members = tar.getmembers()
+        require(len(members) <= max_files and sum(m.size for m in members) <= max_bytes,
+                "Unexpected archive size or member count")
+        seen = set()
+        for member in members:
+            relative = PurePosixPath(member.name)
+            require(not relative.is_absolute() and ".." not in relative.parts and relative.parts
+                    and relative not in seen and (member.isdir() or member.isfile()),
+                    "Invalid archive member")
+            seen.add(relative)
+        for member in members:
+            target = destination.joinpath(*PurePosixPath(member.name).parts)
+            if member.isdir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with tar.extractfile(member) as source, target.open("xb") as output:
+                    shutil.copyfileobj(source, output)
+
+
+def runtime_environment(work):
+    inherited = (
+        "PATH", "LD_LIBRARY_PATH", "CUDA_VISIBLE_DEVICES", "NVIDIA_VISIBLE_DEVICES",
+        "NVIDIA_DRIVER_CAPABILITIES", "LANG", "LC_ALL",
+    )
+    return {
+        **{name: os.environ[name] for name in inherited if name in os.environ},
+        **CPU_THREADS,
+        "HF_HOME": str(work / "hf-cache"),
+        "PYTORCH_KERNEL_CACHE_PATH": str(work / "torch-kernel-cache"),
+        "HF_HUB_DISABLE_IMPLICIT_TOKEN": "1",
+        "HF_HUB_DISABLE_PROGRESS_BARS": "1",
+        "PIP_PROGRESS_BAR": "off",
+        "PYTHONDONTWRITEBYTECODE": "1",
+        "PYTHONUNBUFFERED": "1",
+    }
+
+
+INPUT_LOADER_SOURCE = '''
+def load_evaluation_inputs(work, final_doc):
+    import fsboard_task_evaluate as evaluation
+    import fsboard_task_inputs as input_gate
+    from fsboard_v4_evaluation_launch import MODEL, PAIR_PINS
+
+    evidence = work / "media"
+    verified = input_gate.load_admission(
+        admission=evidence / "admitted/admission.json", admission_sha256=PAIR_PINS["admission_sha256"],
+        proposal=work / "private-proposal.json", proposal_sha256=PAIR_PINS["proposal_sha256"],
+        protocol_sha256=PAIR_PINS["protocol_sha256"], previous_receipt=work / "fsboard-eval-v3-approved.json",
+    )
+    require(verified.frozen_protocol["model"] == MODEL, "Frozen evaluation model mismatch")
+    plan, controls = evaluation.load_control_inputs(
+        verified, control_plan_path=evidence / "control-plan.json",
+        control_plan_sha256=final_doc["control_plan_sha256"],
+        control_inputs_path=JOB / "inputs/control-inputs.json", control_inputs_sha256=CONTROL_INPUTS_SHA,
+    )
+    return verified, plan, controls
+'''
+exec(compile(INPUT_LOADER_SOURCE, "<evaluation-input-loader>", "exec"))
+
+
+# The child reuses the verified input loader from the parent and the untouched frozen evaluator.
+CHILD_BODY = '''
+import gc
+import json
+from pathlib import Path
+import signal
+import sys
+
+import fsboard_task_cloud_training as training
+import fsboard_task_evaluate as evaluation
+import fsboard_task_inputs as input_gate
+import paired_experiment as paired
+from fsboard_v4_evaluation_launch import EMPTY_SHA256, MODEL, require
+
+if not __debug__:
+    raise RuntimeError("Evaluation requires enabled integrity checks")
+
+work = Path.cwd()
+output = work / "evaluation"
+request = json.loads((work / "evaluation-request.json").read_bytes())
+stage = "frozen_inputs"
+candidate = None
+
+def run():
+    global stage, candidate
+    verified, plan, control_inputs = load_evaluation_inputs(work, request["inputs"])
+    stage = "runtime"
+    torch, processor_type, model_type, _, _, peft_model = training.load_runtime()
+    torch.set_num_threads(1)
+    torch.set_num_interop_threads(1)
+    paired.validate_runtime(torch, output)
+    model_id, revision = MODEL["id"], MODEL["revision"]
+    training.check_model_path(model_id)
+    processor = processor_type.from_pretrained(model_id, revision=revision, token=False, trust_remote_code=False)
+    (output / "bindings").mkdir()
+    for candidate in CANDIDATES:
+        stage = "load_base"
+        training.check_model_path(model_id)
+        model = model_type.from_pretrained(
+            model_id, revision=revision, token=False, trust_remote_code=False, use_safetensors=True,
+            dtype=torch.bfloat16, attn_implementation="sdpa",
+        ).to("cuda")
+        require(model.config.model_type == "qwen3_5", "Unexpected frozen base architecture")
+        model.requires_grad_(False)
+        provenance = request["candidates"][candidate]
+        if candidate != "base":
+            stage = "verify_adapter"
+            checkpoint = work / "adapters" / candidate
+            model = paired.load_initialized_adapter(
+                lambda: model, lambda base, path: peft_model.from_pretrained(
+                    base, str(path), is_trainable=True,
+                ),
+                checkpoint, provenance["adapter_sha256"],
+            )
+            trainable = [name for name, parameter in model.named_parameters() if parameter.requires_grad]
+            require(trainable and all(".language_model." in name and ".lora_" in name for name in trainable),
+                    "Unexpected LoRA parameter set")
+            actual = paired.parameter_digest(model)
+            require(actual != EMPTY_SHA256 and actual == provenance["parameter_sha256"],
+                    "Loaded LoRA parameter digest disagrees with training")
+        else:
+            require(not isinstance(model, peft_model) and not getattr(model, "_hf_peft_config_loaded", False),
+                    "Base candidate unexpectedly contains a PEFT adapter")
+        model.requires_grad_(False).eval()
+        require(all(not parameter.requires_grad for parameter in model.parameters()), "Model parameters are not frozen")
+        input_gate.publish_private(output / "bindings" / f"{candidate}.json", provenance)
+        stage = "holdout"
+        evaluation.evaluate_model(torch, processor, model, verified, plan, control_inputs, output / candidate, candidate)
+        del model
+        gc.collect()
+        torch.cuda.empty_cache()
+        print(f"Completed holdout candidate {candidate}", flush=True)
+
+def cancel(signum, frame):
+    raise KeyboardInterrupt
+
+signal.signal(signal.SIGTERM, cancel)
+try:
+    run()
+except (Exception, KeyboardInterrupt) as error:
+    input_gate.publish_private(output / "failure.json", {
+        "status": "evaluation_incomplete", "candidate": candidate, "stage": stage,
+        "error_type": type(error).__name__, "detail": str(error)[:4096],
+    })
+    print(f"Evaluation stopped during {stage} ({type(error).__name__})", file=sys.stderr, flush=True)
+    raise SystemExit(130 if isinstance(error, KeyboardInterrupt) else 1)
+'''
+
+
+def capture_records(local, remote, expected, copied, *, strict=False):
+    from fsboard_v4_evaluation_launch import JSON_LIMIT, read_object
+
+    for relative in sorted(expected):
+        if relative in copied:
+            continue
+        source = local / relative
+        if not source.exists() and not source.is_symlink():
+            continue
+        require(source.is_file() and not source.is_symlink() and source.resolve() == source,
+                "Unexpected non-regular evaluation result")
+        with source.open("rb") as stream:
+            payload = stream.read(JSON_LIMIT + 1)
+        require(len(payload) <= JSON_LIMIT, "Unexpected evaluation result size")
+        if relative == "runtime_receipt.json":
+            # The direct writer ends its indented object with a closing brace on its own line.
+            if not strict and not payload.endswith((b"\n}\n", b"\n}\r\n")):
+                continue
+            require(payload.endswith(b"\n"), "Incomplete evaluation runtime receipt")
+        require(payload, "Unexpected evaluation result size")
+        read_object(payload, relative)
+        target = remote / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        with target.open("xb") as stream:
+            stream.write(payload)
+        require(target.read_bytes() == payload, "Captured evaluation result readback failed")
+        copied[relative] = {"sha256": hashlib.sha256(payload).hexdigest(), "bytes": len(payload)}
+    if strict:
+        for relative, receipt in copied.items():
+            target = remote / relative
+            require(target.stat().st_size == receipt["bytes"] and file_sha(target) == receipt["sha256"],
+                    "Captured evaluation result changed")
+
+
+def verify_complete(remote, copied, candidates, clips, plan, controls):
+    import fsboard_task_evaluate as evaluation
+    from fsboard_v4_evaluation_launch import EXPERIMENT_ID, read_object
+
+    def document(relative):
+        require(relative in copied, "Missing completed evaluation result")
+        return read_object(read_pinned(remote / relative, copied[relative]["sha256"]), relative)
+
+    expected_inputs = read_object(controls.payload, "attested holdout processor inputs")["examples"]
+    summaries = {}
+    conditions = evaluation.CONDITIONS
+    for candidate, binding in candidates.items():
+        binding_name = f"bindings/{candidate}.json"
+        require(document(binding_name) == binding, "Evaluation candidate binding mismatch")
+        scores = {condition: [] for condition in conditions}
+        for clip in clips:
+            clip_id = clip["id"]
+            for condition in conditions:
+                row = document(f"{candidate}/{clip_id}/{condition}.json")
+                require(row.get("candidate") == candidate and row.get("condition") == condition
+                        and row.get("clip_id") == clip_id and row.get("reference") == clip["reference"]
+                        and row.get("signer_id") == clip["signer_id"]
+                        and row.get("publisher_split") == clip["split"]
+                        and row.get("control") == plan["examples"][clip_id]["conditions"][condition]
+                        and row.get("model_input") == expected_inputs[clip_id][condition],
+                        "Evaluation row disagrees with the admitted clip, condition or processor attestation")
+                nll = row["reference_nll"]
+                require(nll["tokens_including_eos"] == row["model_input"]["supervised_tokens_including_eos"],
+                        "Incomplete teacher-forced reference loss")
+                scores[condition].append(row)
+        summary_name = f"{candidate}/summary.json"
+        summary = document(summary_name)
+        pins = {
+            **dict(zip(evaluation.PINS, controls.admission_binding, strict=True)),
+            "control_plan_sha256": controls.plan_file_sha256,
+            "control_plan_content_sha256": controls.plan_sha256,
+            "control_inputs_sha256": controls.sha256,
+            "scorer_sha256": evaluation.protocol.SCORER_SHA256,
+        }
+        aggregates = evaluation._summarize(scores)
+        require(summary.get("candidate") == candidate and summary.get("status") == "HOLDOUT_EVALUATED"
+                and summary.get("experiment_id") == EXPERIMENT_ID and summary.get("pins") == pins
+                and all(summary.get(key) == value for key, value in aggregates.items()),
+                "Incomplete or mismatched candidate summary")
+        summaries[candidate] = {"conditions": len(conditions), "clips": len(clips),
+                                "scored_records": sum(len(rows) for rows in scores.values()),
+                                "summary_sha256": copied[summary_name]["sha256"],
+                                "model_binding_sha256": copied[binding_name]["sha256"]}
+    return summaries
+
+
+def run_and_capture(argv, work, env, output, out, candidates, clips, plan, controls):
+    import fsboard_task_evaluate as evaluation
+
+    remote = out / "artifacts"
+    remote.mkdir()
+    require(len(clips) == 64 and len({clip["id"] for clip in clips}) == 64
+            and all(PurePosixPath(clip["id"]).parts == (clip["id"],)
+                    and not clip["id"].startswith(".") for clip in clips)
+            and len(evaluation.CONDITIONS) == 5, "Unexpected frozen holdout shape")
+    expected = {
+        f"{candidate}/{clip['id']}/{condition}.json"
+        for candidate in candidates for clip in clips for condition in evaluation.CONDITIONS
+    }
+    expected.update(f"bindings/{candidate}.json" for candidate in candidates)
+    expected.update(f"{candidate}/summary.json" for candidate in candidates)
+    expected.add("runtime_receipt.json")
+    allowed = expected | {"failure.json"}
+    child = None
+    error = None
+    copied = {}
+    deadline = None
+    strict = False
+    summaries = None
+
+    def terminate(signum, frame):
+        nonlocal deadline
+        if deadline is None:
+            deadline = time.monotonic() + 15
+        if child is not None and child.poll() is None:
+            child.terminate()
+
+    previous = signal.signal(signal.SIGTERM, terminate)
+    try:
+        try:
+            child = subprocess.Popen(argv, cwd=work, env=env)
+            if deadline is not None and child.poll() is None:
+                child.terminate()
+            while child.poll() is None:
+                if deadline is not None and time.monotonic() >= deadline:
+                    child.kill()
+                    child.wait()
+                    break
+                capture_records(output, remote, allowed, copied)
+                time.sleep(5)
+        except (Exception, KeyboardInterrupt) as failure:
+            error = failure
+        finally:
+            if child is not None and child.poll() is None:
+                child.terminate()
+                try:
+                    child.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    child.kill()
+                    child.wait()
+            try:
+                capture_records(output, remote, allowed, copied, strict=True)
+                strict = True
+                if child is not None and child.returncode == 0 and deadline is None and error is None:
+                    local_json = {
+                        path.relative_to(output).as_posix() for path in output.rglob("*.json")
+                        if not any(part.startswith(".") for part in path.relative_to(output).parts)
+                    }
+                    require(set(copied) == expected == local_json, "Incomplete or unexpected evaluation capture")
+                    summaries = verify_complete(remote, copied, candidates, clips, plan, controls)
+            except (Exception, KeyboardInterrupt) as failure:
+                if error is None:
+                    error = failure
+        rc = None if child is None else child.returncode
+        completed = rc == 0 and deadline is None and error is None and strict and summaries is not None
+        report = {
+            "status": "completed_holdout_evaluation" if completed else "evaluation_incomplete",
+            "returncode": rc, "strict_capture_complete": strict, "cancellation_requested": deadline is not None,
+            "orchestration_error_type": None if error is None else type(error).__name__,
+            "saved_artifacts": copied,
+        }
+        if error is not None:
+            report["orchestration_error_detail"] = str(error)[:4096]
+        if completed:
+            report.update(
+                candidates=summaries, scored_records=sum(row["scored_records"] for row in summaries.values()),
+                pair_success_sha256=PAIR_SUCCESS_SHA, pair_child_exit_sha256=PAIR_EXIT_SHA,
+                training_started=False,
+            )
+        write_json(out / "child-exit.json", report)
+        print(report["status"], flush=True)
+        return 0 if completed else 130 if deadline is not None else 1
+    finally:
+        signal.signal(signal.SIGTERM, previous)
+
+
+def main(out, work):
+    if not __debug__:
+        raise RuntimeError("Evaluation bootstrap requires enabled integrity checks")
+
+    source = JOB / "source/fsboard-v4-fit-source-20261119-r3.tar.gz"
+    require(source.stat().st_size == 201692 and file_sha(source) == SOURCE_ARCHIVE_SHA, "Wrong frozen source")
+    extract_checked(source, work, 60, 4000000)
+    manifest = work / "SOURCE-MANIFEST.json"
+    for row in json.loads(read_pinned(manifest, SOURCE_MANIFEST_SHA)):
+        payload = read_pinned(work / row["file"], row["sha256"])
+        require(len(payload) == row["bytes"], "Frozen source member size mismatch")
+    support = JOB / "support" / SUPPORT_NAME
+    require(support.is_file() and not support.is_symlink() and support.stat().st_size == SUPPORT_BYTES,
+            "Missing pinned evaluation support")
+    payload = read_pinned(support, SUPPORT_SHA)
+    (work / SUPPORT_NAME).write_bytes(payload)
+
+    sys.path.insert(0, str(work))
+    from fsboard_v4_evaluation_launch import MODEL, PAIR_PINS, read_object, valid_digest, verify_pair
+    require(valid_digest(PAIR_SUCCESS_SHA) and valid_digest(PAIR_EXIT_SHA), "Pair receipts require exact trusted pins")
+
+    final_doc = read_object(read_pinned(JOB / "inputs/inputs-success.json", INPUT_SUCCESS_SHA), "R4 success")
+    require(final_doc["status"] == "FULL_MEDIA_AND_INPUT_CONTRACTS_VERIFIED"
+            and final_doc["clips"] == {"holdout": 64, "development": 32, "training": 192}
+            and final_doc["matched_processor_examples"] == 288 and final_doc["encoded_holdout_controls"] == 320
+            and final_doc["static_images_verified_and_encoded"] == 80 and final_doc["lazy_video_batches_exercised"] == 2
+            and final_doc["model_weights_loaded"] is False and final_doc["model_training_or_scoring_started"] is False
+            and final_doc["processor_receipt_sha256"] == PROCESSOR_SHA
+            and final_doc["source_archive_sha256"] == "268f59f6f84493d2a9cb01468d906d7fb64d1d1ea866f7ad0a79a280f08e3200"
+            and final_doc["control_inputs_sha256"] == CONTROL_INPUTS_SHA and final_doc["media_archive_sha256"] == MEDIA_SHA,
+            "Frozen input success contract mismatch")
+
+    processor = read_object(read_pinned(JOB / "inputs/processor-inputs.json", PROCESSOR_SHA), "R4 processor")
+    require(processor["status"] == "INPUTS_VERIFIED"
+            and processor["clips_verified"] == {"holdout": 64, "development": 32, "training": 192}
+            and processor["admission_sha256"] == PAIR_PINS["admission_sha256"], "Frozen matched processor contract mismatch")
+
+    media = JOB / "media/full-media-private-evidence.tar.gz"
+    require(media.stat().st_size == 2030178907 and file_sha(media) == MEDIA_SHA, "Wrong frozen media archive")
+    evidence = work / "media"
+    evidence.mkdir()
+    extract_checked(media, evidence, 16000, 8 * 1024**3)
+    admission_payload = read_pinned(evidence / "admitted/admission.json", PAIR_PINS["admission_sha256"])
+    training_ids = {clip["id"] for clip in read_object(admission_payload, "pinned admission")["clips"]["training"]}
+    pair = verify_pair(
+        JOB / "pair", success_sha256=PAIR_SUCCESS_SHA, exit_sha256=PAIR_EXIT_SHA,
+        control_plan_sha256=final_doc["control_plan_sha256"], training_ids=training_ids,
+        local_adapters=work / "adapters",
+    )
+
+    (work / "torch-kernel-cache").mkdir(mode=0o700)
+    env = runtime_environment(work)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
+                    "torchvision==0.23.0", "--index-url", "https://download.pytorch.org/whl/cu126"],
+                   cwd=work, env=env, check=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "--no-cache-dir", "--only-binary=:all:",
+                    "-r", str(work / "requirements-train-cloud.txt"), "av==17.0.0"],
+                   cwd=work, env=env, check=True)
+
+    verified, plan, controls = load_evaluation_inputs(work, final_doc)
+    candidates = {}
+    for candidate in CANDIDATES:
+        arm = pair.get(candidate)
+        candidates[candidate] = {
+            "schema_version": 1, "candidate": candidate, "model": MODEL,
+            "pair_success_sha256": PAIR_SUCCESS_SHA, "pair_child_exit_sha256": PAIR_EXIT_SHA,
+            "adapter_sha256": None if arm is None else arm.adapter_sha256,
+            "parameter_sha256": None if arm is None else arm.parameter_sha256,
+            "checkpoint_receipt_sha256": None if arm is None else arm.checkpoint_receipt_sha256,
+            "initialization_sha256": None if arm is None else arm.initialization_sha256,
+        }
+    write_json(work / "evaluation-request.json", {"inputs": final_doc, "candidates": candidates})
+    write_json(out / "bootstrap-provenance.json", {
+        "source_archive_sha256": SOURCE_ARCHIVE_SHA, "source_manifest_sha256": SOURCE_MANIFEST_SHA,
+        "evaluation_support_sha256": SUPPORT_SHA, "media_archive_sha256": MEDIA_SHA,
+        "input_success_sha256": INPUT_SUCCESS_SHA, "processor_receipt_sha256": PROCESSOR_SHA,
+        "control_plan_sha256": controls.plan_file_sha256, "control_inputs_sha256": CONTROL_INPUTS_SHA,
+        "pair_success_sha256": PAIR_SUCCESS_SHA, "pair_child_exit_sha256": PAIR_EXIT_SHA,
+        "model": MODEL, "cpu_thread_environment": CPU_THREADS,
+    })
+    output = work / "evaluation"
+    output.mkdir(mode=0o700)
+    # Use inspect-free source extraction as the template may be passed to Python on stdin.
+    child_header = (
+        "from pathlib import Path\n"
+        f"JOB = Path({str(JOB)!r})\n"
+        f"CANDIDATES = {CANDIDATES!r}\n"
+        f"CONTROL_INPUTS_SHA = {CONTROL_INPUTS_SHA!r}\n"
+        "from fsboard_v4_evaluation_launch import require\n"
+    )
+    child_script = work / "evaluate_child.py"
+    child_script.write_text(child_header + INPUT_LOADER_SOURCE + CHILD_BODY, encoding="utf-8")
+    return run_and_capture([sys.executable, "-B", str(child_script)], work, env, output, out, candidates,
+                           verified.clips["holdout"], plan, controls)
+
+
+def cancel_bootstrap(signum, frame):
+    raise KeyboardInterrupt
+
+
+if __name__ == "__main__":
+    out = JOB / "out/run"
+    out.mkdir(mode=0o700)
+    signal.signal(signal.SIGTERM, cancel_bootstrap)
+    with tempfile.TemporaryDirectory(prefix="sign-to-speak-evaluation-", dir="/tmp") as scratch:
+        try:
+            returncode = main(out, Path(scratch))
+        except (Exception, KeyboardInterrupt) as error:
+            write_json(out / "bootstrap-failure.json", {
+                "status": "evaluation_incomplete", "error_type": type(error).__name__, "detail": str(error)[:4096],
+            })
+            print(f"Evaluation bootstrap stopped ({type(error).__name__})", file=sys.stderr, flush=True)
+            returncode = 130 if isinstance(error, KeyboardInterrupt) else 1
+    raise SystemExit(returncode)

@@ -1,6 +1,6 @@
 # FSboard v4 verification status — November 19, 2026
 
-The unchanged 288-clip cohort has passed full media and actual processor verification. The six-clip GPU fit is executing on a separately verified L40S runtime; no completed fit result, new paired model or independent accuracy result is qualified yet. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
+The unchanged 288-clip cohort has passed full media and actual processor verification. The six-clip GPU engineering fit passed at update 100 on the verified L40S runtime. The fresh 192-update A/B pair is running; independent accuracy and commercial readiness remain unqualified. Earlier base/video/static models each scored 0/8 exact on the inspected fresh fingerspelling assessment. This research does not establish general everyday ASL translation or commercial readiness.
 
 ## Frozen experiment and completed input evidence
 
@@ -47,13 +47,39 @@ The first multi-mount L40S fit request stayed unallocated and was cancelled. The
 
 The [pair launcher](fsboard_v4_pair_launch.py) rechecks fit success, child exit, exact checkpoint hashes, effective EOS and source/data/processor pins, and recomputes the six-clip guard before emitting the existing complete-pair command with a new common initialization. Scoring separately binds final A/B adapters and the base revision, then evaluates the frozen 64-by-five controls. None of those stages is qualified by a mock test. [Pair](fsboard_task_cloud_training.py) · [Evaluator](fsboard_task_evaluate.py)
 
+## Completed engineering fit and current pair
+
+Independent private readback verified the fit process exit, every saved checkpoint, source/data pins and the actual pair-launch gate against the frozen R3 runtime.
+
+| Optimizer update | Exact outputs on six training clips | Mean teacher NLL | Guard |
+| --- | --- | --- | --- |
+| 0 | 0/6 | 6.6929999193 | Not met |
+| 50 | 5/6 | 0.2187784041 | Not met |
+| 100 | 6/6 | 0.0003787550 | Passed |
+
+The same optimizer continued through both trained checkpoints. No holdout/development model calls occurred and the fit adapter was discarded. Actual effective EOS IDs were `[248046, 248044]`; returned sequences did not continue past the first effective EOS. Peak allocated training memory was 16,054,930,944 bytes. This is training-graph and overfitting evidence, not held-out recognition or mobile memory evidence.
+
+Fit success SHA-256: `ba48fd3925b2067692a9f8f00110574652c2898be1b7ebce2fc23b4cbefc0b9e`; outer zero-exit receipt: `d825a05b4ec51ea3550d5bfc5ccb0fb3154f34ebc0adefa88fd7aed8fc39badc`.
+
+The [fresh pair](https://huggingface.co/jobs/Hatsunama/6aff619b4fdc5ab3c55a4fab) uses another isolated one-mount workspace, copied server-side and verified without large local downloads. Arm A completed 192 updates and 384 video microbatches; B reached update 40. Actual persisted initialization receipts match, observed video batches match, and B's static forward/backward path executed with finite loss. The pair is not complete yet. No comparison outcome or static-transfer benefit is claimed.
+
+The trained reference uses Transformers' Torch implementation; optional fused linear-attention/convolution packages are absent. Evaluation keeps that implementation and sets an explicit owned kernel-cache directory while excluding ambient credentials.
+
+## Evaluation binding and capture repairs
+
+The candidate verifier binds every final adapter to the exact completed pair, source/model/data pins, common initialization, schedule and outer capture receipt. Loaded nonempty LoRA parameters must reproduce the trained parameter digest before freezing for inference. The base is loaded fresh from its pinned revision.
+
+Review found and reproduced two additional edges before use: a cross-arm inequality guard incorrectly rejected a legitimate identical-arm null outcome, and live capture could treat a partially written runtime receipt as corruption. Identical arms are now accepted when each has its own valid evidence; swapped or tampered artifacts still reject. Live polling defers the directly written runtime receipt until completion, and final capture requires valid complete JSON. The helper/template byte-pin connection is checked in the extracted source closure.
+
+The full workspace source/requirements/declared-program-template suite passed 365 checks with no failures or errors and four Windows filesystem-link skips; 18 focused binding/orchestration checks also passed in isolated delivery. Actual held-out scoring remains pending. [Binding verifier](fsboard_v4_evaluation_launch.py) · [Evaluation template](fsboard-v4-evaluate-one-mount-body-template-r1.py.txt)
+
 ## Durable paired-output capture
 
 The paired-output collector initially could copy a terminal success receipt even when final model files were absent. Regressions reproduced that incomplete success before repair. The collector now requires shared records, all 192 step records per arm, both final checkpoint adapters/optimizers and matching receipt hashes before publishing success. Conflicting success/failure receipts reject. Completed checkpoint and failure evidence survives rejected completion; cleanup errors attach to the original I/O error. This verifies stored output completeness, not model accuracy. Sixteen synthetic cases pass, including real Windows junction rejection; actual GPU pair and bucket capture still require verification. [Collector](fsboard_v4_pair_capture.py) · [Regressions](test_fsboard_v4_pair_capture.py)
 
 ## Validation limits and release status
 
-The complete local workspace source-only suite has 347 checks, no failures/errors and four Windows filesystem-link skips. It ran without private historical fixtures, local Torch imports or native builds. R3 separately passed 176 extracted-source checks with two host link skips; Linux execution must exercise them. The private continuous-media probe separately passed its 15 Linux checks without skips.
+The source-only checkpoint before evaluation support contained 347 checks, no failures/errors and four Windows filesystem-link skips. It ran without private historical fixtures, local Torch imports or native builds. R3 separately passed 176 extracted-source checks with two host link skips; Linux execution must exercise them. The private continuous-media probe separately passed its 15 Linux checks without skips.
 
 The [continuous-ASL intake plan](CONTINUOUS_ASL_DATA_INTAKE_PLAN.md) tracks sentence/discourse data, rights, reference alignment and cross-source leakage. Its first one-recording operational probe passed actual access and two-pass decoding; this does not establish signed meaning. [Metadata and media evidence](FLEURS_METADATA_ACCESS.md)
 
