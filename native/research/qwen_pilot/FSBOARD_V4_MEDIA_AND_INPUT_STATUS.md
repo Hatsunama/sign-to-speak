@@ -26,7 +26,7 @@ V4 admission now opts into measured terminal-frame corroboration for positive ov
 
 An auxiliary diagnostic read one derived duration after closing its PyAV container. That value was invalid. The original is preserved, with a separate correction reconstructed from exact stream integers and frame arrays captured while open. The repair captures measurements while open.
 
-The [corrected full run](https://huggingface.co/jobs/Hatsunama/6aff3156efaf5e14f4b1c577) passed 122 prerequisite tests and first replayed that exact MP4 through legacy rejection and corrected two-pass decoding plus PNG verification. It then started the unchanged 288-clip cohort. Completion remains pending at this checkpoint. Source archive: 122,236 bytes, SHA-256 `3c01ea6ee972f542efb1dab21fac167277cfef55b93c6d16dc4aca9edc2fa05d`.
+The [corrected full run](https://huggingface.co/jobs/Hatsunama/6aff3156efaf5e14f4b1c577) passed 122 prerequisite tests and first replayed that exact MP4 through legacy rejection and corrected two-pass decoding plus PNG verification. It then started the unchanged 288-clip cohort. It then stopped at holdout position 40 after verifying 39 clips: decoded duration 4.053755556 seconds versus publisher duration 4.020157000 seconds. The final-frame interval need not equal the preceding interval in variable-frame-rate media. A separate corpus-wide timing probe now profiles all 288 unchanged originals before another repair; no timing threshold has been widened to make the run pass. Full media and processor qualification remain pending. Source archive: 122,236 bytes, SHA-256 `3c01ea6ee972f542efb1dab21fac167277cfef55b93c6d16dc4aca9edc2fa05d`.
 
 ## Connected consumer and control checks
 
@@ -45,3 +45,5 @@ Complete full-media admission and independent archive checks remotely; verify th
 The [continuous-ASL plan](CONTINUOUS_ASL_DATA_INTAKE_PLAN.md) covers published sentence/discourse data, rights, reference alignment and leakage. Fingerspelling cannot establish everyday-conversation translation. [Phone evidence](PHONE_RUNTIME_RESULTS.md) retains unresolved accelerated numerical failures and unqualified interactive latency. Exact final production application checks remain required on both phones.
 
 Media, raw identifiers and operational evidence stay private; backups exclude signing keys and credentials. This draft is not a release or installation recommendation.
+
+The corpus-wide diagnostic is job [6aff33f44fdc5ab3c55a1034](https://huggingface.co/jobs/Hatsunama/6aff33f44fdc5ab3c55a1034). It retains hash-verified originals privately for follow-up and performs no model training or scoring.
