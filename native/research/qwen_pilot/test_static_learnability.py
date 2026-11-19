@@ -8,6 +8,8 @@ import unittest
 from unittest.mock import Mock, patch
 
 import static_learnability as probe
+import test_fsboard_evaluate as fixtures
+from test_static_diagnostic import approved_rows
 
 
 class ProbeTests(unittest.TestCase):
@@ -71,6 +73,61 @@ class ProbeTests(unittest.TestCase):
         optimizer.step.assert_called_once_with()
         optimizer.zero_grad.assert_called_once_with(set_to_none=True)
         self.assertEqual(result, {"target_ce": 2.5, "gradient_norm_before_clip": 3.0})
+
+    def test_initialization_receipt_lora_settings_match_verified_adapter(self):
+        fixture = fixtures.PairValidation()
+        self.addCleanup(fixture.doCleanups)
+        fixture.setUp()
+        experiment = fixture.write_complete_pair()
+        static = fixture.root / "static.json"
+        samples = approved_rows()
+        for label, source_path in probe.SOURCE_PATHS.items():
+            samples[f"{label}-0"].update(source_path=source_path, width=200, height=200)
+        static_sha = fixtures.write_json(static, {
+            "schema_version": 1, "role": "training_eligible", "samples": list(samples.values()),
+        })
+        source_paths = (
+            Path(probe.paired.__file__), Path(probe.pilot.__file__),
+            Path(probe.__file__).with_name("requirements-train-cloud.txt"),
+        )
+        experiment.update(
+            planned_optimizer_steps_per_arm=80, static_manifest_sha256=static_sha,
+            static_prompt=probe.paired.STATIC_PROMPT,
+            source_sha256={path.name: probe.paired.sha256(path.read_bytes()) for path in source_paths},
+        )
+        fixtures.write_json(fixture.pair / "experiment.json", experiment)
+        initial_path = fixture.pair / "initialization"
+        initial_path.mkdir()
+        targets = ["language_model.q_proj", "language_model.v_proj"]
+        fixtures.write_json(initial_path / "adapter_config.json", {
+            "r": 8, "lora_alpha": 16, "lora_dropout": 0.0, "target_modules": targets[::-1],
+        })
+        (initial_path / "adapter_model.safetensors").write_bytes(b"initial adapter")
+        adapter_sha = probe.paired.adapter_digest(initial_path)
+        parameter_sha = "a" * 64
+        receipt = {
+            "adapter_sha256": adapter_sha, "parameter_sha256": parameter_sha,
+            "rank": 8, "alpha": 16, "dropout": 0.0, "targets": targets,
+            "trainable_parameters": probe.TRAINABLE_PARAMETERS,
+        }
+        success, _ = probe.fsboard.read_json(fixture.pair / "success.json")
+        success["initialization_sha256"] = adapter_sha
+        for arm, summary in success["arms"].items():
+            summary["optimizer_steps"] = 80
+            fixtures.write_json(fixture.pair / arm / "summary.json", summary)
+            fixtures.write_json(fixture.pair / arm / "initialization.json", {
+                "shared_adapter_sha256": adapter_sha, "trainable_parameter_sha256": parameter_sha,
+            })
+        fixtures.write_json(fixture.pair / "success.json", success)
+        args = SimpleNamespace(pair_root=fixture.pair, dense_admission=fixture.dense_path, static_manifest=static)
+        receipt_path = initial_path / "receipt.json"
+        fixtures.write_json(receipt_path, receipt)
+        self.assertEqual(probe.load_inputs(args)[2], receipt)
+        for field, value in (("rank", 64), ("dropout", 0.5), ("alpha", 32), ("targets", targets[:1])):
+            with self.subTest(field=field):
+                fixtures.write_json(receipt_path, {**receipt, field: value})
+                with self.assertRaisesRegex(ValueError, "initialization.*LoRA"):
+                    probe.load_inputs(args)
 
     def test_adapter_loader_can_only_open_shared_initialization(self):
         root = Path.cwd().resolve() / "pair"

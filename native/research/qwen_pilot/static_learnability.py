@@ -80,6 +80,20 @@ def load_inputs(args):
         if (arm_initial.get("shared_adapter_sha256") != initial["adapter_sha256"]
                 or arm_initial.get("trainable_parameter_sha256") != initial["parameter_sha256"]):
             raise ValueError(f"Shared initialization receipt disagrees with arm {arm}")
+    adapter_path = fsboard.pair_path(root, "initialization")
+    config_path = fsboard.pair_path(root, "initialization/adapter_config.json")
+    fsboard.pair_path(root, "initialization/adapter_model.safetensors")
+    if paired.adapter_digest(adapter_path) != initial["adapter_sha256"]:
+        raise ValueError("Shared initialization adapter digest disagrees with the completed pair")
+    config, _ = fsboard.read_json(config_path)
+    targets, config_targets = initial.get("targets"), config.get("target_modules")
+    if (any(type(initial.get(receipt_key)) not in (int, float)
+            or initial[receipt_key] != config.get(config_key)
+            for receipt_key, config_key in (("rank", "r"), ("alpha", "lora_alpha"), ("dropout", "lora_dropout")))
+            or not isinstance(targets, list) or not isinstance(config_targets, list)
+            or not all(isinstance(target, str) for target in targets + config_targets)
+            or sorted(targets) != sorted(config_targets)):
+        raise ValueError("Shared initialization receipt LoRA settings disagree with the verified adapter")
     return experiment, rows, initial, {
         **digests, "static_manifest": manifest_sha, "dense_admission": experiment["dense_admission_sha256"],
         "initialization/receipt.json": initial_sha, "initialization/adapter": initial["adapter_sha256"],

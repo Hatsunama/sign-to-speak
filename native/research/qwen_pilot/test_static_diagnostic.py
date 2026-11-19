@@ -4,7 +4,7 @@ import unittest
 
 import paired_experiment as paired
 import static_diagnostic as diagnostic
-from test_fsboard_evaluate import PairValidation, write_json
+import test_fsboard_evaluate as fixtures
 
 
 def approved_rows():
@@ -69,12 +69,12 @@ class StaticSelection(unittest.TestCase):
 
 class DiagnosticAdmission(unittest.TestCase):
     def setUp(self):
-        fixture = PairValidation()
+        fixture = fixtures.PairValidation()
         self.addCleanup(fixture.doCleanups)
         fixture.setUp()
         self.fixture = fixture
         static = fixture.root / "static.json"
-        write_json(static, {"schema_version": 1, "role": "training_eligible", "samples": list(approved_rows().values())})
+        fixtures.write_json(static, {"schema_version": 1, "role": "training_eligible", "samples": list(approved_rows().values())})
         self.args = SimpleNamespace(pair_root=fixture.pair, dense_admission=fixture.dense_path, static_manifest=static)
 
     def complete_pair(self):
@@ -85,10 +85,10 @@ class DiagnosticAdmission(unittest.TestCase):
         }
         experiment.update(
             static_manifest_sha256=paired.sha256(self.args.static_manifest.read_bytes()),
-            schedule_sha256=write_json(self.fixture.pair / "schedule.json", schedule),
+            schedule_sha256=fixtures.write_json(self.fixture.pair / "schedule.json", schedule),
             static_prompt=paired.STATIC_PROMPT,
         )
-        write_json(self.fixture.pair / "experiment.json", experiment)
+        fixtures.write_json(self.fixture.pair / "experiment.json", experiment)
 
     def test_completion_and_both_input_digests_are_required(self):
         with self.assertRaisesRegex(ValueError, "completed A/B"):
