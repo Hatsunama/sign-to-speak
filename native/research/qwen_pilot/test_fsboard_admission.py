@@ -439,10 +439,68 @@ class DecodeTests(unittest.TestCase):
             self.assertTrue((self.output / frame["path"]).is_file())
         self.assertEqual(len(list(self.frames.rglob("*.png"))), 32)
 
+    def test_terminal_pts_endpoint_admits_measured_variable_tail_durations(self):
+        time_base = Fraction(1, 90_000)
+        # Exact presentation ticks from holdout-040 in corpus timing job 6aff33f44fdc5ab3c55a1034.
+        holdout_ticks = [
+            0, 3_020, 6_040, 9_049, 12_058, 15_079, 18_100, 21_109,
+            24_118, 27_138, 30_158, 33_178, 36_188, 39_198, 42_219, 45_240,
+            48_249, 51_258, 54_279, 57_300, 60_310, 63_320, 66_341, 69_362,
+            72_374, 75_386, 78_398, 81_410, 84_434, 87_458, 90_466, 93_474,
+            96_496, 99_518, 102_526, 105_534, 108_555, 111_576, 114_586, 117_596,
+            120_617, 123_638, 126_647, 129_656, 132_678, 135_700, 138_709, 141_718,
+            144_739, 147_760, 150_768, 153_776, 156_797, 159_818, 162_827, 165_836,
+            168_856, 171_876, 174_885, 177_894, 180_914, 183_934, 186_942, 189_950,
+            192_970, 195_990, 198_999, 202_008, 205_027, 208_046, 211_055, 214_064,
+            217_083, 220_102, 223_112, 226_122, 229_132, 232_153, 235_174, 238_181,
+            241_188, 244_207, 247_226, 250_235, 253_244, 256_263, 259_282, 262_291,
+            265_300, 268_319, 271_338, 274_347, 277_356, 280_375, 283_394, 286_403,
+            289_412, 292_431, 295_450, 298_459, 301_468, 304_488, 307_508, 310_518,
+            313_528, 316_553, 319_578, 322_590, 325_602, 328_626, 331_650, 334_663,
+            337_676, 340_700, 343_724, 346_738, 349_752, 352_776, 355_800, 358_807,
+            361_814,
+        ]
+        cases = (
+            ("holdout-040", holdout_ticks, 364_838, 3024, 3007, {
+                "clip_start_full_video_seconds": 14.057611,
+                "clip_end_full_video_seconds": 18.077768,
+                "annotation_start_full_video_seconds": 14.656,
+                "annotation_end_full_video_seconds": 17.444,
+            }),
+            # Every observed PTS interval is 2992 ticks in training-116.
+            ("training-116", range(0, 91 * 2992, 2992), 272_282, 3002, 2992, {
+                "clip_start_full_video_seconds": 791.172956,
+                "clip_end_full_video_seconds": 794.164957,
+                "annotation_start_full_video_seconds": 791.411,
+                "annotation_end_full_video_seconds": 793.54,
+            }),
+        )
+        for clip_id, ticks, stream_duration, frame_duration, preceding_gap, clip in cases:
+            with self.subTest(clip=clip_id):
+                receipt = self.decode(
+                    0, duration=stream_duration, time_base=time_base, start_time=0,
+                    times=[float(tick * time_base) for tick in ticks], clip=clip,
+                    terminal_duration=frame_duration, terminal_time_base=time_base,
+                    min_frames=8, max_frames=32, allow_terminal_pts_endpoint=True,
+                )
+                corroboration = receipt["terminal_endpoint_corroboration"]
+                self.assertEqual(corroboration["last_frame_duration_ticks"], frame_duration)
+                self.assertAlmostEqual(
+                    corroboration["preceding_distinct_pts_gap_seconds"], preceding_gap / 90_000,
+                )
+                self.assertAlmostEqual(corroboration["last_frame_end_seconds"], stream_duration / 90_000)
+                self.assertEqual(len(receipt["frames"]), 32)
+
+    def test_terminal_pts_endpoint_accepts_a_shorter_duration_after_a_wide_pts_gap(self):
+        options = self.terminal_endpoint_fixture()
+        options["times"][-2] = 353_847 / 90_000
+        receipt = self.decode(0, allow_terminal_pts_endpoint=True, **options)
+        corroboration = receipt["terminal_endpoint_corroboration"]
+        self.assertAlmostEqual(corroboration["preceding_distinct_pts_gap_seconds"], 5998 / 90_000)
+        self.assertEqual(corroboration["last_frame_duration_ticks"], 3008)
+
     def test_terminal_pts_endpoint_rejects_uncorroborated_overruns_before_publication(self):
         options = self.terminal_endpoint_fixture()
-        widened_gap = list(options["times"])
-        widened_gap[-2] = 353_847 / 90_000
         shifted_end = dict(options["clip"])
         shifted_end["clip_end_full_video_seconds"] -= 0.000050
 
@@ -453,11 +511,11 @@ class DecodeTests(unittest.TestCase):
             ("non-finite duration", {"terminal_duration": math.nan}),
             ("non-finite time base", {"terminal_time_base": math.nan}),
             ("zero duration", {"terminal_duration": 0}),
-            ("large final gap", {"times": widened_gap}),
+            ("duration reported as seconds instead of ticks", {"terminal_duration": 3008 / 90_000}),
             ("publisher end moved 50 microseconds", {"clip": shifted_end}),
             ("terminal duration extended by eight ticks", {"terminal_duration": 3016}),
             ("stream overrun without matching frame end", {"duration": 362_861}),
-            ("stream and terminal frame extended by one period", {
+            ("aligned terminal frame exceeds twice the median period", {
                 "duration": 365_852, "terminal_duration": 6007,
             }),
         ):

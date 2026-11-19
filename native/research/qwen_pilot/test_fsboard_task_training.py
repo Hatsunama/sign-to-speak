@@ -20,13 +20,19 @@ import fsboard_task_training as training
 from test_fsboard_task_inputs import Processor
 
 
-ROOT = Path(__file__).parent
-
-
 def write_json(path, document):
     payload = json.dumps(document).encode("utf-8")
     path.write_bytes(payload)
     return hashlib.sha256(payload).hexdigest()
+
+
+def make_prior_schedule(static_ids):
+    arms = {"A": [], "B": []}
+    for index, static_id in enumerate(static_ids):
+        video_ids = [f"{2 * index + offset:064x}" for offset in (1, 2)]
+        arms["A"].append({"video_ids": video_ids, "static_id": None})
+        arms["B"].append({"video_ids": video_ids.copy(), "static_id": static_id})
+    return arms
 
 
 def make_admission(root):
@@ -68,11 +74,20 @@ class Qwen3VLProcessor(Processor):
 
 
 class ScheduleTests(unittest.TestCase):
-    def test_two_complete_paired_passes_and_exact_pinned_static_cycle(self):
-        prior = ROOT / "paired-80-receipts" / "schedule.json"
-        static = training.load_prior_static_ids(prior)
-        self.assertEqual(static, tuple(step["static_id"] for step in json.loads(prior.read_bytes())["B"]))
-        schedule = training.build_schedule(make_admission(ROOT), static)
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.prior_path = self.root / "schedule.json"
+        self.static_ids = tuple(f"static-{index:064x}" for index in range(1, 81))
+        self.prior_digest = write_json(self.prior_path, make_prior_schedule(self.static_ids))
+
+    def test_two_complete_paired_passes_and_exact_static_cycle(self):
+        # Bind the loader to the synthetic schedule for this unit test.
+        with patch.object(protocol, "PREVIOUS_SCHEDULE_SHA256", self.prior_digest):
+            static = training.load_prior_static_ids(self.prior_path)
+        self.assertEqual(static, self.static_ids)
+        schedule = training.build_schedule(make_admission(self.root), static)
         self.assertEqual(len(schedule["A"]), 192)
         self.assertEqual([step.video_ids for step in schedule["A"]],
                          [step.video_ids for step in schedule["B"]])
@@ -88,28 +103,32 @@ class ScheduleTests(unittest.TestCase):
             self.assertEqual(len(set(actual[offset:offset + 192])), 192)
 
     def test_schedule_rejects_hash_change_and_duplicate_id(self):
-        original = (ROOT / "paired-80-receipts" / "schedule.json").read_bytes()
-        with tempfile.TemporaryDirectory() as directory:
-            path = Path(directory) / "schedule.json"
-            path.write_bytes(original + b" ")
+        with self.assertRaisesRegex(ValueError, "digest"):
+            training.load_prior_static_ids(self.prior_path)
+
+        original = self.prior_path.read_bytes()
+        self.prior_path.write_bytes(original + b" ")
+        with patch.object(protocol, "PREVIOUS_SCHEDULE_SHA256", self.prior_digest):
             with self.assertRaisesRegex(ValueError, "digest"):
-                training.load_prior_static_ids(path)
-            document = json.loads(original)
-            document["B"][1]["static_id"] = document["B"][0]["static_id"]
-            digest = write_json(path, document)
-            with patch.object(protocol, "PREVIOUS_SCHEDULE_SHA256", digest):
-                with self.assertRaisesRegex(ValueError, "distinct"):
-                    training.load_prior_static_ids(path)
+                training.load_prior_static_ids(self.prior_path)
+
+        document = json.loads(original)
+        document["B"][1]["static_id"] = document["B"][0]["static_id"]
+        digest = write_json(self.prior_path, document)
+        with patch.object(protocol, "PREVIOUS_SCHEDULE_SHA256", digest):
+            with self.assertRaisesRegex(ValueError, "distinct"):
+                training.load_prior_static_ids(self.prior_path)
 
     def test_rejects_wrong_roles_and_cross_role_publisher_groups(self):
-        prior = training.load_prior_static_ids(ROOT / "paired-80-receipts" / "schedule.json")
+        with patch.object(protocol, "PREVIOUS_SCHEDULE_SHA256", self.prior_digest):
+            prior = training.load_prior_static_ids(self.prior_path)
         for field, replacement in (
             ("role", "holdout"), ("id", "holdout-001"),
             ("signer_id", " HOLDOUT-SIGNER "),
             ("full_video_filename", " DEVELOPMENT-RECORDING "),
         ):
             with self.subTest(field=field):
-                verified = make_admission(ROOT)
+                verified = make_admission(self.root)
                 verified.clips["training"][0][field] = replacement
                 with self.assertRaisesRegex(ValueError, "role|overlap"):
                     training.build_schedule(verified, prior)
@@ -128,10 +147,7 @@ class InputTests(unittest.TestCase):
         self.static_path = self.root / "manifest.json"
         (self.root / "images").mkdir()
         self.static_manifest, self.prior_ids = self.make_static_fixture()
-        previous = json.loads((ROOT / "paired-80-receipts" / "schedule.json").read_bytes())
-        for step, static_id in zip(previous["B"], self.prior_ids, strict=True):
-            step["static_id"] = static_id
-        self.prior_digest = write_json(self.prior_path, previous)
+        self.prior_digest = write_json(self.prior_path, make_prior_schedule(self.prior_ids))
         with patch.object(gate, "load_frames", side_effect=images_for):
             self.report = gate.inspect_examples(self.verified, self.processor)
         self.report.update(

@@ -321,11 +321,11 @@ def _corroborate_terminal_pts_endpoint(
     tolerance = 2 * timestamp_tick
     frame_duration = float(duration_ticks * time_base)
     frame_end = last_relative_pts + frame_duration
+    # The preceding PTS gap describes the preceding frame on a variable-rate timeline.
     if any(
         abs(difference) > tolerance + 1e-9
         for difference in (
             last_relative_pts - expected_duration,
-            frame_duration - preceding_gap,
             frame_end - stream_duration,
         )
     ):

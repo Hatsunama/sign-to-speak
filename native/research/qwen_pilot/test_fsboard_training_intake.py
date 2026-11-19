@@ -30,6 +30,23 @@ def candidate(role, tag, **kwargs):
     return intake.candidate_for_role(row(tag, **kwargs), role)
 
 
+def write_previous_receipt(path):
+    references = ("cedar", "linen", "honey", "river", "peach", "cloud", "flute", "birch")
+    document = {
+        "schema_version": 1,
+        "status": "evaluation_eligible",
+        "role": "evaluation_only",
+        "dataset": {"id": intake.DATASET, "version": intake.VERSION, "split": "daun_v3-test"},
+        "clips": [
+            candidate("test", f"synthetic-prior-{index}", phrase=reference)
+            for index, reference in enumerate(references)
+        ],
+    }
+    payload = json.dumps(document).encode("utf-8")
+    path.write_bytes(payload)
+    return hashlib.sha256(payload).hexdigest()
+
+
 class Metadata(unittest.TestCase):
     def test_release_shape_filters_and_uses_the_official_split_path(self):
         with tempfile.TemporaryDirectory() as scratch:
@@ -143,22 +160,37 @@ class Selection(unittest.TestCase):
         self.assertEqual(report["shortfalls"]["signers"], 1)
         self.assertEqual(alternative["shortfalls"]["signers"], 0)
 
-    def test_pinned_old_receipt_contains_exactly_eight_references(self):
-        path = Path(__file__).with_name("fsboard-eval-v3-approved.json")
-        previous = intake.read_previous(path)
-        self.assertEqual(len(previous), 8)
-        self.assertEqual(len({entry["signer_id"] for entry in previous}), 8)
+    def test_previous_receipt_checks_digest_and_exactly_eight_references(self):
         with tempfile.TemporaryDirectory() as scratch:
-            tampered = Path(scratch) / "receipt.json"
-            tampered.write_bytes(path.read_bytes() + b" ")
-            with self.assertRaisesRegex(intake.AdmissionError, "integrity"):
-                intake.read_previous(tampered)
+            path = Path(scratch) / "previous.json"
+            expected_digest = write_previous_receipt(path)
+            with patch.object(intake, "PREVIOUS_RECEIPT_SHA256", expected_digest):
+                previous = intake.read_previous(path)
+                self.assertEqual(len(previous), 8)
+                for field in intake.SEPARATION_FIELDS:
+                    self.assertEqual(len({entry[field] for entry in previous}), 8)
+
+                payload = path.read_bytes()
+                path.write_bytes(payload + b" ")
+                with self.assertRaisesRegex(intake.AdmissionError, "integrity"):
+                    intake.read_previous(path)
+
+            incomplete = json.loads(payload)
+            incomplete["clips"].pop()
+            payload = json.dumps(incomplete).encode("utf-8")
+            path.write_bytes(payload)
+            with patch.object(intake, "PREVIOUS_RECEIPT_SHA256", hashlib.sha256(payload).hexdigest()):
+                with self.assertRaisesRegex(intake.AdmissionError, "wrong provenance"):
+                    intake.read_previous(path)
 
 
 class Preflight(unittest.TestCase):
     def setUp(self):
         release = {
-            "test": [row("unseen-test", phrase="jazz", signer="fixture-test")],
+            "test": [
+                row("unseen-test", phrase="jazz", signer="fixture-test"),
+                row("previous-reference", phrase="cedar"),
+            ],
             "validation": [row("unseen-validation", phrase="apple", signer="fixture-val")],
             "train": [row("unseen-train", phrase="piano", signer="fixture-train")],
         }
@@ -172,7 +204,10 @@ class Preflight(unittest.TestCase):
             target.write_bytes(payload)
             return {"path": name, "bytes": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
 
-        self.prior = Path(__file__).with_name("fsboard-eval-v3-approved.json")
+        receipt_dir = Path(self.enterContext(tempfile.TemporaryDirectory()))
+        self.prior = receipt_dir / "previous.json"
+        self.prior_digest = write_previous_receipt(self.prior)
+        self.enterContext(patch.object(intake, "PREVIOUS_RECEIPT_SHA256", self.prior_digest))
         self.scratch = Path(self.enterContext(tempfile.TemporaryDirectory()))
         self.output = self.scratch / "output"
         self.enterContext(patch.object(intake, "fetch_metadata", fetch))
@@ -192,7 +227,10 @@ class Preflight(unittest.TestCase):
         self.assertEqual(json.loads(summary), result)
         self.assertEqual(hashlib.sha256(private).hexdigest(), result["private_proposal_sha256"])
         self.assertIn(b"fixture-test", private)
+        self.assertNotIn(b"previous-reference", private)
         self.assertNotIn(b"fixture-test", summary)
+        self.assertEqual(result["previous_evaluation_excluded_clips"], 8)
+        self.assertEqual(result["previous_evaluation_receipt_sha256"], self.prior_digest)
         self.assertNotIn(b"unseen-test.mp4", summary)
         self.assertNotIn(b"jazz", summary)
         self.assertEqual(result["scope"]["media_downloaded_bytes"], 0)
