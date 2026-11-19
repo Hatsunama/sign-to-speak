@@ -8,6 +8,7 @@ import hashlib
 import io
 import json
 import math
+from os.path import samestat
 from pathlib import Path
 import re
 import signal
@@ -247,6 +248,7 @@ def admit(*, proposal, proposal_sha256, protocol_sha256, previous_receipt, outpu
         "clips_verified": dict.fromkeys(protocol.ROLE_SOURCES, 0),
         "attempted_original_bytes": 0,
     }
+    published = False
     try:
         document = read_proposal(proposal, proposal_sha256, protocol_sha256, previous_receipt)
         plan = {role: clips[:1] if mode == "sentinel" else clips
@@ -313,9 +315,22 @@ def admit(*, proposal, proposal_sha256, protocol_sha256, previous_receipt, outpu
             summary["admission_sha256"] = hashlib.sha256(receipt.read_bytes()).hexdigest()
             write_json(staging / "summary.json", summary)
             check_output(output)
-            staging.rename(output)
+            source_stat = staging.stat()
+            try:
+                staging.rename(output)
+                published = True
+            except (Exception, KeyboardInterrupt):
+                # A signal can arrive after the rename commits but before it returns.
+                try:
+                    published = source_stat.st_ino != 0 and samestat(source_stat, output.lstat())
+                except (OSError, KeyboardInterrupt):
+                    pass
+                raise
         return summary
     except (Exception, KeyboardInterrupt) as exc:
+        # TemporaryDirectory cleanup cannot change an already committed admission.
+        if published:
+            return summary
         try:
             write_failure(output, progress, exc)
         except (OSError, KeyboardInterrupt):

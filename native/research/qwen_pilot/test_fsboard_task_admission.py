@@ -4,6 +4,8 @@ import hashlib
 import io
 import json
 from pathlib import Path
+import shutil
+import signal
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -231,6 +233,95 @@ class TaskAdmissionTests(unittest.TestCase):
         self.assertEqual(failure["clips_verified"]["holdout"], 1)
         self.assertEqual(failure["role"], "holdout")
         self.assertNotIn("signed?", json.dumps(failure))
+
+    def assert_cli_publication_survives(self):
+        args = self.arguments()
+        argv = [item for key, value in args.items()
+                for item in ("--" + key.replace("_", "-"), str(value))]
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            code = admission.main(argv)
+        summary = json.loads((self.output / "summary.json").read_bytes())
+        receipt = (self.output / "admission.json").read_bytes()
+        self.assertEqual(summary["admission_sha256"], hashlib.sha256(receipt).hexdigest())
+        self.assertEqual(summary["status"], "sentinel_verified")
+        self.assertFalse(admission.failure_path(self.output).exists())
+        self.assertFalse(list(self.directory.glob(".fsboard-*")))
+        self.assertEqual(code, 0)
+        self.assertEqual(stderr.getvalue(), "")
+        self.assertEqual(json.loads(stdout.getvalue()), summary)
+
+    def test_sigterm_after_actual_rename_preserves_published_admission(self):
+        real_rename = Path.rename
+
+        def rename_then_cancel(staging, output):
+            real_rename(staging, output)
+            signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+        with patch.object(Path, "rename", rename_then_cancel):
+            self.assert_cli_publication_survives()
+
+    def test_sigterm_during_temporary_directory_exit_preserves_published_admission(self):
+        real_exit = tempfile.TemporaryDirectory.__exit__
+        exited = []
+
+        def exit_then_cancel(temporary, *exc):
+            real_exit(temporary, *exc)
+            if Path(temporary.name).name.startswith(".fsboard-media-"):
+                exited.append(temporary.name)
+                signal.getsignal(signal.SIGTERM)(signal.SIGTERM, None)
+
+        with patch.object(tempfile.TemporaryDirectory, "__exit__", exit_then_cancel):
+            self.assert_cli_publication_survives()
+        self.assertEqual(len(exited), 1)
+
+    def test_cancellation_before_rename_records_failure_and_exits_nonzero(self):
+        args = self.arguments()
+        argv = [item for key, value in args.items()
+                for item in ("--" + key.replace("_", "-"), str(value))]
+        with (
+            patch.object(Path, "rename", side_effect=KeyboardInterrupt),
+            contextlib.redirect_stdout(io.StringIO()) as stdout,
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            code = admission.main(argv)
+        self.assertEqual(code, 130)
+        self.assertEqual(stdout.getvalue(), "")
+        self.assertFalse(self.output.exists())
+        self.assertFalse(list(self.directory.glob(".fsboard-*")))
+        failure = json.loads(admission.failure_path(self.output).read_bytes())
+        self.assertEqual((failure["status"], failure["stage"]), ("cancelled", "publication"))
+        self.assertEqual(failure["clips_verified"], dict.fromkeys(protocol.ROLE_SOURCES, 1))
+
+    def test_rename_failure_does_not_adopt_a_different_output_directory(self):
+        publication_error = PermissionError("rename denied")
+
+        def competing_publication(staging, output):
+            shutil.copytree(staging, output)
+            raise publication_error
+
+        with patch.object(Path, "rename", competing_publication):
+            with self.assertRaises(PermissionError) as raised:
+                admission.admit(**self.arguments())
+        self.assertIs(raised.exception, publication_error)
+        self.assertTrue((self.output / "summary.json").is_file())
+        self.assertTrue((self.output / "admission.json").is_file())
+        self.assertFalse(list(self.directory.glob(".fsboard-*")))
+        failure = json.loads(admission.failure_path(self.output).read_bytes())
+        self.assertEqual((failure["status"], failure["stage"]), ("failed", "publication"))
+
+    def test_failure_receipt_link_error_does_not_hide_publication_error(self):
+        publication_error = PermissionError("rename denied")
+        with (
+            patch.object(Path, "rename", side_effect=publication_error),
+            patch.object(Path, "hardlink_to", side_effect=KeyboardInterrupt),
+            self.assertRaises(PermissionError) as raised,
+        ):
+            admission.admit(**self.arguments())
+        self.assertIs(raised.exception, publication_error)
+        self.assertFalse(self.output.exists())
+        self.assertFalse(admission.failure_path(self.output).exists())
+        self.assertFalse(list(self.directory.glob(".fsboard-*")))
 
     def test_existing_output_is_preserved_without_any_requests(self):
         self.output.mkdir()
