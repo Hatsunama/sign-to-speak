@@ -25,3 +25,11 @@ Use exclusive fresh output directories and preserve failed attempts. Static publ
 Every paid job requires a timeout and shared-budget check. US$14 covers both candidates and previous pilots, with US$2 reserved for storage/startup uncertainty. Android builds remain on GitHub. Research results do not authorize a release or establish phone behavior.
 
 See [teaching-material task](STATIC_ASL_CURRICULUM_TASK.md) and [research record](STATIC_ASL_RESEARCH.md).
+
+## Completed evidence and diagnosis
+
+Both 80-update candidates failed the fresh eight-clip fingerspelling assessment (0/8 exact each). A static-only four-photo fit test subsequently reached 4/4 by step 50; it does not establish generalization or select a curriculum. See [paired results](PAIRED_RESEARCH_RESULTS.md) and the updated [source register](STATIC_ASL_RESEARCH.md).
+
+`static_diagnostic.py` evaluates the base and both completed adapters on identically processed seen/unused same-source photos. `static_learnability.py` reloads the shared original initialization for a fixed 200-update four-photo training-fit diagnosis. Both require the pinned pair/data receipts and fresh private output directories; neither changes an app model or scores explanatory text as an extracted guessed answer.
+
+The GitHub-only runtime preflight produced Linux/Android CPU executables, followed by cloud-only F16 conversion and Q4 quantization of the original pinned base. See [measured runtime evidence](RUNTIME_PREFLIGHT_RESULTS.md) and [reproduction procedure](EXPORT_PREFLIGHT.md). Phone execution remains blocked by an empty host ADB inventory; no release or language-quality claim follows from the build.

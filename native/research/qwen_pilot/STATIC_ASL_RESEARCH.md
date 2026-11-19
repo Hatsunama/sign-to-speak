@@ -1,23 +1,21 @@
-# Static ASL teaching material: admission and transfer plan
+# Static ASL teaching material
 
-Checked November 18, 2026. This is a research record, not a model-quality or release acceptance result.
+Research record for the November 18, 2026 pilot.
 
-## Decision
+## Exploratory use
 
-Investigate clean static photographs as an auxiliary handshape task. Keep sentence training and assessment grounded in real signing sequences. Drawings are a lower-priority domain-transfer hypothesis. Neither the two downloaded charts nor a high still-image score establishes general everyday ASL translation.
+The completed controlled comparison tested static handshape recognition as a small auxiliary task alongside real signing sequences. The fresh fingerspelling results did not establish a transfer benefit. A separate static-only probe demonstrated training fit on four photos. See the paired report for the frozen protocol, aggregate results, evidence limits, private archive verification and compute estimate. [Paired research results](PAIRED_RESEARCH_RESULTS.md)
 
-The existing pilot cannot answer the transfer question. Its 16 size-selected training clips and four reused development controls are small and translated general-text material. They lack fingerspelling annotations and verified signer separation. Their word-overlap metric is not a meaning judgment. No static-auxiliary model has been trained.
+Keep sentence training and evaluation grounded in real signing sequences. Drawings remain a lower-priority domain-transfer hypothesis. J/Z require motion and were excluded from the 24-letter static objective.
 
-## Verified reference and diagnostic inputs
+## Verified reference and training inputs
 
 | Input | Evidence and current role |
 | --- | --- |
-| Cwterp photographic alphabet, hands-only and labelled companion | Original [hands-only page](https://commons.wikimedia.org/wiki/File:ABC_pict_just_hands.png) and [companion page](https://commons.wikimedia.org/wiki/File:ABC_pict.png) state public-domain dedication by Cwterp. Both exact PNGs were retrieved; publisher byte counts and SHA-1 values matched, and local SHA-256 values were recorded privately. They remain annotation references. |
-| Dan Rasband ASL Alphabet Test v1 | The [uploader card](https://www.kaggle.com/danrasband/asl-alphabet-test/home) declares CC0, 870 photos at 200 by 200 pixels and 30 examples per A–Z/delete/space/nothing class. One original A/A0001_test.jpg was anonymously retrieved through the official Kaggle dataset API: 10,570 bytes, SHA-256 4c22cf21532007e15036d69e6d511ed050cea28eeb6bbb65488fe19dd70bba71. Its declared label is A. It is a source-separated photo diagnostic candidate, not admitted training or independently verified labels. Signer/session provenance remains unknown. |
+| Cwterp photographic alphabet, hands-only and labelled companion | Both exact PNGs were retrieved. Publisher byte counts and SHA-1 values matched, and local SHA-256 values were recorded privately. Cwterp's public-domain dedication covers both images. They remain annotation references. [Hands-only chart](https://commons.wikimedia.org/wiki/File:ABC_pict_just_hands.png) · [Labelled companion](https://commons.wikimedia.org/wiki/File:ABC_pict.png) |
+| Dan Rasband ASL Alphabet Test v1 | The uploader declares CC0 and 870 photos across A–Z, delete, space and nothing. The verified 25,489,344-byte archive contained those 870 canonical photos and one complete wrapped copy of each. The original A anchor had 10,570 bytes and SHA-256 `4c22cf21532007e15036d69e6d511ed050cea28eeb6bbb65488fe19dd70bba71`. Contact-sheet screening compared 120 candidate images across 24 non-motion letters against the Cwterp chart and excluded four for uncertain or clipped hand details. The approved manifest contains 116 photos for exploratory training. The screen assessed visual plausibility and visibility. Independent ASL-fluent label certification and signer/session provenance remain unverified. [Uploader card](https://www.kaggle.com/danrasband/asl-alphabet-test/home) |
 
-The chart review found retained R/L viewpoint notes, drawn J/Z motion arrows, irregular layout and an extra I-love-you gesture. Alphabet order remains a shortcut even without printed letters. Some original views show the sign from a side rather than a typical observer view. Check every intended crop, orientation and annotation; simple regular-grid slicing is unsuitable. A second chart derived from the same original is not independent evaluation data.
-
-The sample Kaggle image was visually inspected as a hand photograph with a real background. This is not independent linguistic validation of the full dataset or proof that a source-disjoint split is signer-disjoint.
+The chart review found retained R/L viewpoint notes, drawn J/Z motion arrows, irregular layout and an extra I-love-you gesture. Alphabet order remains a shortcut even without printed letters. Some original views show the sign from a side rather than a typical observer view. Check every intended crop, orientation and annotation. A chart derived from the same original shares its source and should stay in the same evaluation group.
 
 ## Other candidates, not admitted
 
@@ -36,22 +34,10 @@ The sample Kaggle image was visually inspected as a hand photograph with a real 
 
 These concrete leads reduce the need to buy material. They still require file-level checks; no curriculum video or PopSign archive was ingested, and no human subject identities were inferred.
 
-## Controlled experiment and release limits
+## Earlier sequence pilots
 
-1. Preserve the present video-only adapter and all failure evidence. Admit isolated, checked static inputs with a task-specific prompt. Keep J/Z, motion arrows and the extra gesture outside the 24-static-letter objective.
-2. Freeze a real-video assessment before choosing curriculum weights. Include fingerspelled names/words, repeated letters, J/Z and everyday meaning contrasts such as negation and questions. Record actual references, source families, subject separation when known, timestamps and any uncertainty. Do not fabricate signer IDs from article URLs.
-3. Compare two arms initialized identically, with the same ordered 80 video microbatches, 40 optimizer updates and video loss. A tentative auxiliary weight of 0.05 is a development choice, not a validated default. Use a separate static sampler and separately backpropagated auxiliary loss within the same update. Report added compute and gradient/clipping differences.
-4. Assess independent real-photo diagnostics separately from real-video spelling and sentence meaning. Record terminated versus capped decoding. Use character/word accuracy for spelling and reliable meaning adjudication for sentences. Wrong-video, shuffled and black inputs test different failure hypotheses.
-5. Keep, remove or call the static auxiliary inconclusive from that evidence. A small feasibility comparison cannot establish commercial coverage. Application integration, quantization, phone fit and exact-artifact runtime acceptance are later gates.
+The first four-image LoRA trial completed but repeated one output on all four clips and did not distinguish temporal order. A denser 32-image trial initially exhausted L4 memory while constructing vocabulary logits for ignored prompt positions. The repair computes causal cross-entropy only at supervised predictor positions. The CUDA helper checked loss and hidden/head-weight/head-bias gradients against dense ignored-label cross-entropy on a controlled tensor fixture. Full-Qwen gradient parity remains unmeasured.
 
-## Completed cloud pilot and implementation repairs
+The repaired dense pilot completed 40 optimizer updates, peaked at about 17.01 GiB allocated GPU memory and passed 20 helper tests locally and in the cloud job. It produced 0/4 matched exact transcripts on reused development controls. A separate intake repair limits cleanup after a handled failure to the unpublished directory owned by that invocation. Hard kills still require explicit recovery of partial output.
 
-The first four-image LoRA trial completed but repeated one output on all four clips and did not distinguish temporal order. A denser 32-image trial initially exhausted L4 memory while constructing vocabulary logits for ignored prompt positions.
-
-The repair computes causal cross-entropy only at supervised predictor positions. A failing regression preceded it. The CUDA helper compares the loss and hidden/head-weight/head-bias gradients with dense ignored-label cross-entropy on a controlled tensor fixture; it is not a full-Qwen gradient-parity claim. The repaired real Qwen job completed all 40 optimizer updates, saved checkpoints and paired baseline/adapter evaluations, and peaked at 18,267,689,984 allocated GPU bytes (about 17.01 GiB). All 20 lightweight helper tests passed locally and in that cloud job.
-
-The dense adapter still had zero normalized exact matches on four reused clips, two distinct matched outputs, and two of four matched outputs equal to their temporal reorder. Mean token F1 was 0.1335 matched, 0.1050 reordered and 0.1788 black. The frozen and trained generations also differ in token-cap frequency. These observations fail to demonstrate reliable translation and cannot select a static curriculum.
-
-A separate handled-intake failure previously stranded a partial dense directory. Recovery now removes only unpublished output created by that invocation and retains pre-existing/completed data; regression fixtures cover retry and cleanup failure. Hard kills still require the documented explicit recovery procedure.
-
-Five jobs are terminal. The ledger estimates US$0.191162 in minute-rounded execution charges, excluding storage/startup and without invoice verification; the authorization remains US$14, with a US$2 reserve. The dedicated private bucket is Hatsunama/sign-to-speak-qwen-20261118-d460a4 and the job agent label is sign-to-speak-qwen. No app source, UI, release artifact, signing credential or phone setting changed for this investigation.
+Those pilots predated corrected display rotation and the 80-update comparison. The newer results, static-only probe and native-video boundary are recorded in the [paired research results](PAIRED_RESEARCH_RESULTS.md).
