@@ -249,7 +249,7 @@ jobs:
           "$build_tools/aapt2" dump permissions "$aligned_apk" > "$diagnostics/permissions.txt"
           "$build_tools/aapt2" dump xmltree --file AndroidManifest.xml "$aligned_apk" > "$diagnostics/manifest.txt"
           grep -F "package: name='$java_package'" "$diagnostics/badging.txt"
-          grep -Fx "sdkVersion:'$ANDROID_API'" "$diagnostics/badging.txt"
+          grep -Fx "minSdkVersion:'$ANDROID_API'" "$diagnostics/badging.txt"
           grep -Fx "targetSdkVersion:'$ANDROID_SDK'" "$diagnostics/badging.txt"
           grep -E '^[[:space:]]*E: instrumentation([[:space:]]|$)' "$diagnostics/manifest.txt"
           grep -F "\"$entry_point\"" "$diagnostics/manifest.txt"
@@ -313,6 +313,8 @@ jobs:
             ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeCache.txt
             ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeFiles/CMakeConfigureLog.yaml
             ${{ runner.temp }}/sign-qwen-backend-app-build/host-toolchain.cmake
+            ${{ runner.temp }}/sign-qwen-backend-app-package/sign-qwen-backend-app-unsigned-aligned.apk
+            ${{ runner.temp }}/sign-qwen-backend-app-package/libsign_backend_probe.so
           if-no-files-found: warn
           retention-days: 7
 
