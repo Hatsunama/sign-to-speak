@@ -110,6 +110,11 @@ def fetch_file(name, target, cap, *, size=None, md5=None):
 
 
 def candidate_from_row(row):
+    return validated_fingerspelling_clip(row, video_dir=VIDEO_DIR, target_pattern=r"[a-z]{3,8}")
+
+
+def validated_fingerspelling_clip(row, *, video_dir, target_pattern):
+    """Apply shared clip metadata checks with an explicit target and source policy."""
     phrase = row.get("phrase")
     signer = row.get("signerId")
     full_video = row.get("fullVideoFilename")
@@ -120,7 +125,7 @@ def candidate_from_row(row):
         row.get("signingType") != "fs"
         or row.get("sensitiveContent") is not False
         or not isinstance(phrase, str)
-        or not re.fullmatch(r"[a-z]{3,8}", phrase)
+        or not re.fullmatch(target_pattern, phrase)
         or not isinstance(signer, str)
         or not signer.strip()
         or not isinstance(full_video, str)
@@ -151,7 +156,7 @@ def candidate_from_row(row):
         "signer_id": signer,
         "full_video_filename": full_video,
         "clip_filename": clip,
-        "source_path": f"{VIDEO_DIR}/{clip}",
+        "source_path": f"{video_dir}/{clip}",
         "original_bytes": size,
         "metadata_md5": md5.lower(),
         "clip_start_full_video_seconds": clip_start,

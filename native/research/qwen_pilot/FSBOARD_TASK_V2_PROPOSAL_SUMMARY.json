@@ -1,0 +1,430 @@
+{
+  "schema_version": 1,
+  "status": "metadata_proposal",
+  "protocol": {
+    "experiment_id": "sts-fsboard-whole-prompt-static-ablation-20261119-v2",
+    "status": "frozen_metadata_protocol",
+    "role_sources": {
+      "holdout": "daun_v3-validation",
+      "development": "daun_v3-train",
+      "training": "daun_v3-train"
+    },
+    "excluded_publisher_split": "daun_v3-test",
+    "selection": {
+      "priority": [
+        "holdout",
+        "development",
+        "training"
+      ],
+      "algorithm": "Deterministic greedy category scarcity, signer balance, byte size and source path.",
+      "development_partition": "Reserve entire connected signer and recording groups from publisher train.",
+      "cross_role_and_prior_separation": [
+        "signer_id",
+        "full_video_filename",
+        "reference",
+        "source_path",
+        "clip_filename",
+        "metadata_md5"
+      ],
+      "target_pattern": "(?=[a-z ]{3,12}\\Z)[a-z]+(?: [a-z]+)*",
+      "target": "Whole publisher fingerspelling prompt, 3 to 12 lowercase ASCII characters including single interword spaces.",
+      "annotation_duration_seconds": [
+        0.5,
+        3.2
+      ],
+      "max_clip_bytes": 20971520,
+      "ordinary_category": "Target with neither j, z nor identical adjacent letters."
+    },
+    "model": {
+      "id": "Qwen/Qwen3.5-0.8B",
+      "revision": "2fc06364715b967f1860aea9cf38778875588b17"
+    },
+    "input": {
+      "native_video": false,
+      "ordered_rgb_stills": 32,
+      "max_frame_edge": 384,
+      "dense_max_sequence_tokens": 6144
+    },
+    "training": {
+      "runtime_hook_implemented": false,
+      "shared_adapter_initialization_seed": 17631,
+      "lora": {
+        "scope": "language_model",
+        "rank": 8,
+        "alpha": 16,
+        "dropout": 0.0,
+        "bias": "none"
+      },
+      "optimizer": {
+        "type": "AdamW",
+        "learning_rate": 0.0002,
+        "weight_decay": 0.0
+      },
+      "max_gradient_norm": 1.0,
+      "required_admitted_video_clips": 192,
+      "video_epochs": 2,
+      "optimizer_steps_per_arm": 192,
+      "matching_video_microbatches_per_update": 2,
+      "matching_video_microbatches_per_arm": 384,
+      "examples_per_microbatch": 1,
+      "video_order": "Two complete shared seeded shuffled passes over the frozen training manifest.",
+      "video_sampler_seed": 17631,
+      "video_prompt": "These images show American Sign Language fingerspelling in time order. Transcribe the spelled text. Reply with only that text.",
+      "video_objective": "Target-only loss with the complete literal prompt reference as the target.",
+      "video_loss_weight": 1.0,
+      "A": {
+        "static_loss_weight": 0.0,
+        "static_microbatches_per_update": 0
+      },
+      "B": {
+        "static_loss_weight": 0.05,
+        "static_microbatches_per_update": 1,
+        "prior_schedule_sha256": "6b1980c513f627f3b4bad9cec92c6cda951f0e1fe77fececeb0b319d3f8f27fe",
+        "prior_static_row_count": 80,
+        "static_order": "Cycle the 80 distinct B static IDs in order from the pinned prior schedule.",
+        "static_manifest_sha256": "55d6034693b3118c4e7fc87f6191effd831410d22d9cb96225c35eb7dc1b0d2e",
+        "input_binding": "Verify each selected row against the pinned admission and its source bytes before training.",
+        "static_prompt": "Identify the static American Sign Language fingerspelling handshape. Reply with only the uppercase letter."
+      }
+    },
+    "evaluation": {
+      "scorer_file": "fsboard_evaluate.py",
+      "scorer_sha256": "d3899f88c2c59280b58e4861321d433e8883d1c626445b8ebd53f32411d7c266",
+      "scorer_source_encoding": "UTF-8 with LF line endings",
+      "scorer_functions": [
+        "score",
+        "aggregate"
+      ],
+      "prompt": "These images show American Sign Language fingerspelling in time order. Transcribe the spelled text. Reply with only that text.",
+      "candidates": [
+        "base",
+        "A",
+        "B"
+      ],
+      "runtime_hook_implemented": false,
+      "conditions": {
+        "matched": {
+          "source": "same_clip",
+          "frame_indices": [
+            0,
+            1,
+            2,
+            3,
+            4,
+            5,
+            6,
+            7,
+            8,
+            9,
+            10,
+            11,
+            12,
+            13,
+            14,
+            15,
+            16,
+            17,
+            18,
+            19,
+            20,
+            21,
+            22,
+            23,
+            24,
+            25,
+            26,
+            27,
+            28,
+            29,
+            30,
+            31
+          ]
+        },
+        "reordered": {
+          "source": "same_clip",
+          "frame_indices": [
+            31,
+            30,
+            29,
+            28,
+            27,
+            26,
+            25,
+            24,
+            23,
+            22,
+            21,
+            20,
+            19,
+            18,
+            17,
+            16,
+            15,
+            14,
+            13,
+            12,
+            11,
+            10,
+            9,
+            8,
+            7,
+            6,
+            5,
+            4,
+            3,
+            2,
+            1,
+            0
+          ]
+        },
+        "repeated_middle_frame": {
+          "source": "same_clip",
+          "frame_indices": [
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16,
+            16
+          ]
+        },
+        "black": {
+          "source": "black_frames_with_matched_geometry"
+        },
+        "wrong_video": {
+          "source": "different_clip",
+          "donor_policy": "Preassign a distinct frozen holdout clip with a different signer ID, recording and reference."
+        }
+      },
+      "condition_pairing": "Keep target, visual slot count, prompt and generation settings fixed within each example.",
+      "report_per_category": [
+        "contains_j",
+        "contains_z",
+        "adjacent_repeat",
+        "ordinary"
+      ],
+      "max_new_tokens": 32,
+      "do_sample": false,
+      "normalization": "NFKC, casefold, collapse whitespace to single spaces, retain punctuation.",
+      "metrics": [
+        "exact match",
+        "weighted character error rate including normalized spaces",
+        "EOS versus cap",
+        "paired wrong-video minus matched reference NLL"
+      ]
+    },
+    "prior_evidence": {
+      "protocol_file": "comparison-protocol-v1.json",
+      "protocol_sha256": "b106018ee2f9191b202e48bbe01e90da7326e3d1738be6bc2a2959d9e0b03714",
+      "results_file": "PAIRED_RESEARCH_RESULTS.md",
+      "evaluation_receipt_sha256": "5be4dd8a5d5225c8131eab855f521a83382a4da3f18804170e917ff381ebd8ac"
+    },
+    "shared_hf_budget_usd": 14,
+    "compute_ceiling_usd": 12,
+    "storage_startup_reserve_usd": 2
+  },
+  "dataset": {
+    "id": "googleai/fsboard",
+    "publisher": "Google AI",
+    "version": 13,
+    "url": "https://www.kaggle.com/datasets/googleai/fsboard/versions/13",
+    "license": "CC-BY-4.0",
+    "license_url": "https://creativecommons.org/licenses/by/4.0/",
+    "citation": "https://arxiv.org/abs/2407.15806",
+    "source_pins": {
+      "LICENSE": {
+        "path": "LICENSE",
+        "bytes": 129,
+        "sha256": "96218feb836f9005261b0346501f349d11e4019deb6bbfce899483d94639c7dd"
+      },
+      "daun_v3/metadata/daun_v3-test.json": {
+        "path": "daun_v3/metadata/daun_v3-test.json",
+        "bytes": 9227832,
+        "sha256": "94f53f6c9d9199cbc50c5207a31a96d400734e49eac60d4a157fc515a587423b"
+      },
+      "daun_v3/metadata/daun_v3-validation.json": {
+        "path": "daun_v3/metadata/daun_v3-validation.json",
+        "bytes": 8850161,
+        "sha256": "d306aac4c80e7052492ebffdd01f2e8242d09755ff7243824e866360fb609648"
+      },
+      "daun_v3/metadata/daun_v3-train.json": {
+        "path": "daun_v3/metadata/daun_v3-train.json",
+        "bytes": 52049545,
+        "sha256": "f85cbf264a4bab08924f5c19c565d3e9b32d4161fabe3004adeb40dd1ba56cdc"
+      }
+    }
+  },
+  "previous_evaluation_excluded_clips": 8,
+  "publisher_signer_and_recording_separation_verified": true,
+  "source_stats": {
+    "test": {
+      "rows": 12529,
+      "official_signers": 15,
+      "official_recordings": 186,
+      "excluded_from_all_experiment_roles": true,
+      "candidates": 0,
+      "candidate_signers": 0,
+      "candidate_categories": {
+        "contains_j": 0,
+        "contains_z": 0,
+        "adjacent_repeat": 0,
+        "ordinary": 0
+      }
+    },
+    "validation": {
+      "rows": 12022,
+      "official_signers": 15,
+      "official_recordings": 171,
+      "excluded_from_all_experiment_roles": false,
+      "candidates": 418,
+      "candidate_signers": 14,
+      "candidate_categories": {
+        "contains_j": 40,
+        "contains_z": 17,
+        "adjacent_repeat": 107,
+        "ordinary": 276
+      }
+    },
+    "train": {
+      "rows": 70699,
+      "official_signers": 94,
+      "official_recordings": 1095,
+      "excluded_from_all_experiment_roles": false,
+      "candidates": 1717,
+      "candidate_signers": 87,
+      "candidate_categories": {
+        "contains_j": 204,
+        "contains_z": 109,
+        "adjacent_repeat": 574,
+        "ordinary": 931
+      }
+    }
+  },
+  "splits": {
+    "holdout": {
+      "eligible_after_cross_split_and_prior_exclusions": 418,
+      "requested_clips": 64,
+      "requested_min_signers": 8,
+      "requested_min_per_category": 8,
+      "selected_clips": 64,
+      "selected_signers": 14,
+      "selected_recordings": 44,
+      "selected_categories": {
+        "contains_j": 11,
+        "contains_z": 8,
+        "adjacent_repeat": 20,
+        "ordinary": 36
+      },
+      "uncovered_ascii_letters": [],
+      "proposed_media_budget_bytes": 335544320,
+      "proposed_media_bytes": 238978062,
+      "shortfalls": {
+        "clips": 0,
+        "signers": 0,
+        "contains_j": 0,
+        "contains_z": 0,
+        "adjacent_repeat": 0,
+        "ordinary": 0
+      },
+      "publisher_split": "daun_v3-validation"
+    },
+    "development": {
+      "eligible_after_cross_split_and_prior_exclusions": 1717,
+      "requested_clips": 32,
+      "requested_min_signers": 6,
+      "requested_min_per_category": 0,
+      "selected_clips": 32,
+      "selected_signers": 32,
+      "selected_recordings": 32,
+      "selected_categories": {
+        "contains_j": 3,
+        "contains_z": 4,
+        "adjacent_repeat": 8,
+        "ordinary": 20
+      },
+      "uncovered_ascii_letters": [
+        "q",
+        "x"
+      ],
+      "proposed_media_budget_bytes": 167772160,
+      "proposed_media_bytes": 74376241,
+      "shortfalls": {
+        "clips": 0,
+        "signers": 0,
+        "contains_j": 0,
+        "contains_z": 0,
+        "adjacent_repeat": 0,
+        "ordinary": 0
+      },
+      "publisher_split": "daun_v3-train"
+    },
+    "training": {
+      "eligible_after_cross_split_and_prior_exclusions": 880,
+      "requested_clips": 192,
+      "requested_min_signers": 20,
+      "requested_min_per_category": 0,
+      "selected_clips": 192,
+      "selected_signers": 55,
+      "selected_recordings": 142,
+      "selected_categories": {
+        "contains_j": 25,
+        "contains_z": 6,
+        "adjacent_repeat": 64,
+        "ordinary": 107
+      },
+      "uncovered_ascii_letters": [],
+      "proposed_media_budget_bytes": 838860800,
+      "proposed_media_bytes": 810050580,
+      "shortfalls": {
+        "clips": 0,
+        "signers": 0,
+        "contains_j": 0,
+        "contains_z": 0,
+        "adjacent_repeat": 0,
+        "ordinary": 0
+      },
+      "publisher_split": "daun_v3-train"
+    }
+  },
+  "scope": {
+    "task": "FSboard fingerspelling prompt transcription.",
+    "holdout": "Experimental holdout drawn from publisher validation.",
+    "shortfalls": "Reported shortfalls describe the greedy proposal.",
+    "media_downloaded_bytes": 0,
+    "source_video_verified": false,
+    "frame_sampling_verified": false,
+    "processor_token_contract_verified": false,
+    "physical_signer_identity_verified": false,
+    "independent_asl_fluent_review": false,
+    "independent_static_holdout_verified": false,
+    "training_started": false,
+    "model_scoring_started": false
+  },
+  "private_proposal_sha256": "abc506b6edc91d23fbdf416b36f38fd0c739d5e0c2bfff891fa41aef64bc667c"
+}
