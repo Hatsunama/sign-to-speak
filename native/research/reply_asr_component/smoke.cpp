@@ -88,22 +88,6 @@ void decode(sts_reply_engine* engine, const char* label, const std::vector<float
     check(label, status == expected && matches, status, bytes, elapsed(start));
 }
 
-void characterize(sts_reply_engine* engine, const char* label, const std::vector<float>& pcm,
-                  const char* phrase) {
-    Text text;
-    text.fill('x');
-    sts_reply_turn turn;
-    const auto start = Clock::now();
-    const auto status = sts_reply_decode(engine, pcm.data(), pcm.size(), &turn,
-                                         text.data(), text.size());
-    const auto bytes = strnlen(text.data(), text.size());
-    const bool matches = bytes < text.size() && normalize(text.data()) == phrase;
-    std::cout << label << " characterize status=" << status
-              << " text_bytes=" << bytes
-              << " normalized_match=" << matches
-              << " elapsed_ms=" << elapsed(start) << std::endl;
-}
-
 std::vector<float> scaled(const std::vector<float>& pcm, float gain) {
     auto result = pcm;
     for (float& sample : result) sample *= gain;
@@ -160,40 +144,64 @@ void inflight_cancel(sts_reply_engine* engine, const std::vector<float>& fixture
 }
 
 int smoke(int argc, char** argv) {
-    if (argc != 6) return 2;
-    const int fd = std::stoi(argv[1]);
-    const auto offset = std::stoll(argv[2]);
-    const auto length = std::stoll(argv[3]);
-    auto a = read_pcm(argv[4]);
-    auto b = read_pcm(argv[5]);
+    if (argc != 9) return 2;
+    const int model_fd = std::stoi(argv[1]);
+    const auto model_offset = std::stoll(argv[2]);
+    const auto model_length = std::stoll(argv[3]);
+    const int vad_fd = std::stoi(argv[4]);
+    const auto vad_offset = std::stoll(argv[5]);
+    const auto vad_length = std::stoll(argv[6]);
+    auto a = read_pcm(argv[7]);
+    auto b = read_pcm(argv[8]);
     sts_reply_engine* engine = nullptr;
     sts_reply_turn open_turn;
-    const auto initial_position = lseek(fd, 4, SEEK_SET);
-    const auto reject_span = [&](const char* name, std::int64_t base, std::int64_t size) {
-        const auto status = sts_reply_open(fd, base, size, &open_turn, &engine);
+    const auto initial_model_position = lseek(model_fd, 4, SEEK_SET);
+    const auto initial_vad_position = lseek(vad_fd, 7, SEEK_SET);
+    const auto reject_spans = [&](const char* name,
+                                  std::int64_t candidate_model_offset,
+                                  std::int64_t candidate_model_length,
+                                  std::int64_t candidate_vad_offset,
+                                  std::int64_t candidate_vad_length) {
+        const auto status = sts_reply_open(
+            model_fd, candidate_model_offset, candidate_model_length,
+            vad_fd, candidate_vad_offset, candidate_vad_length, &open_turn, &engine);
         check(name, engine == nullptr && status == STS_REPLY_MODEL_UNAVAILABLE, status);
         if (engine) {
             sts_reply_close(engine);
             engine = nullptr;
         }
     };
-    reject_span("negative-span", -1, length);
-    reject_span("short-span", offset, length - 1);
-    reject_span("oversize-span", offset, length + 1);
-    reject_span("overflow-span", std::numeric_limits<std::int64_t>::max(), length);
-    reject_span("wrong-span-header", 0, length);
+    reject_spans("negative-model-span", -1, model_length, vad_offset, vad_length);
+    reject_spans("short-model-span", model_offset, model_length - 1, vad_offset, vad_length);
+    reject_spans("oversize-model-span", model_offset, model_length + 1, vad_offset, vad_length);
+    reject_spans("overflow-model-span", std::numeric_limits<std::int64_t>::max(), model_length,
+                 vad_offset, vad_length);
+    reject_spans("wrong-model-span-header", 0, model_length, vad_offset, vad_length);
+    reject_spans("negative-vad-span", model_offset, model_length, -1, vad_length);
+    reject_spans("short-vad-span", model_offset, model_length, vad_offset, vad_length - 1);
+    reject_spans("oversize-vad-span", model_offset, model_length, vad_offset, vad_length + 1);
+    reject_spans("overflow-vad-span", model_offset, model_length,
+                 std::numeric_limits<std::int64_t>::max(), vad_length);
+    reject_spans("wrong-vad-span-header", model_offset, model_length, 0, vad_length);
     sts_reply_turn cancelled_open;
     cancelled_open.cancelled.store(true);
-    auto status = sts_reply_open(fd, offset, length, &cancelled_open, &engine);
+    auto status = sts_reply_open(model_fd, model_offset, model_length,
+                                 vad_fd, vad_offset, vad_length, &cancelled_open, &engine);
     check("pre-cancel-open", engine == nullptr && status == STS_REPLY_CANCELLED, status);
     if (engine) {
         sts_reply_close(engine);
         engine = nullptr;
     }
     const auto start = Clock::now();
-    status = sts_reply_open(fd, offset, length, &open_turn, &engine);
-    check("open-padded-asset-span", engine && status == STS_REPLY_OK, status, 0, elapsed(start));
-    check("borrowed-fd-and-position", initial_position == 4 && lseek(fd, 0, SEEK_CUR) == initial_position);
+    status = sts_reply_open(model_fd, model_offset, model_length,
+                            vad_fd, vad_offset, vad_length, &open_turn, &engine);
+    check("open-padded-model-and-vad-spans", engine && status == STS_REPLY_OK,
+          status, 0, elapsed(start));
+    check("borrowed-model-fd-and-position",
+          initial_model_position == 4 &&
+              lseek(model_fd, 0, SEEK_CUR) == initial_model_position);
+    check("borrowed-vad-fd-and-position",
+          initial_vad_position == 7 && lseek(vad_fd, 0, SEEK_CUR) == initial_vad_position);
     if (!engine || status != STS_REPLY_OK) return 1;
 
     decode(engine, "first-a", a, STS_REPLY_OK, "please call my family");
@@ -202,18 +210,19 @@ int smoke(int argc, char** argv) {
     decode(engine, "seeded-noise", noise, STS_REPLY_NO_SPEECH);
     for (const auto& gain : std::array<std::pair<const char*, float>, 3>{{
              {"gain-0.10", 0.10f}, {"gain-0.05", 0.05f}, {"gain-0.03", 0.03f}}}) {
-        characterize(engine, (std::string("quiet-a-") + gain.first).c_str(), scaled(a, gain.second),
-                     "please call my family");
-        characterize(engine, (std::string("quiet-b-") + gain.first).c_str(), scaled(b, gain.second),
-                     "i need water please");
+        decode(engine, (std::string("quiet-a-") + gain.first).c_str(), scaled(a, gain.second),
+               STS_REPLY_OK, "please call my family");
+        decode(engine, (std::string("quiet-b-") + gain.first).c_str(), scaled(b, gain.second),
+               STS_REPLY_OK, "i need water please");
     }
     for (const auto& fixture : std::array<std::pair<const char*, std::uint32_t>, 3>{{
              {"noise-seed-243f6a88", 0x243f6a88},
              {"noise-seed-85a308d3", 0x85a308d3},
              {"noise-seed-13198a2e", 0x13198a2e}}}) {
-        characterize(engine, fixture.first, seeded_noise(fixture.second), "");
+        decode(engine, fixture.first, seeded_noise(fixture.second), STS_REPLY_NO_SPEECH);
     }
-    characterize(engine, "noise-seed-9021df15-gain-4", seeded_noise(0x9021df15, 4.f), "");
+    decode(engine, "noise-seed-9021df15-gain-4", seeded_noise(0x9021df15, 4.f),
+           STS_REPLY_NO_SPEECH);
     decode(engine, "second-b", b, STS_REPLY_OK, "i need water please");
     decode(engine, "third-a", a, STS_REPLY_OK, "please call my family");
     decode(engine, "empty-turn", {}, STS_REPLY_INVALID_INPUT);

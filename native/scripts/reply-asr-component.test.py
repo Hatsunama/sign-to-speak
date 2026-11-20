@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import tempfile
 import unittest
+from unittest import mock
 
 SCRIPT = Path(__file__).with_name("reply-asr-component.py")
 spec = importlib.util.spec_from_file_location("reply_asr_component", SCRIPT)
@@ -82,6 +83,42 @@ class ProducerTest(unittest.TestCase):
         attribution = (probe.VENDOR / "ATTRIBUTION.txt").read_text(encoding="utf-8")
         self.assertIn("Silero VAD v6.2 weights", attribution)
         self.assertNotIn("No Silero weights", attribution)
+
+    def test_host_smoke_passes_two_independent_borrowed_model_spans(self):
+        stage = self.root / "stage"
+        assets = stage / "assets/reply-asr"
+        evidence = self.root / "evidence"
+        fixtures = self.root / "fixtures"
+        assets.mkdir(parents=True)
+        evidence.mkdir()
+        fixtures.mkdir()
+        (fixtures / "NOTICES.txt").write_text("fixture notice", encoding="utf-8")
+        model = {"file": "model.bin", "bytes": 4,
+                 "sha256": hashlib.sha256(b"GGML").hexdigest()}
+        vad = {"file": "vad.bin", "bytes": 4,
+               "sha256": hashlib.sha256(b"VAD!").hexdigest()}
+        (assets / model["file"]).write_bytes(b"GGML")
+        (assets / vad["file"]).write_bytes(b"VAD!")
+        pins = {**probe.PINS, "model": model, "vad_model": vad,
+                "fixtures": [{"file": "a"}, {"file": "b"}]}
+        completed = mock.Mock(returncode=0)
+        with mock.patch.object(probe, "PINS", pins), \
+             mock.patch.object(probe, "FIXTURES", fixtures), \
+             mock.patch.object(probe, "fixture_pcm", side_effect=(b"\0\0", b"\0\0")), \
+             mock.patch.object(probe.subprocess, "run", return_value=completed) as run:
+            probe.run_smoke(Path("wrapper-smoke"), Path("vad-probe"), stage, evidence)
+
+        wrapper = run.call_args_list[0]
+        command = wrapper.args[0]
+        self.assertEqual(command[0], "wrapper-smoke")
+        self.assertEqual(command[2:4], [str(len(b"non-model-prefix!")), "4"])
+        self.assertEqual(command[5:7], [str(len(b"non-vad-prefix!")), "4"])
+        self.assertEqual(len(command), 9)
+        self.assertNotEqual(command[1], command[4])
+        self.assertEqual(wrapper.kwargs["pass_fds"], (int(command[1]), int(command[4])))
+        log = (evidence / "host-smoke.txt").read_text(encoding="utf-8")
+        self.assertIn("padded-model-and-vad-spans SHA-256 pass", log)
+        self.assertIn("shifted spans SHA-256 reject", log)
 
     def test_existing_destination_never_replaced(self):
         output = self.root / "model.bin"

@@ -250,28 +250,44 @@ def run_smoke(binary, vad_binary, stage, evidence):
         with (evidence / "host-smoke.txt").open("w", encoding="utf-8") as log:
             try:
                 # Exercise a borrowed fd containing bytes outside the asset.
-                composite = scratch / "asset-span.bin"
-                prefix = b"non-model-prefix!"
-                with composite.open("wb") as output, model_path(stage, model).open("rb") as source:
-                    output.write(prefix)
+                model_composite = scratch / "model-span.bin"
+                model_prefix = b"non-model-prefix!"
+                with model_composite.open("wb") as output, model_path(stage, model).open("rb") as source:
+                    output.write(model_prefix)
                     shutil.copyfileobj(source, output)
                     output.write(b"non-model-suffix")
-                with composite.open("rb") as model_file:
-                    verify_span(model_file, len(prefix), model["bytes"], model)
+                vad = PINS["vad_model"]
+                vad_composite = scratch / "vad-span.bin"
+                vad_prefix = b"non-vad-prefix!"
+                with vad_composite.open("wb") as output, model_path(stage, vad).open("rb") as source:
+                    output.write(vad_prefix)
+                    shutil.copyfileobj(source, output)
+                    output.write(b"non-vad-suffix")
+                with model_composite.open("rb") as model_file, vad_composite.open("rb") as vad_file:
+                    verify_span(model_file, len(model_prefix), model["bytes"], model)
                     try:
-                        verify_span(model_file, len(prefix) - 1, model["bytes"], model)
+                        verify_span(model_file, len(model_prefix) - 1, model["bytes"], model)
                     except ValueError as error:
                         if str(error) != "model fd span SHA-256 differs from pin":
                             raise
                     else:
                         raise ValueError("model fd span unexpectedly accepted at the wrong offset")
-                    log.write("padded-model-span SHA-256 pass; shifted-span SHA-256 reject\n")
+                    verify_span(vad_file, len(vad_prefix), vad["bytes"], vad)
+                    try:
+                        verify_span(vad_file, len(vad_prefix) - 1, vad["bytes"], vad)
+                    except ValueError as error:
+                        if str(error) != "model fd span SHA-256 differs from pin":
+                            raise
+                    else:
+                        raise ValueError("VAD fd span unexpectedly accepted at the wrong offset")
+                    log.write("padded-model-and-vad-spans SHA-256 pass; shifted spans SHA-256 reject\n")
                     log.flush()
                     smoke_result = subprocess.run(
-                        [str(binary), str(model_file.fileno()), str(len(prefix)),
-                         str(model["bytes"]), *map(str, raw_files)],
+                        [str(binary), str(model_file.fileno()), str(len(model_prefix)),
+                         str(model["bytes"]), str(vad_file.fileno()), str(len(vad_prefix)),
+                         str(vad["bytes"]), *map(str, raw_files)],
                         stdout=log, stderr=subprocess.STDOUT,
-                        pass_fds=(model_file.fileno(),), timeout=180)
+                        pass_fds=(model_file.fileno(), vad_file.fileno()), timeout=180)
                     smoke_status = smoke_result.returncode
             except subprocess.TimeoutExpired:
                 log.write("host-smoke ERROR timeout\n")
