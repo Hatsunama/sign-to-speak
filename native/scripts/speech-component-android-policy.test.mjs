@@ -294,6 +294,25 @@ test('a failed compiler receipt copy fails the step after a successful ARM64 bui
 });
 
 test('hosted component workflow enforces source, cost, lock, cross compiler, ELF, and key boundaries', () => audit(workflow));
+test('Android component admits the Qwen pilot branch only for same-repository public manual runs', () => {
+  const expression = workflow.jobs.component.if;
+  const pilotBranch = 'codex/sign-to-speak-qwen-pilot-20261118';
+  const ref = 'refs/heads/' + pilotBranch;
+  assert.equal(evaluate(expression, event('workflow_dispatch')), true);
+
+  for (const [name, candidate] of [
+    ['main dispatch', event('workflow_dispatch', {ref: 'refs/heads/main'})],
+    ['other branch dispatch', event('workflow_dispatch', {ref: ref + '-other'})],
+    ['tag dispatch', event('workflow_dispatch', {ref: 'refs/tags/' + pilotBranch})],
+    ['private repository dispatch', event('workflow_dispatch', {ref, privateRepo: true})],
+    ['other repository dispatch', event('workflow_dispatch', {ref, repository: 'other/repo'})],
+    ['fork pull request', event('pull_request', {ref: 'refs/pull/1/merge', headRepo: 'fork/repo', headRef: pilotBranch})],
+    ['same-repository pull request', event('pull_request', {ref: 'refs/pull/1/merge', headRef: pilotBranch})],
+  ]) assert.equal(evaluate(expression, candidate), false, name);
+
+  assert.equal(evaluate(expression, event('workflow_dispatch', {ref})), true, 'Qwen pilot dispatch');
+});
+
 test('JNI bridge source graph binds the real Rust runtime and four Java exports', () =>
   auditSourceGraph(cmakeSource, jniSource, exportMap));
 test('Rust producer assigns a stable SONAME and Android page alignment', () => auditRustBuild(rustBuild));

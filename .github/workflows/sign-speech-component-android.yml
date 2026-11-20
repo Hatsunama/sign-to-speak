@@ -27,7 +27,8 @@ jobs:
       github.repository == 'Hatsunama/sign-to-speak' &&
       github.event.repository.private == false &&
       ((github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/codex/native-recognition-flow-20261024') ||
+        (github.ref == 'refs/heads/codex/native-recognition-flow-20261024' ||
+         github.ref == 'refs/heads/codex/sign-to-speak-qwen-pilot-20261118')) ||
        (github.event_name == 'pull_request' &&
         github.event.pull_request.head.repo.full_name == 'Hatsunama/sign-to-speak' &&
         github.event.pull_request.head.ref == 'codex/native-recognition-flow-20261024'))
