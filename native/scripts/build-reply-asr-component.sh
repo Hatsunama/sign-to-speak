@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-role="${1:?expected host, host-leak-regression, host-vad-leak-red, arm64-v8a, or x86_64}"
+role="${1:?expected host, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="${RUNNER_TEMP:?missing hosted runner scratch}/sign-reply-component"
@@ -27,7 +27,7 @@ case "$role" in
                -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
         targets=(reply_asr_model_load_leak_regression)
         ;;
-    host-vad-leak-red)
+    host-vad-leak-regression)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
                -DCMAKE_C_FLAGS=-fsanitize=address
                -DCMAKE_CXX_FLAGS=-fsanitize=address
@@ -46,25 +46,15 @@ esac
 if [[ "$role" == host-leak-regression ]]; then
     # The producer stages the pinned repair in place. Freeze that boundary so
     # this existing green regression can never silently move to pristine input.
-    printf '%s  %s\n' b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9 \
+    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
         "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
     sha256sum "$whisper_source/src/whisper.cpp" > \
         "$evidence/model-load-leak-source-sha256.txt"
-elif [[ "$role" == host-vad-leak-red ]]; then
-    # prepare verifies the pinned commit/tree before applying the production
-    # cleanup repair. Materialize and independently verify HEAD so this VAD test
-    # remains a true fail-before regression against untouched v1.9.5.
-    whisper_source="$work/whisper.cpp-v1.9.5-pristine"
-    git -C "$stage/whisper.cpp" worktree add --quiet --detach "$whisper_source" HEAD
-    test "$(git -C "$whisper_source" rev-parse HEAD)" = d1be6fde11ac6e0407606b4e42fe72d34add8037
-    test "$(git -C "$whisper_source" rev-parse 'HEAD^{tree}')" = 6fe2755682242a5c01aba65a22b3c0305d747841
-    printf '%s  %s\n' 891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed \
+elif [[ "$role" == host-vad-leak-regression ]]; then
+    # Freeze the final staged source after both exact-byte repairs. This gate
+    # remains independent from the general Whisper loader regression above.
+    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
         "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
-    git -C "$whisper_source" status --porcelain --untracked-files=all > \
-        "$evidence/vad-leak-source-status.txt"
-    test ! -s "$evidence/vad-leak-source-status.txt"
-    git -C "$whisper_source" rev-parse HEAD 'HEAD^{tree}' > \
-        "$evidence/vad-leak-source-revisions.txt"
     sha256sum "$whisper_source/src/whisper.cpp" > \
         "$evidence/vad-leak-source-sha256.txt"
 fi
@@ -101,7 +91,7 @@ elif [[ "$role" == host-leak-regression ]]; then
             tee -a "$evidence/model-load-leak-regression.txt"
         exit 93
     fi
-elif [[ "$role" == host-vad-leak-red ]]; then
+elif [[ "$role" == host-vad-leak-regression ]]; then
     log="$work/vad-model-load-leak-regression.full.txt"
     vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
     test "$(stat -c %s "$vad_model")" = 885098
@@ -109,36 +99,36 @@ elif [[ "$role" == host-vad-leak-red ]]; then
         "$vad_model" | sha256sum --check --strict
     sha256sum "$vad_model" > "$evidence/vad-leak-model-sha256.txt"
     set +e
-    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1 \
+    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 \
         LSAN_OPTIONS=exitcode=23:max_leaks=20:report_objects=0 \
         "$build/reply_asr_vad_model_load_leak_regression" \
         "$vad_model" > "$log" 2>&1
     status=$?
     set -e
     tail -c 131072 "$log" > "$evidence/vad-model-load-leak-regression.txt"
-    if ! grep -Fq 'STS_EXPECTED_RED: VAD_LATE_READ_LEAK_TRIGGERED' "$log"; then
+    if ! grep -Fq 'STS_VAD_EARLY_METADATA_CLEANUP_PASS reads=9 close_calls=1' "$log" || \
+       ! grep -Fq 'STS_VAD_LATE_READ_CLEANUP_PASS reads=8 bytes=99238 close_calls=1' "$log"; then
         printf 'STS_VAD_LEAK_TRIGGER_UNTRIGGERED status=%s\n' "$status" | \
             tee -a "$evidence/vad-model-load-leak-regression.txt"
         rm -f "$log"
         exit 90
     fi
-    if ! grep -Fq 'ERROR: LeakSanitizer: detected memory leaks' "$log"; then
-        printf 'STS_VAD_LEAK_NOT_DETECTED status=%s\n' "$status" | \
+    if grep -Eq 'ERROR: (AddressSanitizer|LeakSanitizer)' "$log"; then
+        printf 'STS_VAD_SANITIZER_DIAGNOSTIC status=%s\n' "$status" | \
             tee -a "$evidence/vad-model-load-leak-regression.txt"
         rm -f "$log"
         exit 91
     fi
-    if [[ "$status" -ne 23 ]]; then
+    if [[ "$status" -ne 0 ]]; then
         printf 'STS_VAD_LEAK_UNEXPECTED_SANITIZER_STATUS status=%s\n' "$status" | \
             tee -a "$evidence/vad-model-load-leak-regression.txt"
         rm -f "$log"
         exit 92
     fi
-    printf 'STS_EXPECTED_RED: PINNED_V1_9_5_VAD_LOAD_LEAK status=23\n' | \
+    printf 'STS_VAD_INIT_LIFETIME_REPAIRED sanitizer_status=0\n' | \
         tee -a "$evidence/vad-model-load-leak-regression.txt"
     rm -f "$log"
     cat "$evidence/vad-model-load-leak-regression.txt"
-    exit 23
 else
     so="$build/reply-asr/libsign_reply_asr.so"
     prefix="$evidence/$role"

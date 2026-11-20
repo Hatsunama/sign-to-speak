@@ -7,14 +7,17 @@ pinned source and both models over HTTPS. The engine
 consumes an already verified, immutable local fd span during initialization.
 The same core and static CPU library configuration build for the Linux host,
 Android ARM64 and Android x86_64. After verifying the pristine source commit,
-tree and exact `src/whisper.cpp` SHA-256, the producer changes its one model-load
-failure branch to call the existing `whisper_free` cleanup. Both original and
-resulting source hashes are pinned. This releases raw ggml contexts and backend
-buffers on a late read failure; the hosted green leak regression exercises that
-path against the staged repaired source. A separate expected-red VAD regression
-materializes and independently verifies pristine v1.9.5, then proves its late
-short-read path still leaks under LeakSanitizer. The two gates retain separate
-source, build and execution evidence.
+tree and exact `src/whisper.cpp` SHA-256, the producer applies two ordered,
+exact-byte repairs. The first changes the Whisper model-load failure branch to
+call the existing `whisper_free` cleanup. The second explicitly includes
+`<memory>`, value-initializes the VAD context and holds it in a
+`whisper_vad_free` RAII guard until initialization succeeds. Every input and
+resulting source hash is pinned. The hosted green regressions independently
+exercise the Whisper late-read cleanup and the VAD early-malformed-metadata and
+late-short-read cleanup paths against the final staged source. Both sanitizer
+gates require their trigger markers, a zero exit status and no sanitizer leak.
+They retain separate source, build and execution evidence. The prior pristine
+v1.9.5 expected-red evidence remains in the pull-request run history.
 
 The application integration must verify SHA-256 on the immutable fd span
 before opening it. The native loader enforces the model length, header,

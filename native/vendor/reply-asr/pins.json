@@ -12,6 +12,12 @@
       "original_sha256": "891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed",
       "repaired_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
       "reason": "Release ggml contexts and backend buffers on model-load failure using the existing whisper_free cleanup path."
+    },
+    "vad_init_lifetime_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+      "repaired_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
+      "reason": "Value-initialize VAD ownership fields and hold the context in an explicit whisper_vad_free RAII guard until initialization succeeds."
     }
   },
   "model": {

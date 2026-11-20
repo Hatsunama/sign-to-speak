@@ -170,6 +170,44 @@ class ProducerTest(unittest.TestCase):
                 duplicated, {"original_sha256": hashlib.sha256(duplicated).hexdigest(),
                              "repaired_sha256": hashlib.sha256(duplicated).hexdigest()})
 
+    def test_vad_init_lifetime_fails_before_and_repairs_old_prepared_source(self):
+        old_prepared = (
+            b"#include <map>\n#include <random>\n"
+            b"    whisper_vad_context * vctx = new whisper_vad_context;\n"
+            b"    vctx->n_threads = params.n_threads;\n"
+            b"    if (!whisper_vad_init_context(vctx)) {\n"
+            b"        whisper_vad_free(vctx);\n"
+            b"        return nullptr;\n"
+            b"    }\n\n"
+            b"    return vctx;\n"
+        )
+        expected = (
+            b"#include <map>\n#include <memory>\n#include <random>\n"
+            b"    whisper_vad_context * vctx = new whisper_vad_context{};\n"
+            b"    std::unique_ptr<whisper_vad_context, decltype(&whisper_vad_free)> "
+            b"vctx_guard(vctx, whisper_vad_free);\n"
+            b"    vctx->n_threads = params.n_threads;\n"
+            b"    if (!whisper_vad_init_context(vctx)) {\n"
+            b"        return nullptr;\n"
+            b"    }\n\n"
+            b"    return vctx_guard.release();\n"
+        )
+        pin = {"original_sha256": hashlib.sha256(old_prepared).hexdigest(),
+               "repaired_sha256": hashlib.sha256(expected).hexdigest()}
+        self.assertNotIn(b"vctx_guard", old_prepared)
+        self.assertEqual(probe.repair_vad_init_lifetime_bytes(old_prepared, pin), expected)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_init_lifetime_bytes(old_prepared + b"unexpected", pin)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_init_lifetime_bytes(
+                old_prepared, {**pin, "repaired_sha256": "0" * 64})
+
+        source = probe.PINS["source"]
+        self.assertEqual(source["model_load_cleanup_repair"]["repaired_sha256"],
+                         source["vad_init_lifetime_repair"]["original_sha256"])
+        self.assertEqual(source["vad_init_lifetime_repair"]["repaired_sha256"],
+                         "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5")
+
 
 class LeakGatePolicyTest(unittest.TestCase):
     NATIVE = SCRIPT.parent.parent
@@ -193,7 +231,8 @@ class LeakGatePolicyTest(unittest.TestCase):
         )
         self.assertIn("late-model-read-failure %s", source["model"].decode())
         self.assertNotIn("VAD_LATE_READ_LEAK_TRIGGERED", source["model"].decode())
-        self.assertIn("STS_EXPECTED_RED: VAD_LATE_READ_LEAK_TRIGGERED", source["vad"])
+        self.assertIn("STS_VAD_EARLY_METADATA_CLEANUP_PASS", source["vad"])
+        self.assertIn("STS_VAD_LATE_READ_CLEANUP_PASS", source["vad"])
         self.assertIn("whisper_vad_init_with_params", source["vad"])
 
         self.assertIn(
@@ -209,7 +248,7 @@ class LeakGatePolicyTest(unittest.TestCase):
         build = source["build"]
         self.assertIn('whisper_source="$stage/whisper.cpp"', build)
         self.assertIn(
-            "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+            "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
             build,
         )
         self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)
@@ -218,22 +257,20 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn('"$evidence/model-load-leak-regression.txt"', build)
         self.assertIn('"$evidence/model-load-leak-source-sha256.txt"', build)
 
-        self.assertIn('elif [[ "$role" == host-vad-leak-red ]]; then', build)
+        self.assertIn('elif [[ "$role" == host-vad-leak-regression ]]; then', build)
         self.assertIn('targets=(reply_asr_vad_model_load_leak_regression)', build)
-        self.assertIn('whisper_source="$work/whisper.cpp-v1.9.5-pristine"', build)
-        self.assertIn(
-            "891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed",
-            build,
-        )
+        self.assertNotIn("whisper.cpp-v1.9.5-pristine", build)
         self.assertIn('"$evidence/vad-leak-source-sha256.txt"', build)
         self.assertIn('"$evidence/vad-model-load-leak-regression.txt"', build)
-        self.assertIn("STS_EXPECTED_RED: PINNED_V1_9_5_VAD_LOAD_LEAK status=23", build)
-        self.assertRegex(build, r"cat \"\$evidence/vad-model-load-leak-regression\.txt\"\n    exit 23")
+        self.assertIn("STS_VAD_INIT_LIFETIME_REPAIRED sanitizer_status=0", build)
+        self.assertIn("STS_VAD_EARLY_METADATA_CLEANUP_PASS reads=9 close_calls=1", build)
+        self.assertIn("STS_VAD_LATE_READ_CLEANUP_PASS reads=8 bytes=99238 close_calls=1", build)
+        self.assertNotIn("STS_EXPECTED_RED", build)
 
         workflow = source["workflow"]
         for name, role in (
             ("Verify repaired Whisper model-load cleanup", "host-leak-regression"),
-            ("Expected red - reproduce pristine v1.9.5 VAD load leak", "host-vad-leak-red"),
+            ("Verify repaired VAD initialization lifetime", "host-vad-leak-regression"),
         ):
             gate = (
                 f"      - name: {name}\n"
@@ -244,7 +281,7 @@ class LeakGatePolicyTest(unittest.TestCase):
             self.assertIn(gate, workflow)
         self.assertNotIn("continue-on-error", workflow)
 
-    def test_repaired_whisper_and_pristine_vad_gates_are_independent(self):
+    def test_repaired_whisper_and_vad_gates_are_independent(self):
         self.audit(self.sources())
 
     def test_policy_rejects_overwrite_source_confusion_and_masking(self):
@@ -261,15 +298,15 @@ class LeakGatePolicyTest(unittest.TestCase):
         mutations.append(copy)
         copy = dict(original)
         copy["build"] = original["build"].replace(
-            'cat "$evidence/vad-model-load-leak-regression.txt"\n    exit 23',
-            'cat "$evidence/vad-model-load-leak-regression.txt"\n    exit 0',
+            "STS_VAD_INIT_LIFETIME_REPAIRED sanitizer_status=0",
+            "STS_VAD_INIT_LIFETIME_UNVERIFIED sanitizer_status=0",
         )
         mutations.append(copy)
         copy = dict(original)
         copy["workflow"] = original["workflow"].replace(
-            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red",
+            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-regression",
             "        continue-on-error: true\n"
-            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red",
+            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-regression",
         )
         mutations.append(copy)
         for mutation in mutations:

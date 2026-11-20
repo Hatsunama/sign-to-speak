@@ -15,8 +15,7 @@ if(NOT ANDROID)
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)
     target_link_libraries(reply_asr_model_load_leak_regression PRIVATE whisper)
 
-    # Hosted-only fail-before VAD regression. Its build role supplies a
-    # separately verified pristine v1.9.5 tree so ASan/LSan observes upstream.
+    # Hosted-only repaired-source VAD initialization lifetime regression.
     add_executable(reply_asr_vad_model_load_leak_regression vad_model_load_leak_regression.cpp)
     target_link_libraries(reply_asr_vad_model_load_leak_regression PRIVATE whisper)
 endif()

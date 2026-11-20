@@ -86,10 +86,10 @@ jobs:
         timeout-minutes: 4
         run: bash native/scripts/build-reply-asr-component.sh host-leak-regression
 
-      - name: Expected red - reproduce pristine v1.9.5 VAD load leak
+      - name: Verify repaired VAD initialization lifetime
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 4
-        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-regression
 
       - name: Retain bounded component evidence
         if: always()

@@ -132,6 +132,38 @@ def repair_whisper_cleanup_bytes(source, pin):
     return repaired
 
 
+def repair_vad_init_lifetime_bytes(source, pin):
+    if hashlib.sha256(source).hexdigest() != pin["original_sha256"]:
+        raise ValueError("VAD init lifetime source SHA-256 differs from pin")
+    transformations = (
+        (b"#include <map>\n#include <random>",
+         b"#include <map>\n#include <memory>\n#include <random>"),
+        (b"    whisper_vad_context * vctx = new whisper_vad_context;\n"
+         b"    vctx->n_threads = params.n_threads;",
+         b"    whisper_vad_context * vctx = new whisper_vad_context{};\n"
+         b"    std::unique_ptr<whisper_vad_context, decltype(&whisper_vad_free)> "
+         b"vctx_guard(vctx, whisper_vad_free);\n"
+         b"    vctx->n_threads = params.n_threads;"),
+        (b"    if (!whisper_vad_init_context(vctx)) {\n"
+         b"        whisper_vad_free(vctx);\n"
+         b"        return nullptr;\n"
+         b"    }\n\n"
+         b"    return vctx;",
+         b"    if (!whisper_vad_init_context(vctx)) {\n"
+         b"        return nullptr;\n"
+         b"    }\n\n"
+         b"    return vctx_guard.release();"),
+    )
+    repaired = source
+    for before, after in transformations:
+        if repaired.count(before) != 1:
+            raise ValueError("VAD init lifetime source branch differs from pin")
+        repaired = repaired.replace(before, after)
+    if hashlib.sha256(repaired).hexdigest() != pin["repaired_sha256"]:
+        raise ValueError("VAD init lifetime repair SHA-256 differs from pin")
+    return repaired
+
+
 def model_path(stage, pin):
     return stage / "assets/reply-asr" / output_name(pin["file"])
 
@@ -148,6 +180,10 @@ def prepare(output):
         repair = PINS["source"]["model_load_cleanup_repair"]
         repair_file = stage / "whisper.cpp" / repair["path"]
         repair_file.write_bytes(repair_whisper_cleanup_bytes(repair_file.read_bytes(), repair))
+        vad_repair = PINS["source"]["vad_init_lifetime_repair"]
+        if vad_repair["path"] != repair["path"]:
+            raise ValueError("Whisper repairs unexpectedly target different files")
+        repair_file.write_bytes(repair_vad_init_lifetime_bytes(repair_file.read_bytes(), vad_repair))
         notices = stage / "notices"
         notices.mkdir()
         for name, pin in {**PINS["notices"], **PINS["additional_notices"]}.items():
