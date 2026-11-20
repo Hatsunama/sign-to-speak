@@ -110,6 +110,7 @@ public final class RecognitionInputStage {
     private static void checkName(String name) {
         if (name == null || !(name.equals("manifest.json") || name.equals("model.tflite")
                 || name.equals("holistic.task") || name.equals("labels.json")
+                || name.equals("holistic-parity.rgba")
                 || name.matches("[a-zA-Z0-9_-]{1,40}\\.mp4"))) {
             throw new IllegalArgumentException("Unapproved input name");
         }
