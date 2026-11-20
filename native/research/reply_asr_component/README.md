@@ -10,7 +10,11 @@ Android ARM64 and Android x86_64. After verifying the pristine source commit,
 tree and exact `src/whisper.cpp` SHA-256, the producer changes its one model-load
 failure branch to call the existing `whisper_free` cleanup. Both original and
 resulting source hashes are pinned. This releases raw ggml contexts and backend
-buffers on a late read failure; the hosted leak regression exercises that path.
+buffers on a late read failure; the hosted green leak regression exercises that
+path against the staged repaired source. A separate expected-red VAD regression
+materializes and independently verifies pristine v1.9.5, then proves its late
+short-read path still leaks under LeakSanitizer. The two gates retain separate
+source, build and execution evidence.
 
 The application integration must verify SHA-256 on the immutable fd span
 before opening it. The native loader enforces the model length, header,

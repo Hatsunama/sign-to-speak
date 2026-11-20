@@ -11,8 +11,12 @@ if(NOT ANDROID)
     add_executable(reply_asr_vad_semantic_probe vad_semantic_probe.cpp)
     target_link_libraries(reply_asr_vad_semantic_probe PRIVATE whisper)
 
-    # Hosted-only fail-before regression. The executable links the pinned
-    # upstream library directly so ASan/LSan can inspect its model-load cleanup.
+    # Hosted-only repaired-source regression for the general Whisper loader.
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)
     target_link_libraries(reply_asr_model_load_leak_regression PRIVATE whisper)
+
+    # Hosted-only fail-before VAD regression. Its build role supplies a
+    # separately verified pristine v1.9.5 tree so ASan/LSan observes upstream.
+    add_executable(reply_asr_vad_model_load_leak_regression vad_model_load_leak_regression.cpp)
+    target_link_libraries(reply_asr_vad_model_load_leak_regression PRIVATE whisper)
 endif()

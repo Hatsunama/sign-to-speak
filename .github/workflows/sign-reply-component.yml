@@ -81,10 +81,15 @@ jobs:
         timeout-minutes: 6
         run: bash native/scripts/build-reply-asr-component.sh x86_64
 
-      - name: Reproduce pinned model-load cleanup leak
+      - name: Verify repaired Whisper model-load cleanup
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 4
         run: bash native/scripts/build-reply-asr-component.sh host-leak-regression
+
+      - name: Expected red - reproduce pristine v1.9.5 VAD load leak
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red
 
       - name: Retain bounded component evidence
         if: always()

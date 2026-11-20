@@ -171,5 +171,111 @@ class ProducerTest(unittest.TestCase):
                              "repaired_sha256": hashlib.sha256(duplicated).hexdigest()})
 
 
+class LeakGatePolicyTest(unittest.TestCase):
+    NATIVE = SCRIPT.parent.parent
+    COMPONENT = NATIVE / "research/reply_asr_component"
+    WORKFLOW = NATIVE.parent / ".github/workflows/sign-reply-component.yml"
+
+    @classmethod
+    def sources(cls):
+        return {
+            "model": (cls.COMPONENT / "model_load_leak_regression.cpp").read_bytes(),
+            "vad": (cls.COMPONENT / "vad_model_load_leak_regression.cpp").read_text(),
+            "cmake": (cls.COMPONENT / "CMakeLists.txt").read_text(),
+            "build": (cls.NATIVE / "scripts/build-reply-asr-component.sh").read_text(),
+            "workflow": cls.WORKFLOW.read_text(),
+        }
+
+    def audit(self, source):
+        self.assertEqual(
+            hashlib.sha256(source["model"]).hexdigest(),
+            "09315b59ef397c02e8b91cbb55af7917068d7a9b1167b0b13a8aa3e3a565e467",
+        )
+        self.assertIn("late-model-read-failure %s", source["model"].decode())
+        self.assertNotIn("VAD_LATE_READ_LEAK_TRIGGERED", source["model"].decode())
+        self.assertIn("STS_EXPECTED_RED: VAD_LATE_READ_LEAK_TRIGGERED", source["vad"])
+        self.assertIn("whisper_vad_init_with_params", source["vad"])
+
+        self.assertIn(
+            "add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)",
+            source["cmake"],
+        )
+        self.assertIn(
+            "add_executable(reply_asr_vad_model_load_leak_regression "
+            "vad_model_load_leak_regression.cpp)",
+            source["cmake"],
+        )
+
+        build = source["build"]
+        self.assertIn('whisper_source="$stage/whisper.cpp"', build)
+        self.assertIn(
+            "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+            build,
+        )
+        self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)
+        self.assertIn('model="$stage/assets/reply-asr/ggml-tiny.en.bin"', build)
+        self.assertIn("late-model-read-failure pass", build)
+        self.assertIn('"$evidence/model-load-leak-regression.txt"', build)
+        self.assertIn('"$evidence/model-load-leak-source-sha256.txt"', build)
+
+        self.assertIn('elif [[ "$role" == host-vad-leak-red ]]; then', build)
+        self.assertIn('targets=(reply_asr_vad_model_load_leak_regression)', build)
+        self.assertIn('whisper_source="$work/whisper.cpp-v1.9.5-pristine"', build)
+        self.assertIn(
+            "891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed",
+            build,
+        )
+        self.assertIn('"$evidence/vad-leak-source-sha256.txt"', build)
+        self.assertIn('"$evidence/vad-model-load-leak-regression.txt"', build)
+        self.assertIn("STS_EXPECTED_RED: PINNED_V1_9_5_VAD_LOAD_LEAK status=23", build)
+        self.assertRegex(build, r"cat \"\$evidence/vad-model-load-leak-regression\.txt\"\n    exit 23")
+
+        workflow = source["workflow"]
+        for name, role in (
+            ("Verify repaired Whisper model-load cleanup", "host-leak-regression"),
+            ("Expected red - reproduce pristine v1.9.5 VAD load leak", "host-vad-leak-red"),
+        ):
+            gate = (
+                f"      - name: {name}\n"
+                "        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}\n"
+                "        timeout-minutes: 4\n"
+                f"        run: bash native/scripts/build-reply-asr-component.sh {role}"
+            )
+            self.assertIn(gate, workflow)
+        self.assertNotIn("continue-on-error", workflow)
+
+    def test_repaired_whisper_and_pristine_vad_gates_are_independent(self):
+        self.audit(self.sources())
+
+    def test_policy_rejects_overwrite_source_confusion_and_masking(self):
+        original = self.sources()
+        mutations = []
+        copy = dict(original)
+        copy["model"] = original["vad"].encode()
+        mutations.append(copy)
+        copy = dict(original)
+        copy["build"] = original["build"].replace(
+            'model="$stage/assets/reply-asr/ggml-tiny.en.bin"',
+            'model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"',
+        )
+        mutations.append(copy)
+        copy = dict(original)
+        copy["build"] = original["build"].replace(
+            'cat "$evidence/vad-model-load-leak-regression.txt"\n    exit 23',
+            'cat "$evidence/vad-model-load-leak-regression.txt"\n    exit 0',
+        )
+        mutations.append(copy)
+        copy = dict(original)
+        copy["workflow"] = original["workflow"].replace(
+            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red",
+            "        continue-on-error: true\n"
+            "        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-red",
+        )
+        mutations.append(copy)
+        for mutation in mutations:
+            with self.subTest(index=mutations.index(mutation)), self.assertRaises(AssertionError):
+                self.audit(mutation)
+
+
 if __name__ == "__main__":
     unittest.main()
