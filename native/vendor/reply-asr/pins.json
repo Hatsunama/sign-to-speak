@@ -18,6 +18,12 @@
       "original_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
       "repaired_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
       "reason": "Value-initialize VAD ownership fields and hold the context in an explicit whisper_vad_free RAII guard until initialization succeeds."
+    },
+    "vad_compute_failure_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
+      "repaired_sha256": "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
+      "reason": "After resetting the scheduler, propagate VAD graph-compute failure as false instead of reporting valid silence."
     }
   },
   "model": {

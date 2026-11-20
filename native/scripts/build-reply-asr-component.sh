@@ -48,23 +48,23 @@ case "$role" in
 esac
 
 if [[ "$role" == host-vad-compute-failure-regression ]]; then
-    # The fault-injection regression belongs to the same exact repaired input
-    # as the two independent lifetime gates, but does not modify that source.
-    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
+    # The fault-injection regression belongs to the same exact fully repaired
+    # input as the two independent lifetime gates, but does not modify it.
+    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
         "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
     sha256sum "$whisper_source/src/whisper.cpp" > \
         "$evidence/vad-compute-failure-source-sha256.txt"
 elif [[ "$role" == host-leak-regression ]]; then
     # The producer stages the pinned repair in place. Freeze that boundary so
     # this existing green regression can never silently move to pristine input.
-    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
+    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
         "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
     sha256sum "$whisper_source/src/whisper.cpp" > \
         "$evidence/model-load-leak-source-sha256.txt"
 elif [[ "$role" == host-vad-leak-regression ]]; then
-    # Freeze the final staged source after both exact-byte repairs. This gate
+    # Freeze the final staged source after all three exact-byte repairs. This gate
     # remains independent from the general Whisper loader regression above.
-    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
+    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
         "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
     sha256sum "$whisper_source/src/whisper.cpp" > \
         "$evidence/vad-leak-source-sha256.txt"

@@ -164,6 +164,43 @@ def repair_vad_init_lifetime_bytes(source, pin):
     return repaired
 
 
+def repair_vad_compute_failure_bytes(source, pin):
+    if hashlib.sha256(source).hexdigest() != pin["original_sha256"]:
+        raise ValueError("VAD compute failure source SHA-256 differs from pin")
+    transformations = (
+        (b"    const int64_t t_start_vad_us = ggml_time_us();\n\n"
+         b"    for (int i = 0; i < n_chunks; i++) {",
+         b"    const int64_t t_start_vad_us = ggml_time_us();\n"
+         b"    bool compute_ok = true;\n\n"
+         b"    for (int i = 0; i < n_chunks; i++) {"),
+        (b"        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {\n"
+         b"            WHISPER_LOG_ERROR(\"%s: failed to compute VAD graph\\n\", __func__);\n"
+         b"            break;\n"
+         b"        }",
+         b"        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {\n"
+         b"            WHISPER_LOG_ERROR(\"%s: failed to compute VAD graph\\n\", __func__);\n"
+         b"            compute_ok = false;\n"
+         b"            break;\n"
+         b"        }"),
+        (b"    ggml_backend_sched_reset(sched);\n\n"
+         b"    return true;\n"
+         b"}\n\n"
+         b"bool whisper_vad_detect_speech(",
+         b"    ggml_backend_sched_reset(sched);\n\n"
+         b"    return compute_ok;\n"
+         b"}\n\n"
+         b"bool whisper_vad_detect_speech("),
+    )
+    repaired = source
+    for before, after in transformations:
+        if repaired.count(before) != 1:
+            raise ValueError("VAD compute failure source branch differs from pin")
+        repaired = repaired.replace(before, after)
+    if hashlib.sha256(repaired).hexdigest() != pin["repaired_sha256"]:
+        raise ValueError("VAD compute failure repair SHA-256 differs from pin")
+    return repaired
+
+
 def model_path(stage, pin):
     return stage / "assets/reply-asr" / output_name(pin["file"])
 
@@ -184,6 +221,11 @@ def prepare(output):
         if vad_repair["path"] != repair["path"]:
             raise ValueError("Whisper repairs unexpectedly target different files")
         repair_file.write_bytes(repair_vad_init_lifetime_bytes(repair_file.read_bytes(), vad_repair))
+        compute_repair = PINS["source"]["vad_compute_failure_repair"]
+        if compute_repair["path"] != repair["path"]:
+            raise ValueError("Whisper repairs unexpectedly target different files")
+        repair_file.write_bytes(
+            repair_vad_compute_failure_bytes(repair_file.read_bytes(), compute_repair))
         notices = stage / "notices"
         notices.mkdir()
         for name, pin in {**PINS["notices"], **PINS["additional_notices"]}.items():

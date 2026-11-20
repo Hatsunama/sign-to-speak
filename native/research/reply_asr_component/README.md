@@ -7,12 +7,16 @@ pinned source and both models over HTTPS. The engine
 consumes an already verified, immutable local fd span during initialization.
 The same core and static CPU library configuration build for the Linux host,
 Android ARM64 and Android x86_64. After verifying the pristine source commit,
-tree and exact `src/whisper.cpp` SHA-256, the producer applies two ordered,
+tree and exact `src/whisper.cpp` SHA-256, the producer applies three ordered,
 exact-byte repairs. The first changes the Whisper model-load failure branch to
 call the existing `whisper_free` cleanup. The second explicitly includes
 `<memory>`, value-initializes the VAD context and holds it in a
-`whisper_vad_free` RAII guard until initialization succeeds. Every input and
-resulting source hash is pinned. The hosted green regressions independently
+`whisper_vad_free` RAII guard until initialization succeeds. The third records
+VAD graph-compute failure, resets the scheduler, then returns `false` instead
+of misreporting the failed inference as valid silence; successful computation
+still returns `true`. Every input and resulting source hash is pinned. The
+hosted graph-compute wrapper requires one injected scheduler failure and a
+`false` detection result. The hosted green regressions independently
 exercise the Whisper late-read cleanup and the VAD early-malformed-metadata and
 late-short-read cleanup paths against the final staged source. Both sanitizer
 gates require their trigger markers, a zero exit status and no sanitizer leak.

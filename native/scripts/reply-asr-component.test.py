@@ -245,6 +245,52 @@ class ProducerTest(unittest.TestCase):
         self.assertEqual(source["vad_init_lifetime_repair"]["repaired_sha256"],
                          "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5")
 
+    def test_vad_compute_failure_fails_before_and_repairs_old_prepared_source(self):
+        old_prepared = (
+            b"    const int64_t t_start_vad_us = ggml_time_us();\n\n"
+            b"    for (int i = 0; i < n_chunks; i++) {\n"
+            b"        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {\n"
+            b"            WHISPER_LOG_ERROR(\"%s: failed to compute VAD graph\\n\", __func__);\n"
+            b"            break;\n"
+            b"        }\n"
+            b"    }\n\n"
+            b"    ggml_backend_sched_reset(sched);\n\n"
+            b"    return true;\n"
+            b"}\n\n"
+            b"bool whisper_vad_detect_speech(\n"
+        )
+        expected = (
+            b"    const int64_t t_start_vad_us = ggml_time_us();\n"
+            b"    bool compute_ok = true;\n\n"
+            b"    for (int i = 0; i < n_chunks; i++) {\n"
+            b"        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {\n"
+            b"            WHISPER_LOG_ERROR(\"%s: failed to compute VAD graph\\n\", __func__);\n"
+            b"            compute_ok = false;\n"
+            b"            break;\n"
+            b"        }\n"
+            b"    }\n\n"
+            b"    ggml_backend_sched_reset(sched);\n\n"
+            b"    return compute_ok;\n"
+            b"}\n\n"
+            b"bool whisper_vad_detect_speech(\n"
+        )
+        pin = {"original_sha256": hashlib.sha256(old_prepared).hexdigest(),
+               "repaired_sha256": hashlib.sha256(expected).hexdigest()}
+        self.assertEqual(probe.repair_vad_compute_failure_bytes(old_prepared, pin), expected)
+        self.assertLess(expected.index(b"ggml_backend_sched_reset(sched)"),
+                        expected.index(b"return compute_ok"))
+        with self.assertRaises(ValueError):
+            probe.repair_vad_compute_failure_bytes(old_prepared + b"unexpected", pin)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_compute_failure_bytes(
+                old_prepared, {**pin, "repaired_sha256": "0" * 64})
+
+        source = probe.PINS["source"]
+        self.assertEqual(source["vad_init_lifetime_repair"]["repaired_sha256"],
+                         source["vad_compute_failure_repair"]["original_sha256"])
+        self.assertEqual(source["vad_compute_failure_repair"]["repaired_sha256"],
+                         "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6")
+
 
 class LeakGatePolicyTest(unittest.TestCase):
     NATIVE = SCRIPT.parent.parent
@@ -256,6 +302,7 @@ class LeakGatePolicyTest(unittest.TestCase):
         return {
             "model": (cls.COMPONENT / "model_load_leak_regression.cpp").read_bytes(),
             "vad": (cls.COMPONENT / "vad_model_load_leak_regression.cpp").read_text(),
+            "compute": (cls.COMPONENT / "vad_compute_failure_regression.cpp").read_text(),
             "cmake": (cls.COMPONENT / "CMakeLists.txt").read_text(),
             "build": (cls.NATIVE / "scripts/build-reply-asr-component.sh").read_text(),
             "workflow": cls.WORKFLOW.read_text(),
@@ -271,6 +318,10 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn("STS_VAD_EARLY_METADATA_CLEANUP_PASS", source["vad"])
         self.assertIn("STS_VAD_LATE_READ_CLEANUP_PASS", source["vad"])
         self.assertIn("whisper_vad_init_with_params", source["vad"])
+        self.assertIn("STS_VAD_COMPUTE_INJECTION wrapper_calls=", source["compute"])
+        self.assertIn("STS_VAD_COMPUTE_FAILURE_PROPAGATION_PASS detect_return=false",
+                      source["compute"])
+        self.assertIn("if (detected)", source["compute"])
 
         self.assertIn(
             "add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)",
@@ -284,10 +335,16 @@ class LeakGatePolicyTest(unittest.TestCase):
 
         build = source["build"]
         self.assertIn('whisper_source="$stage/whisper.cpp"', build)
-        self.assertIn(
+        final_source_sha256 = (
+            "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6"
+        )
+        self.assertEqual(build.count(final_source_sha256), 3)
+        self.assertNotIn(
             "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
             build,
         )
+        self.assertIn('targets=(reply_asr_vad_compute_failure_regression)', build)
+        self.assertIn('"$evidence/vad-compute-failure-source-sha256.txt"', build)
         self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)
         self.assertIn('model="$stage/assets/reply-asr/ggml-tiny.en.bin"', build)
         self.assertIn("late-model-read-failure pass", build)
@@ -306,6 +363,8 @@ class LeakGatePolicyTest(unittest.TestCase):
 
         workflow = source["workflow"]
         for name, role in (
+            ("Reject VAD graph-compute failure as valid silence",
+             "host-vad-compute-failure-regression"),
             ("Verify repaired Whisper model-load cleanup", "host-leak-regression"),
             ("Verify repaired VAD initialization lifetime", "host-vad-leak-regression"),
         ):
