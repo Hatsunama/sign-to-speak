@@ -127,5 +127,25 @@ class ProducerTest(unittest.TestCase):
             runtime / "libclang_rt.builtins-x86_64-android.a", "x86_64", ndk))
 
 
+    def test_model_load_cleanup_requires_exact_source_and_result_hashes(self):
+        old = (b'        WHISPER_LOG_ERROR("%s: failed to load model\\n", __func__);'
+               b"\n        delete ctx;\n        return nullptr;")
+        fixed = old.replace(b"delete ctx;", b"whisper_free(ctx);")
+        source = b"prefix\n" + old + b"\nsuffix\n"
+        repaired = b"prefix\n" + fixed + b"\nsuffix\n"
+        pin = {"original_sha256": hashlib.sha256(source).hexdigest(),
+               "repaired_sha256": hashlib.sha256(repaired).hexdigest()}
+        self.assertEqual(probe.repair_whisper_cleanup_bytes(source, pin), repaired)
+        with self.assertRaises(ValueError):
+            probe.repair_whisper_cleanup_bytes(source + b"unexpected", pin)
+        with self.assertRaises(ValueError):
+            probe.repair_whisper_cleanup_bytes(source, {**pin, "repaired_sha256": "0" * 64})
+        duplicated = source + old
+        with self.assertRaises(ValueError):
+            probe.repair_whisper_cleanup_bytes(
+                duplicated, {"original_sha256": hashlib.sha256(duplicated).hexdigest(),
+                             "repaired_sha256": hashlib.sha256(duplicated).hexdigest()})
+
+
 if __name__ == "__main__":
     unittest.main()

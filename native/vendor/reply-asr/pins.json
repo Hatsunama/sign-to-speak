@@ -6,7 +6,13 @@
     "tag_object": "d2a764c648779feb36d44363f212a29b00aad1af",
     "commit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
     "tree": "6fe2755682242a5c01aba65a22b3c0305d747841",
-    "vendored_ggml_version": "0.26.0"
+    "vendored_ggml_version": "0.26.0",
+    "model_load_cleanup_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed",
+      "repaired_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+      "reason": "Release ggml contexts and backend buffers on model-load failure using the existing whisper_free cleanup path."
+    }
   },
   "model": {
     "repository": "ggerganov/whisper.cpp",

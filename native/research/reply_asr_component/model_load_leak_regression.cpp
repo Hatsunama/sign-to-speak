@@ -68,7 +68,7 @@ int main(int argc, char** argv) {
 
     const bool passed = context == nullptr && probe.backend_allocated &&
                         probe.failure_injected && probe.close_calls == 1;
-    std::printf("late-model-read-failure %s context_null=%d backend_allocated=%d "
+    std::fprintf(stderr, "late-model-read-failure %s context_null=%d backend_allocated=%d "
                 "failure_injected=%d close_calls=%u bytes_read=%zu\n",
                 passed ? "pass" : "FAIL", context == nullptr, probe.backend_allocated,
                 probe.failure_injected, probe.close_calls, probe.bytes_read);

@@ -118,6 +118,20 @@ def verify_notices(directory):
             consume_verified(source, pin)
 
 
+def repair_whisper_cleanup_bytes(source, pin):
+    if hashlib.sha256(source).hexdigest() != pin["original_sha256"]:
+        raise ValueError("Whisper cleanup source SHA-256 differs from pin")
+    before = (b'        WHISPER_LOG_ERROR("%s: failed to load model\\n", __func__);'
+              b"\n        delete ctx;\n        return nullptr;")
+    after = before.replace(b"delete ctx;", b"whisper_free(ctx);")
+    if source.count(before) != 1:
+        raise ValueError("Whisper cleanup source branch differs from pin")
+    repaired = source.replace(before, after)
+    if hashlib.sha256(repaired).hexdigest() != pin["repaired_sha256"]:
+        raise ValueError("Whisper cleanup repair SHA-256 differs from pin")
+    return repaired
+
+
 def prepare(output):
     reject_links(output)
     if output.exists():
@@ -127,6 +141,9 @@ def prepare(output):
         stage = Path(scratch) / "component"
         stage.mkdir()
         fetch_source(stage / "whisper.cpp", PINS["source"])
+        repair = PINS["source"]["model_load_cleanup_repair"]
+        repair_file = stage / "whisper.cpp" / repair["path"]
+        repair_file.write_bytes(repair_whisper_cleanup_bytes(repair_file.read_bytes(), repair))
         notices = stage / "notices"
         notices.mkdir()
         for name, pin in {**PINS["notices"], **PINS["additional_notices"]}.items():

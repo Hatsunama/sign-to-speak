@@ -5,7 +5,11 @@ v1.9.5, bundled ggml 0.26.0 and the publisher-preconverted tiny.en model.
 The GitHub job fetches the pinned source and model over HTTPS. The engine
 consumes an already verified, immutable local fd span during initialization.
 The same core and static CPU library configuration build for the Linux host,
-Android ARM64 and Android x86_64.
+Android ARM64 and Android x86_64. After verifying the pristine source commit,
+tree and exact `src/whisper.cpp` SHA-256, the producer changes its one model-load
+failure branch to call the existing `whisper_free` cleanup. Both original and
+resulting source hashes are pinned. This releases raw ggml contexts and backend
+buffers on a late read failure; the hosted leak regression exercises that path.
 
 The application integration must verify SHA-256 on the immutable fd span
 before opening it. The native loader enforces the model length, header,
