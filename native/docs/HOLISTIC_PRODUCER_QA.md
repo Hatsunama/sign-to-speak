@@ -1,6 +1,6 @@
 # Canonical Holistic producer QA
 
-Status: test-only implementation; hosted native compilation and phone execution are pending. Do not infer recognition, CameraX cadence or release readiness from source existence.
+Status: production replay has run on both phones and fails the frozen cross-runtime tolerance. A QA-only graph-output control did not change Samsung hand coordinates. A further direct-ByteBuffer input control is pending hosted compilation and runtime checks. No diagnostic qualifies recognition, CameraX cadence or a release.
 
 PhoneHolisticProducerParityTest#canonicalRgbaReplay replays a private hash-pinned canonical RGBA fixture through the same LiveHolisticHandDetector used by live tracking. It opens no Activity, camera or microphone and changes no app UI, sound or permissions. Inputs contain pixels and measured timestamps, never expected coordinates or labels. The host retains the independent reference.
 
@@ -17,3 +17,18 @@ Freeze comparison thresholds before seeing device output: exact model/pixel/time
 Pixel replay isolates detector differences. It does not certify independent Android video decoding, camera crop/rotation/optical input, live frame dropping, two-hand or occlusion quality, recognition or general translation. Keep those gates separate. Current publisher holdout was already scored by earlier Qwen research and is not globally untouched. No private videos, pixels, landmarks, source IDs, transcripts, credentials or keys belong in public workflow logs/artifacts.
 
 Use one phone at a time only when it is unlocked at Home with no active instrumentation. Keep it at Home while waiting for builds, recheck readiness before staging/tests, preserve sound/settings, and return it Home afterward without disturbing another agent's app. Full source/runtime evidence and commercial blockers remain in the research reports and commercial readiness plan.
+
+
+## Recorded runtime boundaries
+
+The source2fc12fa8 native artifact passed all required hosted checks and 204 Android unit tests. Both phones passed cold-start rear/front/stop/recovery camera checks and completed 53/17/53 replay runs. Their within-device repeated coordinates were identical. Against the independent Python reference, maximum absolute errors were 0.045424 on Seeker and 0.045061 on Samsung; the frozen limit remains 0.001. This is a proven diagnostic disagreement, not proof of which runtime is accurate.
+
+At source71cf1d16, Samsung repeated the camera check and reproduced its prior production coordinates exactly. optionalOutputsGraphDiagnostic enables both optional graph outputs to match the C++ factory's output streams, emits SIGN_HOLISTIC_OPTIONAL_OUTPUT_RESULT_BASE64= and marks production_path_tested=false. It produced exactly the same hand coordinates as the production replay. The output-stream difference is therefore not the cause in this inspected fixture. Effective Samsung CPU XNNPACK execution was captured from the test process; it does not identify a particular arithmetic or ROI cause. Seeker source71cf checks remain pending while another app owns the device.
+
+## Direct-buffer input control
+
+PhoneHolisticProducerParityTest#rgbaByteBufferGraphDiagnostic requires signHolisticByteBuffer=1 plus the same fresh run ID and fixture hashes. It uses the official ByteBufferImageBuilder with RGBA bytes read from the already checked bitmap, default CPU/VIDEO options and optional outputs disabled. Constant dimensions are required for this bounded replay. The direct buffer is reused per graph; staging arrays and buffer bytes are cleared after each call, each MPImage closes before reuse, and each graph closes after a replay.
+
+Its distinct marker is SIGN_HOLISTIC_BYTEBUFFER_RESULT_BASE64= and its result type is phone_holistic_bytebuffer_diagnostic. The payload states diagnostic_mode=rgba_bytebuffer_input, image_transport=rgba_bytebuffer and production_path_tested=false. Every frame includes graph_rgba_sha256, computed from the direct buffer immediately before inference and checked against the pinned frame hash. The normal bitmap_consumed contract remains true. A diagnostic cannot be accepted as a production result by changing a label. Keep the original bytes, selected method, opt-in, invocation nonce and graph-input hashes bound together.
+
+Both experimental outputs enforce the existing raw512KiB bound and an additional 350000-character Base64 bound before the Binder call. This is a controlled current-fixture limit, not support for every64-frame/two-hand combination. The production marker/schema/factory remain unchanged. No production option, dependency, permission, UI or sound setting is changed by these controls. Recheck the exact new artifact before accepting its runtime evidence.

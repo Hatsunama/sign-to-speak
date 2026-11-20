@@ -10,6 +10,8 @@ import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.mediapipe.framework.image.ByteBufferImageBuilder
+import com.google.mediapipe.framework.image.MPImage
 import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
 import com.google.mediapipe.tasks.core.BaseOptions
 import com.google.mediapipe.tasks.vision.core.RunningMode
@@ -21,6 +23,7 @@ import org.junit.Test
 import java.io.DataInputStream
 import java.io.File
 import java.math.BigInteger
+import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Locale
 
@@ -37,11 +40,20 @@ class PhoneHolisticProducerParityTest {
 
     private data class Fixture(val bytes: Long, val frames: List<Frame>)
 
+    private enum class ReplayMode(val resultType: String, val marker: String) {
+        CANONICAL("phone_holistic_producer_parity", "SIGN_HOLISTIC_PARITY_RESULT_BASE64="),
+        OPTIONAL_OUTPUTS(
+            "phone_holistic_optional_output_diagnostic",
+            "SIGN_HOLISTIC_OPTIONAL_OUTPUT_RESULT_BASE64=",
+        ),
+        RGBA_BYTEBUFFER("phone_holistic_bytebuffer_diagnostic", "SIGN_HOLISTIC_BYTEBUFFER_RESULT_BASE64="),
+    }
+
     @Test
     fun canonicalRgbaReplay() {
         val args = InstrumentationRegistry.getArguments()
         assumeTrue("Opt in with -e signHolisticParity 1", args.getString("signHolisticParity") == "1")
-        runReplay(args, optionalOutputs = false)
+        runReplay(args, ReplayMode.CANONICAL)
     }
 
     @Test
@@ -51,10 +63,17 @@ class PhoneHolisticProducerParityTest {
             "Opt in with -e signHolisticOptionalOutputs 1",
             args.getString("signHolisticOptionalOutputs") == "1",
         )
-        runReplay(args, optionalOutputs = true)
+        runReplay(args, ReplayMode.OPTIONAL_OUTPUTS)
     }
 
-    private fun runReplay(args: Bundle, optionalOutputs: Boolean) {
+    @Test
+    fun rgbaByteBufferGraphDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue("Opt in with -e signHolisticByteBuffer 1", args.getString("signHolisticByteBuffer") == "1")
+        runReplay(args, ReplayMode.RGBA_BYTEBUFFER)
+    }
+
+    private fun runReplay(args: Bundle, mode: ReplayMode) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Isolated QA target required" }
@@ -73,23 +92,20 @@ class PhoneHolisticProducerParityTest {
             val framesFile = transfer(stage, runId, RGBA_NAME, framesSha, fixture.bytes)
             require(framesFile.length() == fixture.bytes) { "Staged RGBA length differs from manifest" }
             val modelSha = hashBundledModel(context)
-            val createDetector: () -> LiveHandDetector = if (optionalOutputs) {
-                { createOptionalOutputDetector(context) }
-            } else {
-                { LiveHolisticHandDetector.create(context) }
+            val createDetector: () -> LiveHandDetector = when (mode) {
+                ReplayMode.CANONICAL -> { { LiveHolisticHandDetector.create(context) } }
+                ReplayMode.OPTIONAL_OUTPUTS -> { { createOptionalOutputDetector(context) } }
+                ReplayMode.RGBA_BYTEBUFFER -> {
+                    { RgbaByteBufferDetector(context, fixture.frames) }
+                }
             }
             val runs = JSONArray()
                 .put(replay(createDetector, framesFile, "initial", fixture.frames, complete = true))
                 .put(replay(createDetector, framesFile, "interrupted", fixture.frames.take(17), complete = false))
                 .put(replay(createDetector, framesFile, "recovered", fixture.frames, complete = true))
 
-            val resultType = if (optionalOutputs) {
-                "phone_holistic_optional_output_diagnostic"
-            } else {
-                "phone_holistic_producer_parity"
-            }
             JSONObject()
-                .put("type", resultType)
+                .put("type", mode.resultType)
                 .put("schema_version", 1)
                 .put("status", "COMPLETED")
                 .put("run_id", runId)
@@ -99,11 +115,16 @@ class PhoneHolisticProducerParityTest {
                 .put("input_mode", "canonical_rgba")
                 .put("camera_path_tested", false)
                 .apply {
-                    if (optionalOutputs) {
+                    if (mode == ReplayMode.OPTIONAL_OUTPUTS) {
                         put("diagnostic_mode", "optional_outputs_enabled")
                         put("production_path_tested", false)
                         put("outputFaceBlendshapes", true)
                         put("outputPoseSegmentationMasks", true)
+                    }
+                    if (mode == ReplayMode.RGBA_BYTEBUFFER) {
+                        put("diagnostic_mode", "rgba_bytebuffer_input")
+                        put("production_path_tested", false)
+                        put("image_transport", "rgba_bytebuffer")
                     }
                 }
                 .put("runs", runs)
@@ -113,15 +134,12 @@ class PhoneHolisticProducerParityTest {
             require(payload.size in 1..(512 * 1024)) { "Parity result exceeds stream bound" }
             val encoded = Base64.encodeToString(payload, Base64.NO_WRAP)
             check(encoded.isNotEmpty()) { "Parity result could not be encoded" }
-            val marker = if (optionalOutputs) {
+            if (mode != ReplayMode.CANONICAL) {
                 // Instrumentation sends a UTF-16 string through Binder.
                 require(encoded.length <= 350_000) { "Diagnostic result exceeds Binder stream bound" }
-                "SIGN_HOLISTIC_OPTIONAL_OUTPUT_RESULT_BASE64="
-            } else {
-                "SIGN_HOLISTIC_PARITY_RESULT_BASE64="
             }
             instrumentation.sendStatus(2, Bundle().apply {
-                putString("stream", "\n" + marker + encoded + "\n")
+                putString("stream", "\n" + mode.marker + encoded + "\n")
             })
         } finally {
             payload.fill(0)
@@ -330,6 +348,72 @@ class PhoneHolisticProducerParityTest {
         }
     }
 
+    private inner class RgbaByteBufferDetector(context: Context, frames: List<Frame>) : LiveHandDetector {
+        private val width = frames.first().width
+        private val height = frames.first().height
+        private val expectedHashes = frames.associate { it.timestampMs to it.sha256 }
+
+        init {
+            require(width in 1..640 && height in 1..640)
+            require(frames.all { it.width == width && it.height == height }) {
+                "ByteBuffer replay requires constant frame dimensions"
+            }
+        }
+
+        private val pixels = IntArray(width * height)
+        private val rgba = ByteArray(width * height * 4)
+        private val buffer = ByteBuffer.allocateDirect(rgba.size)
+        private val digest = MessageDigest.getInstance("SHA-256")
+        private val graph = HolisticLandmarker.createFromOptions(
+            context,
+            HolisticLandmarker.HolisticLandmarkerOptions.builder()
+                .setBaseOptions(BaseOptions.builder().setModelAssetPath(LiveHolisticHandDetector.ASSET).build())
+                .setRunningMode(RunningMode.VIDEO)
+                .build(),
+        )
+
+        var graphRgbaSha256: String? = null
+            private set
+
+        override fun detect(bitmap: Bitmap, timestampMs: Long): DetectedHands {
+            graphRgbaSha256 = null
+            var left: FloatArray? = null
+            var right: FloatArray? = null
+            try {
+                return HolisticBitmapInput.consume(bitmap) {
+                    require(bitmap.width == width && bitmap.height == height)
+                    readBitmapRgba(bitmap, pixels, rgba)
+                    buffer.clear()
+                    buffer.put(rgba)
+                    buffer.flip()
+                    digest.update(buffer.duplicate())
+                    val sha256 = hex(digest.digest())
+                    require(sha256 == expectedHashes.getValue(timestampMs)) { "Graph input RGBA hash mismatch" }
+
+                    ByteBufferImageBuilder(buffer, width, height, MPImage.IMAGE_FORMAT_RGBA).build().use { image ->
+                        val result = graph.detectForVideo(image, timestampMs)
+                        left = copyDiagnosticHand(result.leftHandLandmarks())
+                        right = copyDiagnosticHand(result.rightHandLandmarks())
+                    }
+                    graphRgbaSha256 = sha256
+                    DetectedHands(left, right)
+                }
+            } catch (failure: Throwable) {
+                left?.fill(0f)
+                right?.fill(0f)
+                throw failure
+            } finally {
+                pixels.fill(0)
+                rgba.fill(0)
+                buffer.clear()
+                buffer.put(rgba)
+                buffer.clear()
+            }
+        }
+
+        override fun close() = graph.close()
+    }
+
     private fun copyDiagnosticHand(points: List<NormalizedLandmark>): FloatArray? {
         if (points.isEmpty()) return null
         require(points.size == 21)
@@ -389,6 +473,11 @@ class PhoneHolisticProducerParityTest {
                         .put("end_elapsed_ns", end)
                         .put("elapsed_ns", end - start)
                         .put("bitmap_consumed", true)
+                        .apply {
+                            if (detector is RgbaByteBufferDetector) {
+                                put("graph_rgba_sha256", checkNotNull(detector.graphRgbaSha256))
+                            }
+                        }
                 }
             }
         } finally {
@@ -398,6 +487,11 @@ class PhoneHolisticProducerParityTest {
     }
 
     private fun hashBitmapRgba(bitmap: Bitmap, pixels: IntArray, rgba: ByteArray): String {
+        readBitmapRgba(bitmap, pixels, rgba)
+        return hex(MessageDigest.getInstance("SHA-256").digest(rgba))
+    }
+
+    private fun readBitmapRgba(bitmap: Bitmap, pixels: IntArray, rgba: ByteArray) {
         bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
         for (index in pixels.indices) {
             val argb = pixels[index]
@@ -407,7 +501,6 @@ class PhoneHolisticProducerParityTest {
             rgba[offset + 2] = argb.toByte()
             rgba[offset + 3] = (argb ushr 24).toByte()
         }
-        return hex(MessageDigest.getInstance("SHA-256").digest(rgba))
     }
 
     private fun verifyBitmapRgbaHash() {
