@@ -17,6 +17,19 @@ if(NOT ANDROID)
     target_link_options(reply_asr_vad_compute_failure_regression PRIVATE
         -Wl,--wrap=ggml_backend_sched_graph_compute)
 
+    # Compile the actual production wrapper into this hosted-only executable so
+    # the linker's one-shot VAD fault injection covers the public status mapping.
+    add_executable(reply_asr_wrapper_vad_compute_failure_regression
+        wrapper_vad_compute_failure_regression.cpp
+        ../../vendor/reply-asr/reply_asr.cpp)
+    target_compile_features(reply_asr_wrapper_vad_compute_failure_regression PRIVATE cxx_std_17)
+    target_include_directories(reply_asr_wrapper_vad_compute_failure_regression PRIVATE
+        ../../vendor/reply-asr)
+    target_link_libraries(reply_asr_wrapper_vad_compute_failure_regression PRIVATE
+        whisper Threads::Threads)
+    target_link_options(reply_asr_wrapper_vad_compute_failure_regression PRIVATE
+        -Wl,--wrap=ggml_backend_sched_graph_compute)
+
     # Hosted-only repaired-source regression for the general Whisper loader.
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)
     target_link_libraries(reply_asr_model_load_leak_regression PRIVATE whisper)

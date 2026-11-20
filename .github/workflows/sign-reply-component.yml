@@ -76,6 +76,11 @@ jobs:
         timeout-minutes: 4
         run: bash native/scripts/build-reply-asr-component.sh host-vad-compute-failure-regression
 
+      - name: Map wrapper VAD graph-compute failure and recover
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-wrapper-vad-compute-failure-regression
+
       - name: Cross compile and audit ARM64
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 6

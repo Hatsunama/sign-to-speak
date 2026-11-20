@@ -303,6 +303,9 @@ class LeakGatePolicyTest(unittest.TestCase):
             "model": (cls.COMPONENT / "model_load_leak_regression.cpp").read_bytes(),
             "vad": (cls.COMPONENT / "vad_model_load_leak_regression.cpp").read_text(),
             "compute": (cls.COMPONENT / "vad_compute_failure_regression.cpp").read_text(),
+            "wrapper_compute": (
+                cls.COMPONENT / "wrapper_vad_compute_failure_regression.cpp"
+            ).read_text(),
             "cmake": (cls.COMPONENT / "CMakeLists.txt").read_text(),
             "build": (cls.NATIVE / "scripts/build-reply-asr-component.sh").read_text(),
             "workflow": cls.WORKFLOW.read_text(),
@@ -322,6 +325,11 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn("STS_VAD_COMPUTE_FAILURE_PROPAGATION_PASS detect_return=false",
                       source["compute"])
         self.assertIn("if (detected)", source["compute"])
+        self.assertIn("failure_status != STS_REPLY_DECODE_FAILED", source["wrapper_compute"])
+        self.assertIn("output_cleared", source["wrapper_compute"])
+        self.assertIn("retry_status != STS_REPLY_OK", source["wrapper_compute"])
+        self.assertIn("position_is(model_fd, model_position)", source["wrapper_compute"])
+        self.assertIn("injected_failures.compare_exchange_strong", source["wrapper_compute"])
 
         self.assertIn(
             "add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)",
@@ -332,6 +340,11 @@ class LeakGatePolicyTest(unittest.TestCase):
             "vad_model_load_leak_regression.cpp)",
             source["cmake"],
         )
+        self.assertIn(
+            "add_executable(reply_asr_wrapper_vad_compute_failure_regression",
+            source["cmake"],
+        )
+        self.assertIn("../../vendor/reply-asr/reply_asr.cpp", source["cmake"])
 
         build = source["build"]
         self.assertIn('whisper_source="$stage/whisper.cpp"', build)
@@ -345,6 +358,11 @@ class LeakGatePolicyTest(unittest.TestCase):
         )
         self.assertIn('targets=(reply_asr_vad_compute_failure_regression)', build)
         self.assertIn('"$evidence/vad-compute-failure-source-sha256.txt"', build)
+        self.assertIn(
+            'targets=(reply_asr_wrapper_vad_compute_failure_regression)', build
+        )
+        self.assertIn('"$evidence/wrapper-vad-compute-failure-source-sha256.txt"', build)
+        self.assertIn("STS_WRAPPER_VAD_COMPUTE_MAPPING_PASS status=5", build)
         self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)
         self.assertIn('model="$stage/assets/reply-asr/ggml-tiny.en.bin"', build)
         self.assertIn("late-model-read-failure pass", build)
@@ -365,6 +383,8 @@ class LeakGatePolicyTest(unittest.TestCase):
         for name, role in (
             ("Reject VAD graph-compute failure as valid silence",
              "host-vad-compute-failure-regression"),
+            ("Map wrapper VAD graph-compute failure and recover",
+             "host-wrapper-vad-compute-failure-regression"),
             ("Verify repaired Whisper model-load cleanup", "host-leak-regression"),
             ("Verify repaired VAD initialization lifetime", "host-vad-leak-regression"),
         ):
@@ -385,6 +405,12 @@ class LeakGatePolicyTest(unittest.TestCase):
         mutations = []
         copy = dict(original)
         copy["model"] = original["vad"].encode()
+        mutations.append(copy)
+        copy = dict(original)
+        copy["wrapper_compute"] = original["wrapper_compute"].replace(
+            "failure_status != STS_REPLY_DECODE_FAILED",
+            "failure_status != STS_REPLY_NO_SPEECH",
+        )
         mutations.append(copy)
         copy = dict(original)
         copy["build"] = original["build"].replace(
