@@ -11,6 +11,12 @@ if(NOT ANDROID)
     add_executable(reply_asr_vad_semantic_probe vad_semantic_probe.cpp)
     target_link_libraries(reply_asr_vad_semantic_probe PRIVATE whisper)
 
+    # Hosted-only fault injection: production sources remain unmodified.
+    add_executable(reply_asr_vad_compute_failure_regression vad_compute_failure_regression.cpp)
+    target_link_libraries(reply_asr_vad_compute_failure_regression PRIVATE whisper)
+    target_link_options(reply_asr_vad_compute_failure_regression PRIVATE
+        -Wl,--wrap=ggml_backend_sched_graph_compute)
+
     # Hosted-only repaired-source regression for the general Whisper loader.
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)
     target_link_libraries(reply_asr_model_load_leak_regression PRIVATE whisper)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-role="${1:?expected host, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
+role="${1:?expected host, host-vad-compute-failure-regression, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="${RUNNER_TEMP:?missing hosted runner scratch}/sign-reply-component"
@@ -19,6 +19,10 @@ case "$role" in
     host)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
         targets=(reply_asr_smoke reply_asr_vad_semantic_probe)
+        ;;
+    host-vad-compute-failure-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_vad_compute_failure_regression)
         ;;
     host-leak-regression)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
@@ -43,7 +47,14 @@ case "$role" in
     *) exit 2 ;;
 esac
 
-if [[ "$role" == host-leak-regression ]]; then
+if [[ "$role" == host-vad-compute-failure-regression ]]; then
+    # The fault-injection regression belongs to the same exact repaired input
+    # as the two independent lifetime gates, but does not modify that source.
+    printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
+        "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
+    sha256sum "$whisper_source/src/whisper.cpp" > \
+        "$evidence/vad-compute-failure-source-sha256.txt"
+elif [[ "$role" == host-leak-regression ]]; then
     # The producer stages the pinned repair in place. Freeze that boundary so
     # this existing green regression can never silently move to pristine input.
     printf '%s  %s\n' 576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5 \
@@ -70,6 +81,29 @@ fi
 if [[ "$role" == host ]]; then
     python3 "$root/scripts/reply-asr-component.py" smoke \
         "$build/reply_asr_smoke" "$build/reply_asr_vad_semantic_probe" "$stage" "$evidence"
+elif [[ "$role" == host-vad-compute-failure-regression ]]; then
+    log="$work/vad-compute-failure-regression.full.txt"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    sha256sum "$vad_model" > "$evidence/vad-compute-failure-model-sha256.txt"
+    set +e
+    "$build/reply_asr_vad_compute_failure_regression" "$vad_model" > "$log" 2>&1
+    status=$?
+    set -e
+    tail -c 131072 "$log" > "$evidence/vad-compute-failure-regression.txt"
+    rm -f "$log"
+    cat "$evidence/vad-compute-failure-regression.txt"
+    if ! grep -Fq 'STS_VAD_COMPUTE_MODEL_LOAD_PASS' \
+        "$evidence/vad-compute-failure-regression.txt"; then
+        exit 90
+    fi
+    if ! grep -Fq 'STS_VAD_COMPUTE_INJECTION wrapper_calls=1 injected_failures=1' \
+        "$evidence/vad-compute-failure-regression.txt"; then
+        exit 91
+    fi
+    exit "$status"
 elif [[ "$role" == host-leak-regression ]]; then
     log="$work/model-load-leak-regression.full.txt"
     model="$stage/assets/reply-asr/ggml-tiny.en.bin"

@@ -71,6 +71,11 @@ jobs:
         timeout-minutes: 7
         run: bash native/scripts/build-reply-asr-component.sh host
 
+      - name: Reject VAD graph-compute failure as valid silence
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-compute-failure-regression
+
       - name: Cross compile and audit ARM64
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 6
