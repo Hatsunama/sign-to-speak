@@ -27,7 +27,7 @@ import java.nio.ByteBuffer
 import java.security.MessageDigest
 import java.util.Locale
 
-/** Replays pinned pixels through the same Holistic producer used by live tracking. */
+/** Replays pinned pixels through the live Holistic producer and separate QA graph controls. */
 class PhoneHolisticProducerParityTest {
     private data class Frame(
         val index: Long,
@@ -47,6 +47,7 @@ class PhoneHolisticProducerParityTest {
             "SIGN_HOLISTIC_OPTIONAL_OUTPUT_RESULT_BASE64=",
         ),
         RGBA_BYTEBUFFER("phone_holistic_bytebuffer_diagnostic", "SIGN_HOLISTIC_BYTEBUFFER_RESULT_BASE64="),
+        POSE_STAGE("phone_holistic_pose_stage_diagnostic", "SIGN_HOLISTIC_POSE_STAGE_RESULT_BASE64="),
     }
 
     @Test
@@ -73,6 +74,13 @@ class PhoneHolisticProducerParityTest {
         runReplay(args, ReplayMode.RGBA_BYTEBUFFER)
     }
 
+    @Test
+    fun poseStageGraphDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue("Opt in with -e signHolisticPoseStage 1", args.getString("signHolisticPoseStage") == "1")
+        runReplay(args, ReplayMode.POSE_STAGE)
+    }
+
     private fun runReplay(args: Bundle, mode: ReplayMode) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
@@ -97,6 +105,16 @@ class PhoneHolisticProducerParityTest {
                 ReplayMode.OPTIONAL_OUTPUTS -> { { createOptionalOutputDetector(context) } }
                 ReplayMode.RGBA_BYTEBUFFER -> {
                     { RgbaByteBufferDetector(context, fixture.frames) }
+                }
+                ReplayMode.POSE_STAGE -> {
+                    val selectedTimestamps = fixture.frames
+                        .filter { it.index in POSE_STAGE_FRAME_INDICES }
+                        .map { it.timestampMs }
+                        .toSet()
+                    require(selectedTimestamps.size == POSE_STAGE_FRAME_INDICES.size) {
+                        "Pose diagnostic requires both selected fixture indices"
+                    }
+                    ({ PoseStageDetector(context, selectedTimestamps) })
                 }
             }
             val runs = JSONArray()
@@ -125,6 +143,10 @@ class PhoneHolisticProducerParityTest {
                         put("diagnostic_mode", "rgba_bytebuffer_input")
                         put("production_path_tested", false)
                         put("image_transport", "rgba_bytebuffer")
+                    }
+                    if (mode == ReplayMode.POSE_STAGE) {
+                        put("diagnostic_mode", "pose_stage_landmarks")
+                        put("production_path_tested", false)
                     }
                 }
                 .put("runs", runs)
@@ -414,10 +436,71 @@ class PhoneHolisticProducerParityTest {
         override fun close() = graph.close()
     }
 
-    private fun copyDiagnosticHand(points: List<NormalizedLandmark>): FloatArray? {
+    private inner class PoseStageDetector(
+        context: Context,
+        private val selectedTimestamps: Set<Long>,
+    ) : LiveHandDetector {
+        private val graph = HolisticLandmarker.createFromOptions(
+            context,
+            HolisticLandmarker.HolisticLandmarkerOptions.builder()
+                .setBaseOptions(BaseOptions.builder().setModelAssetPath(LiveHolisticHandDetector.ASSET).build())
+                .setRunningMode(RunningMode.VIDEO)
+                .build(),
+        )
+
+        private var poseTimestampMs: Long? = null
+        private var pose: FloatArray? = null
+
+        override fun detect(bitmap: Bitmap, timestampMs: Long): DetectedHands {
+            clearPose()
+            var left: FloatArray? = null
+            var right: FloatArray? = null
+            try {
+                return HolisticBitmapInput.consume(bitmap) { image ->
+                    val result = graph.detectForVideo(image, timestampMs)
+                    left = copyDiagnosticHand(result.leftHandLandmarks())
+                    right = copyDiagnosticHand(result.rightHandLandmarks())
+                    if (timestampMs in selectedTimestamps) {
+                        pose = copyDiagnosticLandmarks(result.poseLandmarks(), 33)
+                        poseTimestampMs = timestampMs
+                    }
+                    DetectedHands(left, right)
+                }
+            } catch (failure: Throwable) {
+                left?.fill(0f)
+                right?.fill(0f)
+                clearPose()
+                throw failure
+            }
+        }
+
+        fun takePose(timestampMs: Long): FloatArray? {
+            check(poseTimestampMs == timestampMs) { "Pose diagnostic timestamp mismatch" }
+            val coordinates = pose
+            pose = null
+            poseTimestampMs = null
+            return coordinates
+        }
+
+        private fun clearPose() {
+            pose?.fill(0f)
+            pose = null
+            poseTimestampMs = null
+        }
+
+        override fun close() {
+            clearPose()
+            graph.close()
+        }
+    }
+
+    private fun copyDiagnosticHand(points: List<NormalizedLandmark>): FloatArray? =
+        copyDiagnosticLandmarks(points, 21)
+
+    private fun copyDiagnosticLandmarks(points: List<NormalizedLandmark>, landmarkCount: Int): FloatArray? {
         if (points.isEmpty()) return null
-        require(points.size == 21)
-        val coordinates = FloatArray(63)
+        require(points.size == landmarkCount)
+        val coordinates = FloatArray(landmarkCount * 3)
         try {
             for (index in points.indices) {
                 val point = points[index]
@@ -461,14 +544,23 @@ class PhoneHolisticProducerParityTest {
                 val start = SystemClock.elapsedRealtimeNanos()
                 detector.detect(bitmap, frame.timestampMs).use { hands ->
                     val end = SystemClock.elapsedRealtimeNanos()
-                    check(bitmap.isRecycled) { "Production detector did not consume the bitmap" }
+                    check(bitmap.isRecycled) { "Replay detector did not consume the bitmap" }
+                    val landmarks = JSONObject()
+                        .put("left_hand", landmarksJson(hands.left, 21))
+                        .put("right_hand", landmarksJson(hands.right, 21))
+                    if (detector is PoseStageDetector && frame.index in POSE_STAGE_FRAME_INDICES) {
+                        val pose = detector.takePose(frame.timestampMs)
+                        try {
+                            landmarks.put("pose", landmarksJson(pose, 33))
+                        } finally {
+                            pose?.fill(0f)
+                        }
+                    }
                     JSONObject()
                         .put("frame_index", frame.index)
                         .put("timestamp_ms", frame.timestampMs)
                         .put("rgba_sha256", bitmapSha256)
-                        .put("landmarks", JSONObject()
-                            .put("left_hand", handJson(hands.left))
-                            .put("right_hand", handJson(hands.right)))
+                        .put("landmarks", landmarks)
                         .put("start_elapsed_ns", start)
                         .put("end_elapsed_ns", end)
                         .put("elapsed_ns", end - start)
@@ -522,9 +614,11 @@ class PhoneHolisticProducerParityTest {
         }
     }
 
-    private fun handJson(points: FloatArray?): Any {
+    private fun landmarksJson(points: FloatArray?, landmarkCount: Int): Any {
         if (points == null) return JSONObject.NULL
-        require(points.size == 63 && points.all { it.isFinite() }) { "Invalid Holistic hand landmarks" }
+        require(points.size == landmarkCount * 3 && points.all { it.isFinite() }) {
+            "Invalid Holistic landmarks"
+        }
         return JSONArray().apply {
             for (index in points.indices step 3) {
                 put(JSONArray().put(points[index].toDouble())
@@ -540,6 +634,7 @@ class PhoneHolisticProducerParityTest {
         const val RGBA_NAME = "holistic-parity.rgba"
         const val MODEL_BYTES = 13_683_609L
         const val MODEL_SHA256 = "e2dab61191e2dcd0a15f943d8e3ed1dce13c82dfa597b9dd39f562975a50c3f8"
+        val POSE_STAGE_FRAME_INDICES = setOf(0L, 34L)
         val RUN_ID = Regex("[0-9a-f]{32}")
         val SHA256 = Regex("[0-9a-f]{64}")
     }
