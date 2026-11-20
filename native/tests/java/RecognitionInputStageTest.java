@@ -63,8 +63,50 @@ public final class RecognitionInputStageTest {
             RecognitionInputStage.cleanupExisting(cache, TOKEN);
             check(!retry.exists());
             exerciseHolisticRgbaTransfer(cache);
+            exerciseTransferAndCleanupFailure(cache, hash);
         } finally {
             cache.delete();
+        }
+    }
+
+    private static void exerciseTransferAndCleanupFailure(File cache, String hash) throws IOException {
+        File stage = RecognitionInputStage.create(cache, TOKEN);
+        File partial = new File(stage, "labels.json.partial");
+        File sentinel = new File(partial, "sentinel");
+        IOException transferFailure = new IOException("fixture transfer failure");
+        try {
+            try {
+                RecognitionInputStage.copy(stage, "labels.json", new InputStream() {
+                    @Override public int read() throws IOException {
+                        throw transferFailure;
+                    }
+
+                    @Override public void close() throws IOException {
+                        // The output stream has closed, so its partial file can be replaced on Windows.
+                        Files.delete(partial.toPath());
+                        Files.createDirectory(partial.toPath());
+                        Files.createFile(sentinel.toPath());
+                    }
+                }, hash, 100);
+                throw new AssertionError("expected transfer failure");
+            } catch (IOException actual) {
+                if (!sentinel.isFile()) {
+                    throw new AssertionError("expected a nonempty partial directory", actual);
+                }
+                if (actual != transferFailure) {
+                    throw new AssertionError("expected the original transfer IOException", actual);
+                }
+                Throwable[] suppressed = actual.getSuppressed();
+                if (suppressed.length != 1 || !(suppressed[0] instanceof IOException)) {
+                    throw new AssertionError("expected one suppressed cleanup IOException", actual);
+                }
+            }
+        } finally {
+            if (partial.isDirectory()) {
+                Files.deleteIfExists(sentinel.toPath());
+                Files.delete(partial.toPath());
+            }
+            RecognitionInputStage.cleanup(stage);
         }
     }
 
