@@ -2,7 +2,9 @@
 
 import argparse
 from collections import Counter
+from contextlib import contextmanager
 from fractions import Fraction
+from hashlib import sha256
 import io
 import json
 import math
@@ -27,6 +29,10 @@ MAX_DECODED_FRAMES = 600
 MAX_DURATION_SECONDS = 20
 MAX_SOURCE_EDGE = 4096
 MAX_INPUT_EDGE = 640
+MAX_FIXTURE_FRAMES = 64
+MAX_FIXTURE_BYTES = 128 * 1024 * 1024
+FIXTURE_RGBA_NAME = "holistic-parity.rgba"
+FIXTURE_MANIFEST_NAME = "parity-manifest.json"
 LANDMARK_FIELDS = {
     "left_hand": ("left_hand_landmarks", 21),
     "right_hand": ("right_hand_landmarks", 21),
@@ -58,6 +64,7 @@ class FrameRecord(TypedDict):
     status: str
     display_rotation_degrees_ccw: NotRequired[int]
     input_size: NotRequired[list[int]]
+    rgba_sha256: NotRequired[str]
     landmarks: NotRequired[dict[str, list[list[float]] | None]]
 
 
@@ -158,6 +165,7 @@ class SuccessReceipt(TypedDict):
     frame_counts: dict[str, int]
     coverage: dict[str, dict[str, int]]
     frames: list[FrameRecord]
+    rgba_fixture: NotRequired[dict]
 
 
 def make_success_receipt(frames: list[FrameRecord], inputs: dict, runtime: dict) -> SuccessReceipt:
@@ -196,7 +204,8 @@ def make_success_receipt(frames: list[FrameRecord], inputs: dict, runtime: dict)
     }
 
 
-def write_private_json(directory: Path, name: str, document: dict) -> None:
+@contextmanager
+def private_output_file(directory: Path, name: str, mode: str, label: str = "Output"):
     target = directory / name
     temporary = target.with_suffix(".tmp")
     descriptor = os.open(temporary, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -204,12 +213,22 @@ def write_private_json(directory: Path, name: str, document: dict) -> None:
     primary_error = None
     warnings = []
     try:
-        with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+        stream = os.fdopen(descriptor, mode, encoding=None if "b" in mode else "utf-8")
+        try:
             staged = os.fstat(stream.fileno())
-            json.dump(document, stream, allow_nan=False, separators=(",", ":"))
-            stream.write("\n")
+            yield stream
             stream.flush()
             os.fsync(stream.fileno())
+        except (Exception, KeyboardInterrupt) as error:
+            primary_error = error
+            raise
+        finally:
+            try:
+                stream.close()
+            except (OSError, KeyboardInterrupt) as close_error:
+                if primary_error is None:
+                    raise
+                primary_error.add_note(f"Could not close staged output {temporary}: {close_error}")
         try:
             os.link(temporary, target)
         except (Exception, KeyboardInterrupt) as error:
@@ -219,11 +238,11 @@ def write_private_json(directory: Path, name: str, document: dict) -> None:
             except FileNotFoundError:
                 committed = False
             except (OSError, KeyboardInterrupt) as stat_error:
-                error.add_note(f"Could not verify receipt publication at {target}: {stat_error}")
+                error.add_note(f"Could not verify {label.lower()} publication at {target}: {stat_error}")
                 committed = False
             if not committed:
                 raise
-            warnings.append(f"Receipt committed at {target} despite link error: {error}")
+            warnings.append(f"{label} committed at {target} despite link error: {error}")
     except (Exception, KeyboardInterrupt) as error:
         primary_error = error
         raise
@@ -246,6 +265,12 @@ def write_private_json(directory: Path, name: str, document: dict) -> None:
             except (OSError, ValueError):
                 # Diagnostic output cannot change the committed receipt.
                 pass
+
+
+def write_private_json(directory: Path, name: str, document: dict) -> None:
+    with private_output_file(directory, name, "w", "Receipt") as stream:
+        json.dump(document, stream, allow_nan=False, separators=(",", ":"))
+        stream.write("\n")
 
 
 def open_local_file(path: Path, expected_bytes: int):
@@ -283,7 +308,66 @@ def upright_pixels(frame, np):
     return np.ascontiguousarray(upright), rotation
 
 
-def decode_video(clip, detector, av, mp, np, frames: list[FrameRecord]) -> None:
+class RgbaFixture:
+    """Stream the exact pre-detection SDK pixels and retain their frame metadata."""
+
+    def __init__(self, stream):
+        self.stream = stream
+        self.digest = sha256()
+        self.length = 0
+        self.frames: list[dict] = []
+
+    def append(self, image, record: FrameRecord) -> None:
+        if len(self.frames) >= MAX_FIXTURE_FRAMES:
+            raise ProbeError("RGBA fixture frame limit exceeded")
+        pixels = image.numpy_view()
+        if len(pixels.shape) != 3:
+            raise ProbeError("SDK RGBA image dimensions are invalid")
+        height, width, channels = map(int, pixels.shape)
+        if channels != 4 or not (1 <= width <= MAX_INPUT_EDGE and 1 <= height <= MAX_INPUT_EDGE):
+            raise ProbeError("SDK RGBA image dimensions out of bounds")
+        length = width * height * 4
+        if self.length + length > MAX_FIXTURE_BYTES:
+            raise ProbeError("RGBA fixture byte limit exceeded")
+        if pixels.dtype.name != "uint8":
+            raise ProbeError("SDK RGBA image must have uint8 channels")
+        rgba = pixels.tobytes(order="C")
+        if len(rgba) != length or rgba[3::4].count(255) != width * height:
+            raise ProbeError("SDK RGBA image must contain the declared number of opaque pixels")
+        if self.stream.write(rgba) != length:
+            raise OSError("incomplete RGBA fixture write")
+
+        digest = sha256(rgba).hexdigest()
+        record["rgba_sha256"] = digest
+        self.frames.append({
+            "frame_index": record["frame_index"],
+            "width": width,
+            "height": height,
+            "offset_bytes": self.length,
+            "length_bytes": length,
+            "rgba_sha256": digest,
+            "source_pts": record["source_pts"],
+            "source_time_base": record["source_time_base"],
+            "timestamp_ms": record["timestamp_ms"],
+        })
+        self.digest.update(rgba)
+        self.length += length
+
+    def manifest(self, inputs: dict) -> dict:
+        return {
+            "type": "holistic_rgba_replay_fixture",
+            "schema_version": 1,
+            "pixel_format": "RGBA_8888",
+            "byte_order": "row_major_RGBA",
+            "frames_file": {"name": FIXTURE_RGBA_NAME, "bytes": self.length, "sha256": self.digest.hexdigest()},
+            "source_clip": inputs["clip"],
+            "source_model": inputs["model"],
+            "frame_count": len(self.frames),
+            "frames": self.frames,
+        }
+
+
+def decode_video(clip, detector, av, mp, np, frames: list[FrameRecord], fixture: RgbaFixture | None = None) -> None:
     ledger = TimestampLedger()
     with av.open(clip, mode="r", format="mov", options={"enable_drefs": "0", "use_absolute_path": "0"}) as container:
         if len(container.streams.video) != 1:
@@ -307,6 +391,8 @@ def decode_video(clip, detector, av, mp, np, frames: list[FrameRecord]) -> None:
                 try:
                     rgba, rotation = upright_pixels(frame, np)
                     image = mp.Image(image_format=mp.ImageFormat.SRGBA, data=rgba)
+                    if fixture is not None:
+                        fixture.append(image, record)
                     result = detector.detect_for_video(image, record["timestamp_ms"])
                     record["landmarks"] = landmark_payload(result)
                 except Exception as error:
@@ -318,7 +404,7 @@ def decode_video(clip, detector, av, mp, np, frames: list[FrameRecord]) -> None:
             frames.append(record)
 
 
-def run(args, frames: list[FrameRecord]) -> SuccessReceipt:
+def extract(args, frames: list[FrameRecord], fixture: RgbaFixture | None = None) -> SuccessReceipt:
     import av
     import mediapipe as mp
     import numpy as np
@@ -338,7 +424,7 @@ def run(args, frames: list[FrameRecord]) -> SuccessReceipt:
             validate_copy(source, clip, args.clip_bytes, CLIP_BYTES, args.clip_sha256)
         clip.seek(0)
         with vision.HolisticLandmarker.create_from_options(options) as detector:
-            decode_video(clip, detector, av, mp, np, frames)
+            decode_video(clip, detector, av, mp, np, frames, fixture)
 
     return make_success_receipt(
         frames,
@@ -356,6 +442,28 @@ def run(args, frames: list[FrameRecord]) -> SuccessReceipt:
     )
 
 
+def run(args, frames: list[FrameRecord]) -> SuccessReceipt:
+    if not getattr(args, "export_rgba_fixture", False):
+        return extract(args, frames)
+
+    with private_output_file(args.output, FIXTURE_RGBA_NAME, "wb") as stream:
+        fixture = RgbaFixture(stream)
+        receipt = extract(args, frames, fixture)
+    manifest = fixture.manifest(receipt["input"])
+    manifest_bytes = (json.dumps(manifest, allow_nan=False, separators=(",", ":")) + "\n").encode("utf-8")
+    receipt["rgba_fixture"] = {
+        "manifest_sha256": sha256(manifest_bytes).hexdigest(),
+        "frames_sha256": manifest["frames_file"]["sha256"],
+        "frame_count": manifest["frame_count"],
+    }
+    # The manifest qualifies a replay only after both the blob and reference receipt commit.
+    write_private_json(args.output, "receipt.json", receipt)
+    with private_output_file(args.output, FIXTURE_MANIFEST_NAME, "wb") as stream:
+        if stream.write(manifest_bytes) != len(manifest_bytes):
+            raise OSError("incomplete RGBA fixture manifest write")
+    return receipt
+
+
 def main() -> None:
     enforce_offline()
     parser = argparse.ArgumentParser(description=__doc__)
@@ -364,6 +472,7 @@ def main() -> None:
     parser.add_argument("--clip-bytes", type=int, required=True)
     parser.add_argument("--model", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--export-rgba-fixture", action="store_true", help="Export a bounded SDK pixel replay fixture.")
     args = parser.parse_args()
     if not re.fullmatch(r"[0-9a-f]{64}", args.clip_sha256):
         parser.error("--clip-sha256 must be a lowercase 64-character SHA-256")
@@ -372,7 +481,9 @@ def main() -> None:
     args.output.mkdir(mode=0o700)
     frames: list[FrameRecord] = []
     try:
-        write_private_json(args.output, "receipt.json", run(args, frames))
+        receipt = run(args, frames)
+        if not args.export_rgba_fixture:
+            write_private_json(args.output, "receipt.json", receipt)
     except Exception as error:
         try:
             write_private_json(args.output, "failure.json", {

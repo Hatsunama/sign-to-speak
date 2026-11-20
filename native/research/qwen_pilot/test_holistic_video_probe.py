@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 import unittest
-from unittest.mock import Mock, patch
+from unittest.mock import Mock, call, patch
 
 import holistic_video_probe
 
@@ -207,6 +207,209 @@ class VerifiedClipTests(unittest.TestCase):
             self.assertEqual(receipt["input"]["clip"]["sha256"], args.clip_sha256)
             self.assertEqual(decoded_bytes, [original])
             self.assertTrue(decoder_inputs[0].closed)
+
+
+
+class FixtureTests(unittest.TestCase):
+    def setUp(self):
+        root = Path(self.enterContext(TemporaryDirectory()))
+        model = b"model bytes"
+        clip = b"clip bytes"
+        self.args = SimpleNamespace(
+            clip=root / "clip.mp4", clip_bytes=len(clip), clip_sha256=sha256(clip).hexdigest(),
+            model=root / "model.task", output=root / "output", export_rgba_fixture=True,
+        )
+        self.args.clip.write_bytes(clip)
+        self.args.model.write_bytes(model)
+        self.args.output.mkdir()
+        self.rgba = SimpleNamespace(shape=(1, 2, 4))
+        self.first = bytes([1, 2, 3, 255, 4, 5, 6, 255])
+        self.second = bytes([7, 8, 9, 255, 10, 11, 12, 255])
+        self.view = SimpleNamespace(
+            shape=self.rgba.shape, dtype=SimpleNamespace(name="uint8"),
+            tobytes=Mock(side_effect=[self.first, self.second]),
+        )
+        self.image = SimpleNamespace(numpy_view=Mock(return_value=self.view))
+        self.detector = Mock(detect_for_video=Mock(return_value=result(left=points(21))))
+        self.decoded = [
+            SimpleNamespace(pts=pts, time_base=Fraction(1, 90_000), width=2, height=1)
+            for pts in (None, -2, -2, 91)
+        ]
+        stream = SimpleNamespace(
+            width=2, height=1, duration=None, time_base=None, codec_context=SimpleNamespace(),
+        )
+        container = SimpleNamespace(
+            streams=SimpleNamespace(video=[stream]), duration=None, decode=lambda _: self.decoded,
+        )
+        vision = SimpleNamespace(
+            HolisticLandmarkerOptions=Mock(),
+            RunningMode=SimpleNamespace(VIDEO="VIDEO"),
+            HolisticLandmarker=SimpleNamespace(create_from_options=lambda _: nullcontext(self.detector)),
+        )
+        self.mp_image = Mock(return_value=self.image)
+        self.enterContext(patch.dict("sys.modules", {
+            "av": SimpleNamespace(
+                __version__=holistic_video_probe.AV_VERSION, open=lambda *_a, **_k: nullcontext(container),
+            ),
+            "mediapipe": SimpleNamespace(
+                __version__=holistic_video_probe.MEDIAPIPE_VERSION,
+                tasks=SimpleNamespace(BaseOptions=Mock(Delegate=SimpleNamespace(CPU="CPU")), vision=vision),
+                Image=self.mp_image, ImageFormat=SimpleNamespace(SRGBA="SRGBA"),
+            ),
+            "numpy": SimpleNamespace(__version__="fake"),
+            "PIL": SimpleNamespace(__version__="fake"),
+        }))
+        for name, value in {
+            "MODEL_BYTES": len(model), "MODEL_SHA256": sha256(model).hexdigest(),
+            "open_local_file": lambda path, _: path.open("rb"),
+        }.items():
+            self.enterContext(patch.object(holistic_video_probe, name, value))
+        self.enterContext(patch.object(holistic_video_probe, "upright_pixels", return_value=(self.rgba, 0)))
+
+    def test_exports_sdk_image_bytes_as_reference_free_fixture(self):
+        timeline = Mock()
+        timeline.attach_mock(self.image.numpy_view, "sdk_pixels")
+        timeline.attach_mock(self.view.tobytes, "snapshot")
+        timeline.attach_mock(self.detector.detect_for_video, "detect")
+        receipt = holistic_video_probe.run(self.args, [])
+        expected_blob = self.first + self.second
+        output = self.args.output
+        self.assertTrue((output / "holistic-parity.rgba").is_file(), "SDK pixel fixture was not exported")
+        self.assertEqual((output / "holistic-parity.rgba").read_bytes(), expected_blob)
+        manifest = (output / "parity-manifest.json").read_bytes()
+        expected_frames = [
+            {
+                "frame_index": index, "width": 2, "height": 1, "offset_bytes": offset, "length_bytes": 8,
+                "rgba_sha256": sha256(pixels).hexdigest(), "source_pts": pts,
+                "source_time_base": [1, 90_000], "timestamp_ms": timestamp,
+            }
+            for index, offset, pixels, pts, timestamp in [(1, 0, self.first, -2, 0), (3, 8, self.second, 91, 1)]
+        ]
+        frame_digest = sha256(expected_blob).hexdigest()
+        self.assertEqual(json.loads(manifest), {
+            "type": "holistic_rgba_replay_fixture", "schema_version": 1,
+            "pixel_format": "RGBA_8888", "byte_order": "row_major_RGBA",
+            "frames_file": {"name": "holistic-parity.rgba", "bytes": len(expected_blob), "sha256": frame_digest},
+            "source_clip": receipt["input"]["clip"], "source_model": receipt["input"]["model"],
+            "frame_count": 2, "frames": expected_frames,
+        })
+        self.assertEqual(receipt["rgba_fixture"], {
+            "manifest_sha256": sha256(manifest).hexdigest(), "frames_sha256": frame_digest, "frame_count": 2,
+        })
+        self.assertEqual(json.loads((output / "receipt.json").read_bytes()), receipt)
+        for manifest_frame in expected_frames:
+            reference = receipt["frames"][manifest_frame["frame_index"]]
+            self.assertEqual(reference["rgba_sha256"], manifest_frame["rgba_sha256"])
+            self.assertEqual(reference["landmarks"]["left_hand"], [[0.25, 0.5, -0.125]] * 21)
+        self.assertNotIn("rgba_sha256", receipt["frames"][2])
+        self.mp_image.assert_called_with(image_format="SRGBA", data=self.rgba)
+        self.assertEqual(timeline.mock_calls, [
+            call.sdk_pixels(), call.snapshot(order="C"), call.detect(self.image, 0),
+            call.sdk_pixels(), call.snapshot(order="C"), call.detect(self.image, 1),
+        ])
+
+    def test_cli_exports_only_the_complete_fixture_and_reference_receipt(self):
+        output = self.args.output / "cli"
+        arguments = [
+            "holistic_video_probe.py", "--clip", str(self.args.clip),
+            "--clip-sha256", self.args.clip_sha256, "--clip-bytes", str(self.args.clip_bytes),
+            "--model", str(self.args.model), "--output", str(output), "--export-rgba-fixture",
+        ]
+        with patch("sys.argv", arguments), patch.object(holistic_video_probe, "enforce_offline"):
+            holistic_video_probe.main()
+        self.assertEqual({path.name for path in output.iterdir()}, {
+            "receipt.json", "holistic-parity.rgba", "parity-manifest.json",
+        })
+        receipt = json.loads((output / "receipt.json").read_bytes())
+        self.assertEqual(receipt["status"], "SUCCESS")
+        self.assertEqual(receipt["rgba_fixture"]["frame_count"], 2)
+
+    def test_default_does_not_read_sdk_pixels_or_emit_fixture(self):
+        self.args.export_rgba_fixture = False
+        receipt = holistic_video_probe.run(self.args, [])
+        self.image.numpy_view.assert_not_called()
+        self.assertNotIn("rgba_fixture", receipt)
+        self.assertNotIn("rgba_sha256", receipt["frames"][1])
+        self.assertEqual(list(self.args.output.iterdir()), [])
+
+    def test_rejects_nonopaque_pixels_before_detection(self):
+        self.view.tobytes.side_effect = None
+        self.view.tobytes.return_value = self.first[:-1] + bytes([254])
+        with self.assertRaisesRegex(ProbeError, "opaque"):
+            holistic_video_probe.run(self.args, [])
+        self.detector.detect_for_video.assert_not_called()
+        self.assertEqual(list(self.args.output.iterdir()), [])
+
+    def test_rejects_invalid_sdk_shape_before_copying_pixels(self):
+        for shape in [(1, 641, 4), (641, 1, 4), (0, 2, 4), (1, 2, 3)]:
+            with self.subTest(shape=shape):
+                self.view.shape = shape
+                with self.assertRaisesRegex(ProbeError, "dimensions"):
+                    holistic_video_probe.run(self.args, [])
+        self.view.tobytes.assert_not_called()
+        self.assertEqual(list(self.args.output.iterdir()), [])
+
+    def test_rejects_fixture_limits_without_publishing_prefix(self):
+        for limit, cap, message in [
+            ("MAX_FIXTURE_FRAMES", 1, "frame limit"),
+            ("MAX_FIXTURE_BYTES", 8, "byte limit"),
+        ]:
+            with self.subTest(limit=limit), patch.object(holistic_video_probe, limit, cap):
+                self.view.tobytes.side_effect = [self.first, self.second]
+                with self.assertRaisesRegex(ProbeError, message):
+                    holistic_video_probe.run(self.args, [])
+                self.assertEqual(list(self.args.output.iterdir()), [])
+
+    def test_detector_error_does_not_publish_fixture(self):
+        self.detector.detect_for_video.side_effect = [result(), RuntimeError("detector failed")]
+        with self.assertRaisesRegex(RuntimeError, "detector failed") as outcome:
+            holistic_video_probe.run(self.args, [])
+        self.assertIn("decoded frame 3", outcome.exception.__notes__[0])
+        self.assertEqual(list(self.args.output.iterdir()), [])
+
+    def test_cancel_preserves_primary_if_blob_cleanup_fails(self):
+        unlink = Path.unlink
+
+        def deny_blob_cleanup(path, *args, **kwargs):
+            if path.name == "holistic-parity.tmp":
+                raise PermissionError("staged blob cleanup denied")
+            return unlink(path, *args, **kwargs)
+
+        self.detector.detect_for_video.side_effect = [result(), KeyboardInterrupt("cancel extraction")]
+        with patch.object(Path, "unlink", deny_blob_cleanup):
+            with self.assertRaisesRegex(KeyboardInterrupt, "cancel extraction") as outcome:
+                holistic_video_probe.run(self.args, [])
+        self.assertIn("staged blob cleanup denied", outcome.exception.__notes__[0])
+        self.assertEqual({path.name for path in self.args.output.iterdir()}, {"holistic-parity.tmp"})
+
+    def test_receipt_publish_failure_keeps_manifest_unpublished(self):
+        link = os.link
+
+        def link_output(source, target):
+            if target.name == "receipt.json":
+                raise OSError("receipt publish failed")
+            link(source, target)
+
+        with patch.object(holistic_video_probe.os, "link", side_effect=link_output):
+            with self.assertRaisesRegex(OSError, "receipt publish failed"):
+                holistic_video_probe.run(self.args, [])
+        self.assertFalse((self.args.output / "parity-manifest.json").exists())
+
+    def test_manifest_link_commit_then_error_keeps_committed_fixture(self):
+        link = os.link
+
+        def link_output(source, target):
+            link(source, target)
+            if target.name == "parity-manifest.json":
+                raise OSError("manifest link result interrupted")
+
+        stderr = io.StringIO()
+        with patch.object(holistic_video_probe.os, "link", side_effect=link_output), redirect_stderr(stderr):
+            receipt = holistic_video_probe.run(self.args, [])
+        manifest = (self.args.output / "parity-manifest.json").read_bytes()
+        self.assertEqual(sha256(manifest).hexdigest(), receipt["rgba_fixture"]["manifest_sha256"])
+        self.assertIn("manifest link result interrupted", stderr.getvalue())
+        self.assertFalse((self.args.output / "parity-manifest.tmp").exists())
 
 
 class ReceiptCommitTests(unittest.TestCase):
