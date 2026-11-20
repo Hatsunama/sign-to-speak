@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-role="${1:?expected host, host-vad-compute-failure-regression, host-wrapper-vad-compute-failure-regression, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
+role="${1:?expected host, host-vad-compute-failure-regression, host-wrapper-vad-compute-failure-regression, host-vad-cancellation-regression, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="${RUNNER_TEMP:?missing hosted runner scratch}/sign-reply-component"
@@ -28,6 +28,10 @@ case "$role" in
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
         targets=(reply_asr_wrapper_vad_compute_failure_regression)
         ;;
+    host-vad-cancellation-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_vad_cancellation_regression)
+        ;;
     host-leak-regression)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
                -DCMAKE_C_FLAGS=-fsanitize=address
@@ -52,7 +56,8 @@ case "$role" in
 esac
 
 if [[ "$role" == host-vad-compute-failure-regression ||
-      "$role" == host-wrapper-vad-compute-failure-regression ]]; then
+      "$role" == host-wrapper-vad-compute-failure-regression ||
+      "$role" == host-vad-cancellation-regression ]]; then
     # The fault-injection regression belongs to the same exact fully repaired
     # input as the two independent lifetime gates, but does not modify it.
     printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
@@ -60,6 +65,9 @@ if [[ "$role" == host-vad-compute-failure-regression ||
     if [[ "$role" == host-wrapper-vad-compute-failure-regression ]]; then
         sha256sum "$whisper_source/src/whisper.cpp" > \
             "$evidence/wrapper-vad-compute-failure-source-sha256.txt"
+    elif [[ "$role" == host-vad-cancellation-regression ]]; then
+        sha256sum "$whisper_source/src/whisper.cpp" > \
+            "$evidence/vad-cancellation-source-sha256.txt"
     else
         sha256sum "$whisper_source/src/whisper.cpp" > \
             "$evidence/vad-compute-failure-source-sha256.txt"
@@ -162,6 +170,68 @@ elif [[ "$role" == host-wrapper-vad-compute-failure-regression ]]; then
         exit 95
     fi
     exit "$status"
+elif [[ "$role" == host-vad-cancellation-regression ]]; then
+    log="$work/vad-cancellation-regression.full.txt"
+    model="$stage/assets/reply-asr/ggml-tiny.en.bin"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    fixture="$root/../qa-artifacts/pocket-tts-audition-20261025/02-request.wav"
+    test "$(stat -c %s "$model")" = 77704715
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f \
+        "$model" | sha256sum --check --strict
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    printf '%s  %s\n' f9d617b62f3741408ecd5b17ff0cc4c20d1079e3d88044a6b8aaae3b80e4529b \
+        "$fixture" | sha256sum --check --strict
+    model_span="$work/vad-cancellation-model-span.bin"
+    vad_span="$work/vad-cancellation-vad-span.bin"
+    model_prefix='non-model-prefix!'
+    vad_prefix='non-vad-prefix!'
+    printf '%s' "$model_prefix" > "$model_span"
+    cat "$model" >> "$model_span"
+    printf '%s' 'non-model-suffix' >> "$model_span"
+    printf '%s' "$vad_prefix" > "$vad_span"
+    cat "$vad_model" >> "$vad_span"
+    printf '%s' 'non-vad-suffix' >> "$vad_span"
+    exec {model_fd}<"$model_span"
+    exec {vad_fd}<"$vad_span"
+    set +e
+    "$build/reply_asr_vad_cancellation_regression" \
+        "$model_fd" "${#model_prefix}" 77704715 \
+        "$vad_fd" "${#vad_prefix}" 885098 "$fixture" 'please call my family' \
+        > "$log" 2>&1
+    status=$?
+    set -e
+    exec {model_fd}<&-
+    exec {vad_fd}<&-
+    tail -c 131072 "$log" > "$evidence/vad-cancellation-regression.txt"
+    rm -f "$log" "$model_span" "$vad_span"
+    cat "$evidence/vad-cancellation-regression.txt"
+    first="$(grep -E '^STS_VAD_CANCELLATION_FIRST status=3 scheduler_calls=[0-9]+ observer_polls=[1-9][0-9]* output_cleared=1$' \
+        "$evidence/vad-cancellation-regression.txt" || true)"
+    test -n "$first" || exit 96
+    calls="${first#* scheduler_calls=}"
+    calls="${calls%% *}"
+    if [[ "$status" -eq 0 ]]; then
+        test "$calls" -eq 1 || exit 97
+        grep -Fq 'STS_VAD_CANCELLATION_PASS scheduler_calls=1 ' \
+            "$evidence/vad-cancellation-regression.txt" || exit 98
+        ! grep -Fq 'STS_VAD_CANCELLATION_RED' \
+            "$evidence/vad-cancellation-regression.txt" || exit 99
+        printf 'STS_VAD_CANCELLATION_GREEN status=3 scheduler_calls=1\n' | \
+            tee -a "$evidence/vad-cancellation-regression.txt"
+        exit 0
+    fi
+    if [[ "$status" -eq 1 && "$calls" -gt 1 ]] && \
+       grep -Fxq 'STS_VAD_CANCELLATION_RED' \
+           "$evidence/vad-cancellation-regression.txt" && \
+       ! grep -Fq 'STS_VAD_CANCELLATION_PASS' \
+           "$evidence/vad-cancellation-regression.txt"; then
+        printf 'STS_VAD_CANCELLATION_EXPECTED_RED status=3 scheduler_calls=%s\n' "$calls" | \
+            tee -a "$evidence/vad-cancellation-regression.txt"
+        exit 1
+    fi
+    exit 100
 elif [[ "$role" == host-leak-regression ]]; then
     log="$work/model-load-leak-regression.full.txt"
     model="$stage/assets/reply-asr/ggml-tiny.en.bin"

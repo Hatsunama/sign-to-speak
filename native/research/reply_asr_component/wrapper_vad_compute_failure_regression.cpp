@@ -180,7 +180,11 @@ int main(int argc, char** argv) {
         output.fill('x');
         const auto retry_status = sts_reply_decode(
             engine, fixture.data(), fixture.size(), &turn, output.data(), output.size());
-        const bool retry_text = normalize(output.data()) == expected_text;
+        const auto retry_bytes = strnlen(output.data(), output.size());
+        const std::string retry_normalized =
+            retry_bytes < output.size() ? normalize(output.data()) : "<unterminated>";
+        const bool retry_text = retry_bytes < output.size() &&
+                                retry_normalized == expected_text;
         const bool borrowed = position_is(model_fd, model_position) &&
                               position_is(vad_fd, vad_position);
         const auto close_status = sts_reply_close(engine);
@@ -188,7 +192,7 @@ int main(int argc, char** argv) {
             close_status != STS_REPLY_OK || !position_is(model_fd, model_position) ||
             !position_is(vad_fd, vad_position)) {
             std::cout << "STS_WRAPPER_VAD_COMPUTE_RETRY_FAIL status=" << retry_status
-                      << " text=" << normalize(output.data()) << " borrowed=" << borrowed
+                      << " text=" << retry_normalized << " borrowed=" << borrowed
                       << " close_status=" << close_status << std::endl;
             return 3;
         }

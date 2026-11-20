@@ -81,6 +81,11 @@ jobs:
         timeout-minutes: 4
         run: bash native/scripts/build-reply-asr-component.sh host-wrapper-vad-compute-failure-regression
 
+      - name: Cancel during VAD before Whisper polling
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-cancellation-regression
+
       - name: Cross compile and audit ARM64
         if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
         timeout-minutes: 6

@@ -306,6 +306,9 @@ class LeakGatePolicyTest(unittest.TestCase):
             "wrapper_compute": (
                 cls.COMPONENT / "wrapper_vad_compute_failure_regression.cpp"
             ).read_text(),
+            "vad_cancellation": (
+                cls.COMPONENT / "vad_cancellation_regression.cpp"
+            ).read_text(),
             "cmake": (cls.COMPONENT / "CMakeLists.txt").read_text(),
             "build": (cls.NATIVE / "scripts/build-reply-asr-component.sh").read_text(),
             "workflow": cls.WORKFLOW.read_text(),
@@ -330,6 +333,10 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn("retry_status != STS_REPLY_OK", source["wrapper_compute"])
         self.assertIn("position_is(model_fd, model_position)", source["wrapper_compute"])
         self.assertIn("injected_failures.compare_exchange_strong", source["wrapper_compute"])
+        self.assertIn("cancelled_status != STS_REPLY_CANCELLED", source["vad_cancellation"])
+        self.assertIn("calls != 1", source["vad_cancellation"])
+        self.assertIn("STS_VAD_CANCELLATION_RED", source["vad_cancellation"])
+        self.assertIn("STS_VAD_CANCELLATION_PASS", source["vad_cancellation"])
 
         self.assertIn(
             "add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)",
@@ -345,6 +352,12 @@ class LeakGatePolicyTest(unittest.TestCase):
             source["cmake"],
         )
         self.assertIn("../../vendor/reply-asr/reply_asr.cpp", source["cmake"])
+        self.assertIn(
+            "add_executable(reply_asr_vad_cancellation_regression",
+            source["cmake"],
+        )
+        self.assertIn("vad_cancellation_regression.cpp", source["cmake"])
+        self.assertIn("-Wl,--wrap=ggml_backend_sched_graph_compute", source["cmake"])
 
         build = source["build"]
         self.assertIn('whisper_source="$stage/whisper.cpp"', build)
@@ -363,6 +376,12 @@ class LeakGatePolicyTest(unittest.TestCase):
         )
         self.assertIn('"$evidence/wrapper-vad-compute-failure-source-sha256.txt"', build)
         self.assertIn("STS_WRAPPER_VAD_COMPUTE_MAPPING_PASS status=5", build)
+        self.assertIn('targets=(reply_asr_vad_cancellation_regression)', build)
+        self.assertIn('"$evidence/vad-cancellation-source-sha256.txt"', build)
+        self.assertIn('"$evidence/vad-cancellation-regression.txt"', build)
+        self.assertIn("STS_VAD_CANCELLATION_GREEN status=3 scheduler_calls=1", build)
+        self.assertIn("STS_VAD_CANCELLATION_EXPECTED_RED status=3 scheduler_calls=%s", build)
+        self.assertIn('[[ "$status" -eq 1 && "$calls" -gt 1 ]]', build)
         self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)
         self.assertIn('model="$stage/assets/reply-asr/ggml-tiny.en.bin"', build)
         self.assertIn("late-model-read-failure pass", build)
@@ -385,6 +404,8 @@ class LeakGatePolicyTest(unittest.TestCase):
              "host-vad-compute-failure-regression"),
             ("Map wrapper VAD graph-compute failure and recover",
              "host-wrapper-vad-compute-failure-regression"),
+            ("Cancel during VAD before Whisper polling",
+             "host-vad-cancellation-regression"),
             ("Verify repaired Whisper model-load cleanup", "host-leak-regression"),
             ("Verify repaired VAD initialization lifetime", "host-vad-leak-regression"),
         ):
@@ -422,6 +443,12 @@ class LeakGatePolicyTest(unittest.TestCase):
         copy["build"] = original["build"].replace(
             "STS_VAD_INIT_LIFETIME_REPAIRED sanitizer_status=0",
             "STS_VAD_INIT_LIFETIME_UNVERIFIED sanitizer_status=0",
+        )
+        mutations.append(copy)
+        copy = dict(original)
+        copy["build"] = original["build"].replace(
+            '[[ "$status" -eq 1 && "$calls" -gt 1 ]]',
+            '[[ "$status" -eq 1 && "$calls" -gt 0 ]]',
         )
         mutations.append(copy)
         copy = dict(original)
