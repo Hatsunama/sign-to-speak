@@ -17,20 +17,20 @@ export CMAKE_BUILD_PARALLEL_LEVEL=2
 case "$role" in
     host)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
-        target=reply_asr_smoke
+        targets=(reply_asr_smoke reply_asr_vad_semantic_probe)
         ;;
     host-leak-regression)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
                -DCMAKE_C_FLAGS=-fsanitize=address
                -DCMAKE_CXX_FLAGS=-fsanitize=address
                -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
-        target=reply_asr_model_load_leak_regression
+        targets=(reply_asr_model_load_leak_regression)
         ;;
     arm64-v8a|x86_64)
         flags=(-DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake"
                -DANDROID_ABI="$role" -DANDROID_PLATFORM=android-26
                -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON)
-        target=sign_reply_asr
+        targets=(sign_reply_asr)
         ;;
     *) exit 2 ;;
 esac
@@ -40,11 +40,12 @@ esac
     -DCMAKE_MAKE_PROGRAM="$ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
     -DREPLY_WHISPER_SOURCE="$stage/whisper.cpp" "${flags[@]}" \
     2>&1 | tee "$evidence/$role-configure.txt"
-"$cmake" --build "$build" --target "$target" --parallel 2 --verbose \
+"$cmake" --build "$build" --target "${targets[@]}" --parallel 2 --verbose \
     2>&1 | tee "$evidence/$role-build.txt"
 
 if [[ "$role" == host ]]; then
-    python3 "$root/scripts/reply-asr-component.py" smoke "$build/reply_asr_smoke" "$stage" "$evidence"
+    python3 "$root/scripts/reply-asr-component.py" smoke \
+        "$build/reply_asr_smoke" "$build/reply_asr_vad_semantic_probe" "$stage" "$evidence"
 elif [[ "$role" == host-leak-regression ]]; then
     log="$work/model-load-leak-regression.full.txt"
     set +e

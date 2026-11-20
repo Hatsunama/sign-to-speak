@@ -18,5 +18,7 @@ YaRN rotary scaling adaptation. See YARN-MIT.txt.
 The baseline Arm NEON vector exponential uses Arm Optimized Routines
 polynomial constants under the MIT option. See ARM-EXP-COPYRIGHT.txt and
 ARM-OPTIMIZED-ROUTINES-LICENSE.txt.
-Silero VAD segmentation heuristic. See SILERO-MIT.txt. No Silero weights.
+Silero VAD v6.2 weights, converted and distributed by ggml-org/whisper-vad.
+See SILERO-MIT.txt.
+https://huggingface.co/ggml-org/whisper-vad/tree/9ffd54a1e1ee413ddf265af9913beaf518d1639b
 Upstream cites PyTorch SpectralOps for a frame-count formula.

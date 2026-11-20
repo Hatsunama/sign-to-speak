@@ -1,8 +1,9 @@
 # Reply ASR component probe
 
 This standalone component evaluates offline English captions with whisper.cpp
-v1.9.5, bundled ggml 0.26.0 and the publisher-preconverted tiny.en model.
-The GitHub job fetches the pinned source and model over HTTPS. The engine
+v1.9.5, bundled ggml 0.26.0, the publisher-preconverted tiny.en model and a
+pinned ggml-org conversion of Silero VAD v6.2. The GitHub job fetches the
+pinned source and both models over HTTPS. The engine
 consumes an already verified, immutable local fd span during initialization.
 The same core and static CPU library configuration build for the Linux host,
 Android ARM64 and Android x86_64. After verifying the pristine source commit,
@@ -30,6 +31,13 @@ The fixture and noise gates compare real decoder results and fail independently
 of the Android cross-compilation gates. The public evidence records output
 status, exact normalized fixture match, byte count, time and peak host RSS.
 The exact normalized phrases here exercise inference and turn isolation.
+After decoder smoke (including a red decoder result), a host-only standalone
+VAD gate uses the same resampled public fixtures. It requires zero segments for
+four deterministic low-level noise seeds and the four-times noise case, and at
+least one segment for both phrases at gains 1.0, 0.10, 0.05 and 0.03. Model
+load, inference and segmentation errors have distinct results from valid
+zero-speech output. This research executable is not built into either Android
+ABI or the application wrapper.
 Commercial quality, Android integration, device runtime and installed 16 KiB
 execution require separate evidence.
 

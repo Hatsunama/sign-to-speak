@@ -59,6 +59,30 @@ class ProducerTest(unittest.TestCase):
             with (probe.VENDOR / name).open("rb") as source:
                 probe.consume_verified(source, pin)
 
+    def test_vad_model_pin_notice_and_fetch_destination_are_frozen(self):
+        pin = probe.PINS["vad_model"]
+        self.assertEqual(pin["repository"], "ggml-org/whisper-vad")
+        self.assertEqual(pin["revision"], "9ffd54a1e1ee413ddf265af9913beaf518d1639b")
+        self.assertEqual(pin["file"], "ggml-silero-v6.2.0.bin")
+        self.assertEqual(pin["bytes"], 885098)
+        self.assertEqual(pin["sha256"],
+                         "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987")
+        self.assertEqual(pin["url"],
+                         "https://huggingface.co/ggml-org/whisper-vad/resolve/"
+                         "9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin")
+        self.assertEqual(probe.model_path(Path("stage"), pin),
+                         Path("stage/assets/reply-asr/ggml-silero-v6.2.0.bin"))
+        notice = probe.PINS["notices"]["SILERO-MIT.txt"]
+        self.assertEqual(notice["bytes"], 1075)
+        self.assertEqual(notice["sha256"],
+                         "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b")
+        self.assertEqual(notice["url"],
+                         "https://raw.githubusercontent.com/snakers4/silero-vad/"
+                         "0dd45f0bcd7271463c234f3bae5ad25181f9df8b/LICENSE")
+        attribution = (probe.VENDOR / "ATTRIBUTION.txt").read_text(encoding="utf-8")
+        self.assertIn("Silero VAD v6.2 weights", attribution)
+        self.assertNotIn("No Silero weights", attribution)
+
     def test_existing_destination_never_replaced(self):
         output = self.root / "model.bin"
         output.write_bytes(b"other")

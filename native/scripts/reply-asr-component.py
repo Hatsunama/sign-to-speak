@@ -132,6 +132,10 @@ def repair_whisper_cleanup_bytes(source, pin):
     return repaired
 
 
+def model_path(stage, pin):
+    return stage / "assets/reply-asr" / output_name(pin["file"])
+
+
 def prepare(output):
     reject_links(output)
     if output.exists():
@@ -152,12 +156,12 @@ def prepare(output):
         verify_notices(notices)
         if (stage / "whisper.cpp/LICENSE").read_bytes() != (notices / "WHISPER-CPP-MIT.txt").read_bytes():
             raise ValueError("license differs from the verified source tree")
-        model = PINS["model"]
         assets = stage / "assets/reply-asr"
         assets.mkdir(parents=True)
-        request = urllib.request.Request(model["url"], headers={"Accept-Encoding": "identity"})
-        with urllib.request.urlopen(request, timeout=45) as source:
-            write_verified(source, assets / output_name(model["file"]), model)
+        for model in (PINS["model"], PINS["vad_model"]):
+            request = urllib.request.Request(model["url"], headers={"Accept-Encoding": "identity"})
+            with urllib.request.urlopen(request, timeout=45) as source:
+                write_verified(source, model_path(stage, model), model)
         (stage / "inputs.json").write_text(json.dumps(PINS, indent=2) + "\n", encoding="utf-8")
         stage.rename(output)
 
@@ -191,7 +195,7 @@ def fixture_pcm(pin):
     return pcm
 
 
-def run_smoke(binary, stage, evidence):
+def run_smoke(binary, vad_binary, stage, evidence):
     model = PINS["model"]
     fixture_report = []
     with tempfile.TemporaryDirectory(dir=stage.parent) as scratch:
@@ -207,30 +211,56 @@ def run_smoke(binary, stage, evidence):
             json.dumps({"resampler": "24-to-16k rational area averaging v1, floor to PCM16LE",
                         "fixtures": fixture_report}, indent=2) + "\n", encoding="utf-8")
         shutil.copyfile(FIXTURES / "NOTICES.txt", evidence / "fixture-notices.txt")
-        # Exercise a regular borrowed file descriptor containing bytes outside the asset.
-        # Prefix and suffix are deliberately not the model bytes.
-        composite = scratch / "asset-span.bin"
-        prefix = b"non-model-prefix!"
-        with composite.open("wb") as output, (stage / "assets/reply-asr" / model["file"]).open("rb") as source:
-            output.write(prefix)
-            shutil.copyfileobj(source, output)
-            output.write(b"non-model-suffix")
-        with composite.open("rb") as model_file:
-            verify_span(model_file, len(prefix), model["bytes"], model)
+        with (evidence / "host-smoke.txt").open("w", encoding="utf-8") as log:
             try:
-                verify_span(model_file, len(prefix) - 1, model["bytes"], model)
-            except ValueError as error:
-                if str(error) != "model fd span SHA-256 differs from pin":
-                    raise
-            else:
-                raise ValueError("model fd span unexpectedly accepted at the wrong offset")
-            with (evidence / "host-smoke.txt").open("w", encoding="utf-8") as log:
-                log.write("padded-model-span SHA-256 pass; shifted-span SHA-256 reject\n")
-                log.flush()
-                subprocess.run([str(binary), str(model_file.fileno()), str(len(prefix)),
-                                str(model["bytes"]), *map(str, raw_files)],
-                               check=True, stdout=log, stderr=subprocess.STDOUT,
-                               pass_fds=(model_file.fileno(),), timeout=180)
+                # Exercise a borrowed fd containing bytes outside the asset.
+                composite = scratch / "asset-span.bin"
+                prefix = b"non-model-prefix!"
+                with composite.open("wb") as output, model_path(stage, model).open("rb") as source:
+                    output.write(prefix)
+                    shutil.copyfileobj(source, output)
+                    output.write(b"non-model-suffix")
+                with composite.open("rb") as model_file:
+                    verify_span(model_file, len(prefix), model["bytes"], model)
+                    try:
+                        verify_span(model_file, len(prefix) - 1, model["bytes"], model)
+                    except ValueError as error:
+                        if str(error) != "model fd span SHA-256 differs from pin":
+                            raise
+                    else:
+                        raise ValueError("model fd span unexpectedly accepted at the wrong offset")
+                    log.write("padded-model-span SHA-256 pass; shifted-span SHA-256 reject\n")
+                    log.flush()
+                    smoke_result = subprocess.run(
+                        [str(binary), str(model_file.fileno()), str(len(prefix)),
+                         str(model["bytes"]), *map(str, raw_files)],
+                        stdout=log, stderr=subprocess.STDOUT,
+                        pass_fds=(model_file.fileno(),), timeout=180)
+                    smoke_status = smoke_result.returncode
+            except subprocess.TimeoutExpired:
+                log.write("host-smoke ERROR timeout\n")
+                smoke_status = 124
+            except Exception as error:
+                log.write(f"host-smoke ERROR setup={type(error).__name__}\n")
+                smoke_status = 125
+        # This independent semantic probe must run even when decoder smoke is red.
+        with (evidence / "host-vad-semantic.txt").open("w", encoding="utf-8") as log:
+            try:
+                vad_result = subprocess.run(
+                    [str(vad_binary), str(model_path(stage, PINS["vad_model"])),
+                     *map(str, raw_files)], stdout=log, stderr=subprocess.STDOUT,
+                    timeout=120)
+                vad_status = vad_result.returncode
+            except subprocess.TimeoutExpired:
+                log.write("vad-probe ERROR timeout\n")
+                vad_status = 124
+            except OSError as error:
+                log.write(f"vad-probe ERROR launch={type(error).__name__}\n")
+                vad_status = 125
+        if smoke_status:
+            raise subprocess.CalledProcessError(smoke_status, str(binary))
+        if vad_status:
+            raise subprocess.CalledProcessError(vad_status, str(vad_binary))
 
 
 def check_linkage(dynamic, symbols):
@@ -402,7 +432,7 @@ def main():
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("prepare").add_argument("output", type=Path)
     smoke = commands.add_parser("smoke")
-    for arg in ("binary", "stage", "evidence"):
+    for arg in ("binary", "vad_binary", "stage", "evidence"):
         smoke.add_argument(arg, type=Path)
     audit_command = commands.add_parser("audit")
     audit_command.add_argument("abi", choices=("arm64-v8a", "x86_64"))
@@ -412,7 +442,7 @@ def main():
     if args.command == "prepare":
         prepare(args.output)
     elif args.command == "smoke":
-        run_smoke(args.binary, args.stage, args.evidence)
+        run_smoke(args.binary, args.vad_binary, args.stage, args.evidence)
     else:
         audit(args.abi, args.build, args.stage, args.evidence)
 

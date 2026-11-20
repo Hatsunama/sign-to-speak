@@ -8,6 +8,9 @@ if(NOT ANDROID)
     add_executable(reply_asr_smoke smoke.cpp)
     target_link_libraries(reply_asr_smoke PRIVATE sign_reply_asr Threads::Threads)
 
+    add_executable(reply_asr_vad_semantic_probe vad_semantic_probe.cpp)
+    target_link_libraries(reply_asr_vad_semantic_probe PRIVATE whisper)
+
     # Hosted-only fail-before regression. The executable links the pinned
     # upstream library directly so ASan/LSan can inspect its model-load cleanup.
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)
