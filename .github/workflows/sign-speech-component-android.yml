@@ -9,6 +9,8 @@ on:
       - .github/workflows/sign-speech-component-android.yml
       - native/scripts/speech-component-android-policy.test.mjs
       - native/scripts/ci-sdk.sh
+      - native/scripts/build-pocket-runtime.sh
+      - native/scripts/check-pocket-elf.py
       - native/vendor/pocket-tts-runtime/**
       - native/android/app/src/main/cpp/pocket/**
 
@@ -33,7 +35,6 @@ jobs:
     timeout-minutes: 30
     env:
       CI: 'true'
-      CARGO_BUILD_JOBS: '2'
       CMAKE_BUILD_PARALLEL_LEVEL: '2'
       EXPECTED_SOURCE_SHA: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
     steps:
@@ -50,10 +51,10 @@ jobs:
           test "$RUNNER_OS" = Linux
           test "$RUNNER_ARCH" = X64
           test -s native/vendor/pocket-tts-runtime/Cargo.lock || { echo '::error::Committed Cargo.lock required; bootstrap is not admitted.'; exit 1; }
-          for tool in rustc cargo rustup python3 node cmake sha256sum; do command -v "$tool"; done
+          for tool in rustup python3 node cmake sha256sum; do command -v "$tool"; done
           mkdir -p "$RUNNER_TEMP/pocket-android-evidence"
           printf '%s\n' "$EXPECTED_SOURCE_SHA" > "$RUNNER_TEMP/pocket-android-evidence/tested-sha.txt"
-          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/build.rs native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/android/app/src/main/cpp/pocket/CMakeLists.txt native/android/app/src/main/cpp/pocket/pocket_jni.cpp native/android/app/src/main/cpp/pocket/exports.map native/scripts/ci-sdk.sh .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
+          sha256sum native/vendor/pocket-tts-runtime/Cargo.toml native/vendor/pocket-tts-runtime/Cargo.lock native/vendor/pocket-tts-runtime/build.rs native/vendor/pocket-tts-runtime/include/sign_pocket_tts.h native/vendor/pocket-tts-runtime/src/*.rs native/android/app/src/main/cpp/pocket/CMakeLists.txt native/android/app/src/main/cpp/pocket/pocket_jni.cpp native/android/app/src/main/cpp/pocket/exports.map native/scripts/ci-sdk.sh native/scripts/build-pocket-runtime.sh native/scripts/check-pocket-elf.py .github/workflows/sign-speech-component-android.yml > "$RUNNER_TEMP/pocket-android-evidence/source-sha256.txt"
       - name: Select pinned Node runtime
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # upstream v4
         with:
@@ -69,66 +70,60 @@ jobs:
       - name: Verify pinned Android SDK and NDK without accepting licenses
         timeout-minutes: 4
         run: bash native/scripts/ci-sdk.sh
-      - name: Configure NDK and Rust Android target
-        timeout-minutes: 3
+      - name: Cross compile actual Android ARM64 C ABI library
+        timeout-minutes: 22
         run: |
           set -euo pipefail
           sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
           ndk="$sdk/ndk/27.1.12297006"
-          toolchain="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
-          test -x "$toolchain/aarch64-linux-android29-clang"
-          test -x "$toolchain/aarch64-linux-android29-clang++"
-          test -x "$toolchain/llvm-ar"
-          test -x "$toolchain/llvm-readelf"
-          test -x "$toolchain/llvm-nm"
-          test -f "$ndk/build/cmake/android.toolchain.cmake"
-          test -x "$sdk/cmake/3.31.5/bin/cmake"
-          rustup target add aarch64-linux-android --toolchain "$(rustup show active-toolchain | awk '{print $1}')"
-          rustup target list --installed | grep -Fx aarch64-linux-android
-          # The cmake crate reads CMAKE_TOOLCHAIN_FILE from the environment.
-          # The wrapper fixes ABI/API/STL before loading the official NDK toolchain.
-          cat > "$RUNNER_TEMP/android.toolchain.cmake" <<EOF
-          set(ANDROID_ABI arm64-v8a CACHE STRING "" FORCE)
-          set(ANDROID_PLATFORM android-29 CACHE STRING "" FORCE)
-          set(ANDROID_STL c++_shared CACHE STRING "" FORCE)
-          include("$ndk/build/cmake/android.toolchain.cmake")
-          EOF
+          bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          cmake="$sdk/cmake/3.31.5/bin/cmake"
+          evidence="$RUNNER_TEMP/pocket-android-evidence"
+          runtime=native/vendor/pocket-tts-runtime
+          wrapper="$RUNNER_TEMP/pocket-arm64-v8a.toolchain.cmake"
+          receipt="$RUNNER_TEMP/pocket-arm64-v8a-toolchain.txt"
+          test -x "$bin/llvm-readelf"
+          test -x "$bin/llvm-nm"
+          test -x "$cmake"
+          "$bin/llvm-readelf" --version | sed -n '1p' > "$evidence/ndk-readelf-version.txt"
+          "$cmake" --version | sed -n '1p' > "$evidence/cmake-version.txt"
+          printf 'ndk=27.1.12297006\napi=29\nabi=arm64-v8a\nrunner-image=%s\nrun=%s\nattempt=%s\n' "${ImageVersion:-unknown}" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$evidence/build-environment.txt"
+          (cd "$runtime" && sha256sum Cargo.lock) > "$evidence/cargo-lock-sha256.txt"
+
+          # Retain the compiler receipt while preserving an earlier build failure.
+          retain_compiler_receipt() {
+            local status=$1
+            local copy_status=0
+            if [[ -s "$receipt" ]]; then
+              cp "$receipt" "$evidence/" || copy_status=$?
+            fi
+            if (( copy_status != 0 )); then
+              printf '::error::Failed to retain compiler receipt (copy exit %s).\n' "$copy_status" >&2
+              if (( status == 0 )); then
+                status=$copy_status
+              fi
+            fi
+            exit "$status"
+          }
+          trap 'retain_compiler_receipt "$?"' EXIT
+          bash native/scripts/build-pocket-runtime.sh arm64-v8a
+          test -s "$RUNNER_TEMP/pocket-arm64-v8a-metadata.json"
+          test -s "$wrapper"
+          grep '^rustc ' "$receipt" > "$evidence/rust-version.txt"
+          grep '^cargo ' "$receipt" > "$evidence/cargo-version.txt"
+          sha256sum "$ndk/source.properties" "$wrapper" > "$evidence/toolchain-sha256.txt"
+          # The standalone JNI configure uses the same toolchain wrapper as the Rust build.
           {
             echo "ANDROID_NDK_HOME=$ndk"
-            echo "CMAKE_TOOLCHAIN_FILE=$RUNNER_TEMP/android.toolchain.cmake"
-            echo "CMAKE=$sdk/cmake/3.31.5/bin/cmake"
-            echo "CC_aarch64_linux_android=$toolchain/aarch64-linux-android29-clang"
-            echo "CXX_aarch64_linux_android=$toolchain/aarch64-linux-android29-clang++"
-            echo "AR_aarch64_linux_android=$toolchain/llvm-ar"
-            echo "CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=$toolchain/aarch64-linux-android29-clang"
-            echo 'CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384'
+            echo "CMAKE_TOOLCHAIN_FILE=$wrapper"
+            echo "CMAKE=$cmake"
           } >> "$GITHUB_ENV"
-          "$toolchain/llvm-readelf" --version | head -1 > "$RUNNER_TEMP/pocket-android-evidence/ndk-readelf-version.txt"
-          rustc --version > "$RUNNER_TEMP/pocket-android-evidence/rust-version.txt"
-          cargo --version > "$RUNNER_TEMP/pocket-android-evidence/cargo-version.txt"
-          "$sdk/cmake/3.31.5/bin/cmake" --version | head -1 > "$RUNNER_TEMP/pocket-android-evidence/cmake-version.txt"
-          printf 'ndk=27.1.12297006\napi=29\nabi=arm64-v8a\nrunner-image=%s\nrun=%s\nattempt=%s\n' "${ImageVersion:-unknown}" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$RUNNER_TEMP/pocket-android-evidence/build-environment.txt"
-          sha256sum "$ndk/source.properties" "$RUNNER_TEMP/android.toolchain.cmake" > "$RUNNER_TEMP/pocket-android-evidence/toolchain-sha256.txt"
-      - name: Fetch complete locked Cargo graph and verify offline metadata
-        timeout-minutes: 5
-        working-directory: native/vendor/pocket-tts-runtime
-        run: |
-          set -euo pipefail
-          test -s Cargo.lock
-          cargo fetch --locked
-          cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-cargo-metadata.json"
-          test -s "$RUNNER_TEMP/pocket-cargo-metadata.json"
-          sha256sum Cargo.lock > "$RUNNER_TEMP/pocket-android-evidence/cargo-lock-sha256.txt"
-      - name: Cross compile actual Android ARM64 C ABI library
-        timeout-minutes: 14
-        working-directory: native/vendor/pocket-tts-runtime
-        run: |
-          set -euo pipefail
-          test -z "${RUSTFLAGS:-}"
-          cargo build --release --locked --offline --jobs 2 --target aarch64-linux-android --lib
-          test -s target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so
-          sha256sum --check "$RUNNER_TEMP/pocket-android-evidence/cargo-lock-sha256.txt"
-          sha256sum target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so > "$RUNNER_TEMP/pocket-android-evidence/component-sha256.txt"
+
+          cd "$runtime"
+          sha256sum --check "$evidence/cargo-lock-sha256.txt"
+          so=target/aarch64-linux-android/release/libsign_pocket_tts_runtime.so
+          test -s "$so"
+          sha256sum "$so" > "$evidence/component-sha256.txt"
       - name: Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports
         timeout-minutes: 2
         working-directory: native/vendor/pocket-tts-runtime
