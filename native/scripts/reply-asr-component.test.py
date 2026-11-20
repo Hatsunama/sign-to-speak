@@ -109,5 +109,23 @@ class ProducerTest(unittest.TestCase):
             probe.check_linkage(dynamic.replace("libc.so", "libcurl.so"), symbols)
 
 
+    def test_pinned_ndk_unwinder_locations(self):
+        ndk = self.root / "sdk" / "ndk" / "27.1.12297006"
+        runtime = ndk / "toolchains/llvm/prebuilt/linux-x86_64/lib/clang/18/lib/linux"
+        for abi, arch in (("arm64-v8a", "aarch64"), ("x86_64", "x86_64")):
+            unwinder = runtime / arch / "libunwind.a"
+            self.assertTrue(probe.pinned_ndk_archive(unwinder, abi, ndk))
+            for wrong in (runtime / ("x86_64" if arch == "aarch64" else "aarch64") / "libunwind.a",
+                          runtime / arch / "libunwind-extra.a",
+                          ndk.parent / "27.1.12297005" / unwinder.relative_to(ndk),
+                          self.root / "other" / unwinder.relative_to(ndk)):
+                with self.subTest(abi=abi, wrong=str(wrong)):
+                    self.assertFalse(probe.pinned_ndk_archive(wrong, abi, ndk))
+        self.assertTrue(probe.pinned_ndk_archive(
+            runtime / "libclang_rt.builtins-aarch64-android.a", "arm64-v8a", ndk))
+        self.assertFalse(probe.pinned_ndk_archive(
+            runtime / "libclang_rt.builtins-x86_64-android.a", "x86_64", ndk))
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -15,6 +15,7 @@
 #include <sys/resource.h>
 #include <thread>
 #include <unistd.h>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -85,6 +86,37 @@ void decode(sts_reply_engine* engine, const char* label, const std::vector<float
     const bool matches = phrase ? bytes < text.size() && normalize(text.data()) == phrase
                                 : std::all_of(text.begin(), text.end(), [](char c) { return c == 0; });
     check(label, status == expected && matches, status, bytes, elapsed(start));
+}
+
+void characterize(sts_reply_engine* engine, const char* label, const std::vector<float>& pcm,
+                  const char* phrase) {
+    Text text;
+    text.fill('x');
+    sts_reply_turn turn;
+    const auto start = Clock::now();
+    const auto status = sts_reply_decode(engine, pcm.data(), pcm.size(), &turn,
+                                         text.data(), text.size());
+    const auto bytes = strnlen(text.data(), text.size());
+    const bool matches = bytes < text.size() && normalize(text.data()) == phrase;
+    std::cout << label << " characterize status=" << status
+              << " text_bytes=" << bytes
+              << " normalized_match=" << matches
+              << " elapsed_ms=" << elapsed(start) << std::endl;
+}
+
+std::vector<float> scaled(const std::vector<float>& pcm, float gain) {
+    auto result = pcm;
+    for (float& sample : result) sample *= gain;
+    return result;
+}
+
+std::vector<float> seeded_noise(std::uint32_t seed, float gain = 1.f) {
+    std::vector<float> noise(32000);
+    for (float& sample : noise) {
+        seed = 1664525u * seed + 1013904223u;
+        sample = gain * float(int(seed >> 24) - 128) / 32768.f;
+    }
+    return noise;
 }
 
 struct AbortLatch {
@@ -166,13 +198,22 @@ int smoke(int argc, char** argv) {
 
     decode(engine, "first-a", a, STS_REPLY_OK, "please call my family");
     decode(engine, "silence", std::vector<float>(32000), STS_REPLY_NO_SPEECH);
-    std::vector<float> noise(32000);
-    std::uint32_t seed = 0x9021df15;
-    for (float& sample : noise) {
-        seed = 1664525u * seed + 1013904223u;
-        sample = float(int(seed >> 24) - 128) / 32768.f;
-    }
+    const auto noise = seeded_noise(0x9021df15);
     decode(engine, "seeded-noise", noise, STS_REPLY_NO_SPEECH);
+    for (const auto& gain : std::array<std::pair<const char*, float>, 3>{{
+             {"gain-0.10", 0.10f}, {"gain-0.05", 0.05f}, {"gain-0.03", 0.03f}}}) {
+        characterize(engine, (std::string("quiet-a-") + gain.first).c_str(), scaled(a, gain.second),
+                     "please call my family");
+        characterize(engine, (std::string("quiet-b-") + gain.first).c_str(), scaled(b, gain.second),
+                     "i need water please");
+    }
+    for (const auto& fixture : std::array<std::pair<const char*, std::uint32_t>, 3>{{
+             {"noise-seed-243f6a88", 0x243f6a88},
+             {"noise-seed-85a308d3", 0x85a308d3},
+             {"noise-seed-13198a2e", 0x13198a2e}}}) {
+        characterize(engine, fixture.first, seeded_noise(fixture.second), "");
+    }
+    characterize(engine, "noise-seed-9021df15-gain-4", seeded_noise(0x9021df15, 4.f), "");
     decode(engine, "second-b", b, STS_REPLY_OK, "i need water please");
     decode(engine, "third-a", a, STS_REPLY_OK, "please call my family");
     decode(engine, "empty-turn", {}, STS_REPLY_INVALID_INPUT);

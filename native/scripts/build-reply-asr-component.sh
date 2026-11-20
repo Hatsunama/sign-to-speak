@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-role="${1:?expected host, arm64-v8a, or x86_64}"
+role="${1:?expected host, host-leak-regression, arm64-v8a, or x86_64}"
 sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 work="${RUNNER_TEMP:?missing hosted runner scratch}/sign-reply-component"
@@ -18,6 +18,13 @@ case "$role" in
     host)
         flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
         target=reply_asr_smoke
+        ;;
+    host-leak-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+               -DCMAKE_C_FLAGS=-fsanitize=address
+               -DCMAKE_CXX_FLAGS=-fsanitize=address
+               -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
+        target=reply_asr_model_load_leak_regression
         ;;
     arm64-v8a|x86_64)
         flags=(-DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake"
@@ -38,6 +45,18 @@ esac
 
 if [[ "$role" == host ]]; then
     python3 "$root/scripts/reply-asr-component.py" smoke "$build/reply_asr_smoke" "$stage" "$evidence"
+elif [[ "$role" == host-leak-regression ]]; then
+    log="$work/model-load-leak-regression.full.txt"
+    set +e
+    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 \
+        "$build/reply_asr_model_load_leak_regression" \
+        "$stage/assets/reply-asr/ggml-tiny.en.bin" > "$log" 2>&1
+    status=$?
+    set -e
+    tail -c 131072 "$log" > "$evidence/model-load-leak-regression.txt"
+    rm -f "$log"
+    cat "$evidence/model-load-leak-regression.txt"
+    exit "$status"
 else
     so="$build/reply-asr/libsign_reply_asr.so"
     prefix="$evidence/$role"

@@ -245,6 +245,21 @@ def verify_ndk_notice(evidence):
         raise ValueError("selected NDK notice lacks compiler_rt dual-license heading")
 
 
+def pinned_ndk_archive(path, abi, ndk):
+    if ndk.name != "27.1.12297006" or not path.is_relative_to(ndk):
+        return False
+    common = ("toolchains", "llvm", "prebuilt", "linux-x86_64", "lib", "clang", "18",
+              "lib", "linux")
+    arch = {"arm64-v8a": "aarch64", "x86_64": "x86_64"}.get(abi)
+    if arch is None:
+        return False
+    relative = path.relative_to(ndk).parts
+    return relative in (
+        common + (arch, "libunwind.a"),
+        common + ("libclang_rt.builtins-aarch64-android.a",) if abi == "arm64-v8a" else (),
+    )
+
+
 def allowed_upstream_path(path):
     if path.parts[:2] in (("ggml", "include"), ("src", "aneforge")):
         return True
@@ -342,15 +357,23 @@ def audit(abi, build, stage, evidence):
     archives = set(re.findall(r"([^\s():]+\.a)\(", report("link-map")))
     expected = {"libwhisper.a", "libggml.a", "libggml-base.a", "libggml-cpu.a"}
     verified_runtime = set()
+    verified_ndk_runtime = set()
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    if not sdk:
+        raise ValueError("Android SDK root missing for pinned NDK audit")
+    ndk = (Path(sdk) / "ndk/27.1.12297006").resolve()
     for archive in archives:
         path = (build / archive).resolve()
         if path.is_relative_to(build / "reply-asr/upstream") and path.name in expected:
             verified_runtime.add(path.name)
-        elif not (path.name.startswith("libclang_rt.builtins") and "/ndk/27.1.12297006/" in path.as_posix()):
+        elif pinned_ndk_archive(path, abi, ndk):
+            verified_ndk_runtime.add(path.relative_to(ndk).as_posix())
+        else:
             raise ValueError(f"unapproved linked archive: {archive}")
     if verified_runtime != expected:
         raise ValueError(f"static library link-map evidence missing: {sorted(expected - verified_runtime)}")
     summary = {"abi": abi, "load_segments_16k": load_count, "static_runtime": sorted(verified_runtime),
+               "pinned_ndk_runtime": sorted(verified_ndk_runtime),
                "compiled_sources": build_inventory, "upstream_includes": sorted(included),
                "ndk_notice_sha256": hashlib.sha256((evidence / "ndk-NOTICE.toolchain").read_bytes()).hexdigest(),
                "verified_notices": sorted(path.name for path in (stage / "notices").iterdir())}

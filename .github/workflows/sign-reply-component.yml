@@ -81,6 +81,11 @@ jobs:
         timeout-minutes: 6
         run: bash native/scripts/build-reply-asr-component.sh x86_64
 
+      - name: Reproduce pinned model-load cleanup leak
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-leak-regression
+
       - name: Retain bounded component evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
