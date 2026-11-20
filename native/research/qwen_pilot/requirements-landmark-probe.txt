@@ -1,0 +1,5 @@
+--only-binary=:all:
+numpy==2.2.6
+protobuf==6.33.5
+pyarrow==22.0.0
+

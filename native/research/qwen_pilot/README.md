@@ -2,13 +2,15 @@
 
 Bounded private cloud experiments, not a production translator. Keep customer data, credentials, signing keys, media, reference manifests, predictions and weights out of this source PR.
 
-Run the lightweight research suite with PyAV 17.0.0, Pillow 12.2.0 and NumPy 2.2.6 available:
+Run the lightweight research suite with PyAV 17.0.0, Pillow 12.2.0 and NumPy 2.2.6 available. The publisher landmark integration checks also require the pinned PyArrow and protobuf wheels in `requirements-landmark-probe.txt`:
 `python -B -m unittest discover -s native/research/qwen_pilot -p 'test_*.py'`.
 Use the pinned cloud CUDA environment for training and the opt-in `test_target_only_loss.py --cuda` for controlled loss/gradient equivalence.
 
 ## Current FSboard v4 work
 
-The current path freezes whole-prompt cohorts, admits actual 8 to 32 distinct ordered frames, verifies the pinned processor and five controls, then gates a six-clip training fit before the 192-update paired experiment. Source and data pins remain mandatory. The current fit policy is v2 and explicitly aligns generation stops with supervised assistant EOS. Full-cohort and GPU qualification status belongs in the evidence record, not in a source-exists flag.
+The completed whole-prompt comparison failed: base, video-only A and video-plus-static B each scored 0/64 exact. No meaningful winner was found. Further B training/evaluation spending is stopped; A remains an engineering reference only. Read [actual results](FSBOARD_V4_RESULTS_20261119.md) before launching anything. Source and data pins remain mandatory. Do not extend this failed regime or qualify a release from training loss or passing source checks.
+
+The next diagnostic checks dense motion input. `publisher_landmark_probe.py` reads bounded HTTPS ranges from one pinned publisher TRAIN shard and selects only exact frozen development contexts. It is a research intake utility, with no application caller or runtime API dependency. The first shard was fully examined without a matching development record; that does not prove absence elsewhere. Read [landmark probe evidence, fixes and limits](PUBLISHER_LANDMARK_PROBE_STATUS_20261119.md).
 
 Read [current media/input evidence](FSBOARD_V4_MEDIA_AND_INPUT_STATUS.md), [generation stops](GENERATION_STOP_CONTRACT.md) and the [continuous-ASL data plan](CONTINUOUS_ASL_DATA_INTAKE_PLAN.md) before running current work. The historical commands below reproduce the original failed experiment and supply shared helpers; they are not the v4 entry points.
 
