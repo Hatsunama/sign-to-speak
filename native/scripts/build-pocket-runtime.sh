@@ -19,12 +19,23 @@ bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
 for file in "$bin/$clang" "$bin/$clangxx" "$bin/llvm-ar" "$bin/llvm-readelf" "$ndk/build/cmake/android.toolchain.cmake" "$sdk/cmake/3.31.5/bin/cmake"; do
   [[ -e "$file" ]] || { echo "Missing pinned Android build input: $file" >&2; exit 1; }
 done
-for command in rustc cargo rustup; do command -v "$command" >/dev/null; done
+command -v rustup >/dev/null
 [[ -z "${RUSTFLAGS:-}" ]] || { echo 'Global RUSTFLAGS may not override the pinned Android target contract' >&2; exit 1; }
-toolchain="$(rustup show active-toolchain | awk '{print $1}')"
-[[ -n "$toolchain" ]] || { echo 'Preinstalled active Rust toolchain required' >&2; exit 1; }
+for override in RUSTC RUSTC_WRAPPER RUSTC_WORKSPACE_WRAPPER; do
+  [[ -z "${!override:-}" ]] || { echo "$override may not override the pinned Pocket compiler" >&2; exit 1; }
+done
+
+# Cargo.lock pins dependencies. Pin the compiler to the device-tested runtime's version.
+toolchain=1.99.1
+toolchain_receipt="$RUNNER_TEMP/pocket-$abi-toolchain.txt"
+if ! rustup run "$toolchain" rustc -Vv > "$toolchain_receipt" 2>/dev/null; then
+  rustup toolchain install "$toolchain" --profile minimal --no-self-update
+  rustup run "$toolchain" rustc -Vv > "$toolchain_receipt"
+fi
+rustup run "$toolchain" cargo -V >> "$toolchain_receipt"
+cat "$toolchain_receipt"
 rustup target add "$target" --toolchain "$toolchain"
-rustup target list --installed | grep -Fx "$target" >/dev/null
+rustup target list --installed --toolchain "$toolchain" | grep -Fx "$target" >/dev/null
 
 wrapper="$RUNNER_TEMP/pocket-$abi.toolchain.cmake"
 cat > "$wrapper" <<EOF
@@ -51,10 +62,10 @@ export CARGO_BUILD_JOBS=2 CMAKE_BUILD_PARALLEL_LEVEL=2
 cd "$runtime"
 test -s Cargo.lock
 # Fetch the entire pinned graph before *any* offline compilation, including build dependencies.
-cargo fetch --locked
-cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-$abi-metadata.json"
+rustup run "$toolchain" cargo fetch --locked
+rustup run "$toolchain" cargo metadata --locked --offline --format-version 1 > "$RUNNER_TEMP/pocket-$abi-metadata.json"
 test -s "$RUNNER_TEMP/pocket-$abi-metadata.json"
-cargo build --release --locked --offline --jobs 2 --target "$target" --lib
+rustup run "$toolchain" cargo build --release --locked --offline --jobs 2 --target "$target" --lib
 
 source_so="target/$target/release/libsign_pocket_tts_runtime.so"
 test -s "$source_so"

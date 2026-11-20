@@ -67,6 +67,7 @@ jobs:
         run: |
           set -euo pipefail
           timeout 900 bash scripts/build-pocket-runtime.sh x86_64
+          cp "$RUNNER_TEMP/pocket-x86_64-toolchain.txt" "$RUNNER_TEMP/sign-emulator-build/"
           python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
           python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
           python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \

@@ -12,6 +12,8 @@ Full Python host suites in the Android and Pocket component workflows provision 
 
 The checkout is the exact PR head SHA (not a synthetic merge commit), or the dispatch `GITHUB_SHA`, verified against `git rev-parse HEAD` and recorded alongside lockfile/wrapper hashes, run ID, runner image version, test reports and APK checksums. Do not describe a different or newer commit as tested. Every change needs a fresh run; rerunning an old workflow does not validate new code.
 
+The Android, emulator-build and Roboflow tracker workflows use Rust 1.99.1 for the Android Pocket runtime. The shared builder installs that exact toolchain with the minimal profile when missing and uses it for target setup and all Cargo commands. Its per-ABI rustc and Cargo version report appears in the build log and the retained evidence for successful Pocket builds.
+
 ## Gates
 
 1. Locked dependency install without lifecycle scripts; all Node host tests, TypeScript check, actual Java cancellation-class tests, and CI configuration/SDK-helper tests.

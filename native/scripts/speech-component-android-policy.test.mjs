@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {readFileSync} from 'node:fs';
+import {spawnSync} from 'node:child_process';
+import {mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync} from 'node:fs';
+import {tmpdir} from 'node:os';
+import {dirname, join} from 'node:path';
 import {createRequire} from 'node:module';
 
 const yaml = createRequire(import.meta.url)('yaml');
@@ -50,7 +53,8 @@ function audit(w) {
   assert.deepEqual(w.on.pull_request.paths, [
     '.github/workflows/sign-speech-component-android.yml',
     'native/scripts/speech-component-android-policy.test.mjs',
-    'native/scripts/ci-sdk.sh', 'native/vendor/pocket-tts-runtime/**',
+    'native/scripts/ci-sdk.sh', 'native/scripts/build-pocket-runtime.sh',
+    'native/scripts/check-pocket-elf.py', 'native/vendor/pocket-tts-runtime/**',
     'native/android/app/src/main/cpp/pocket/**']);
   assert.deepEqual(w.permissions, {contents: 'read'});
   assert.equal(w.concurrency['cancel-in-progress'], true);
@@ -65,7 +69,6 @@ function audit(w) {
     event('pull_request', {headRef: 'main'}), event('pull_request', {privateRepo: true}),
     event('pull_request', {repository: 'other/repo'})]) assert.equal(evaluate(job.if, value), false);
   assert.equal(job.env.EXPECTED_SOURCE_SHA, "${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}");
-  assert.equal(job.env.CARGO_BUILD_JOBS, '2');
   assert.equal(job.env.CMAKE_BUILD_PARALLEL_LEVEL, '2');
   assert.equal(job.env.RUSTFLAGS, undefined);
   const checkout = step(job, 'Checkout exact candidate head');
@@ -76,25 +79,16 @@ function audit(w) {
   assert.match(preflight.run, /test -s native\/vendor\/pocket-tts-runtime\/Cargo.lock/);
   assert.match(preflight.run, /sha256sum[^\n]*native\/vendor\/pocket-tts-runtime\/build\.rs/);
   assert.doesNotMatch(preflight.run, /cargo generate-lockfile|curl |wget /);
+  for (const file of ['native/scripts/build-pocket-runtime.sh', 'native/scripts/check-pocket-elf.py'])
+    assert.ok(preflight.run.includes(file), file);
   for (const file of ['CMakeLists.txt', 'pocket_jni.cpp', 'exports.map'])
     assert.ok(preflight.run.includes(`native/android/app/src/main/cpp/pocket/${file}`), file);
   const sdk = step(job, 'Verify pinned Android SDK and NDK without accepting licenses');
   assert.equal(sdk.run.trim(), 'bash native/scripts/ci-sdk.sh');
-  const config = step(job, 'Configure NDK and Rust Android target');
-  for (const token of ['27.1.12297006', 'aarch64-linux-android29-clang',
-    'aarch64-linux-android29-clang++', 'llvm-ar', 'llvm-readelf', 'llvm-nm',
-    'rustup target add aarch64-linux-android', 'ANDROID_ABI arm64-v8a',
-    'ANDROID_PLATFORM android-29', 'ANDROID_STL c++_shared', 'CMAKE_TOOLCHAIN_FILE=',
-    'CC_aarch64_linux_android=', 'CXX_aarch64_linux_android=', 'AR_aarch64_linux_android=',
-    'CARGO_TARGET_AARCH64_LINUX_ANDROID_LINKER=',
-    'CARGO_TARGET_AARCH64_LINUX_ANDROID_RUSTFLAGS=-C link-arg=-Wl,-z,max-page-size=16384'])
-    assert.ok(config.run.includes(token), token);
-  const fetch = step(job, 'Fetch complete locked Cargo graph and verify offline metadata');
-  assert.match(fetch.run, /cargo fetch --locked\s/);
-  assert.doesNotMatch(fetch.run, /cargo fetch[^\n]*--target/);
-  assert.match(fetch.run, /cargo metadata --locked --offline --format-version 1/);
   const build = step(job, 'Cross compile actual Android ARM64 C ABI library');
-  assert.match(build.run, /cargo build --release --locked --offline --jobs 2 --target aarch64-linux-android --lib/);
+  assert.equal(build['timeout-minutes'], 22);
+  assert.match(build.run, /^bash native\/scripts\/build-pocket-runtime\.sh arm64-v8a$/m);
+  assert.match(build.run, /test -s "\$RUNNER_TEMP\/pocket-arm64-v8a-metadata\.json"/);
   assert.match(build.run, /libsign_pocket_tts_runtime\.so/);
   assert.match(build.run, /sha256sum --check.*cargo-lock-sha256/);
   const elf = step(job, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports');
@@ -130,13 +124,14 @@ function audit(w) {
   assert.equal(upload.with['if-no-files-found'], 'error');
   assert.deepEqual(upload.with.path.trim().split('\n').map(x => x.trim()), ['${{ runner.temp }}/pocket-android-evidence/*.txt']);
   for (const item of job.steps) {
-    assert.ok(item['timeout-minutes'] === undefined || item['timeout-minutes'] <= 14);
+    if (item !== build) assert.ok(item['timeout-minutes'] === undefined || item['timeout-minutes'] <= 14);
     assert.notEqual(item['continue-on-error'], true);
     assert.equal(item.with?.cache, undefined);
     if (item.uses) assert.match(item.uses, /^[\w-]+\/[\w-]+@[a-f0-9]{40}$/);
+    assert.doesNotMatch(item.run ?? '', /^\s*(?:rustc|rustup|cargo)\b/m);
     assert.doesNotMatch(item.run ?? '', /cargo generate-lockfile|cargo install|apt(?:-get)? install|--licenses|yes \||keytool|keystore|gradlew|adb |emulator |assembleRelease|bundleRelease|curl |wget |\|\| true/);
   }
-  assert.ok(job.steps.indexOf(fetch) < job.steps.indexOf(build));
+  assert.ok(job.steps.indexOf(sdk) < job.steps.indexOf(build));
   assert.ok(job.steps.indexOf(build) < job.steps.indexOf(elf));
   assert.equal(job.steps.indexOf(jni), job.steps.indexOf(elf) + 1);
   assert.ok(job.steps.indexOf(jni) < job.steps.indexOf(upload));
@@ -171,7 +166,153 @@ function auditRustBuild(source) {
   assert.doesNotMatch(source, /RPATH|RUNPATH|patchelf|objcopy|IMPORTED_NO_SONAME/);
 }
 
+function runComponentBuildFixture(t, {buildStatus = 0, receiptCopyStatus = 0} = {}) {
+  const scratch = mkdtempSync(join(process.env.RUNNER_TEMP || tmpdir(), 'pocket-component-'));
+  t.after(() => rmSync(scratch, {recursive: true, force: true}));
+
+  function write(path, content) {
+    const absolute = join(scratch, path);
+    mkdirSync(dirname(absolute), {recursive: true});
+    writeFileSync(absolute, content, {mode: 0o755});
+  }
+
+  const ndk = 'sdk/ndk/27.1.12297006';
+  const llvm = ndk + '/toolchains/llvm/prebuilt/linux-x86_64/bin';
+  const runtime = 'native/vendor/pocket-tts-runtime';
+  const library = 'libsign_pocket_tts_runtime.so';
+  const shell = '#!/usr/bin/env bash\nset -euo pipefail\n';
+  write('trace.txt', '');
+  write('github-env.txt', '');
+  write('runner-temp/pocket-android-evidence/.keep', '');
+  write(runtime + '/Cargo.lock', '# Fixture lockfile\n');
+  write(ndk + '/source.properties', 'Pkg.Revision = 27.1.12297006\n');
+  write(ndk + '/build/cmake/android.toolchain.cmake', '# Fixture NDK toolchain\n');
+  for (const command of ['aarch64-linux-android29-clang', 'aarch64-linux-android29-clang++', 'llvm-ar', 'llvm-nm']) {
+    write(llvm + '/' + command, shell + 'exit 99\n');
+  }
+  write(llvm + '/llvm-readelf', shell + 'printf "fixture readelf\n"\n');
+  write('sdk/cmake/3.31.5/bin/cmake', shell + 'printf "fixture CMake\n"\n');
+  for (const command of ['rustc', 'cargo', 'rustup']) {
+    write('bin/' + command, shell + "printf '%s %s\\n' '" + command + "' \"$*\" >> \"$TEST_TRACE\"\nexit 99\n");
+  }
+  const toolchainReceipt = 'rustc fixture-pinned (recorded version)\nrelease: fixture-pinned\ncargo fixture-pinned (recorded version)\n';
+  write('native/scripts/build-pocket-runtime.sh', shell + [
+    'printf "builder %s\\n" "$*" >> "$TEST_TRACE"',
+    '[[ $# == 1 && "$1" == arm64-v8a ]]',
+    'printf "%s" "$TEST_TOOLCHAIN_RECEIPT" > "$RUNNER_TEMP/pocket-$1-toolchain.txt"',
+    'if (( TEST_BUILD_STATUS != 0 )); then',
+    '  printf "fixture producer failed (exit %s)\\n" "$TEST_BUILD_STATUS" >&2',
+    '  exit "$TEST_BUILD_STATUS"',
+    'fi',
+    'printf "# Shared toolchain wrapper\\n" > "$RUNNER_TEMP/pocket-$1.toolchain.cmake"',
+    'printf "{}\\n" > "$RUNNER_TEMP/pocket-$1-metadata.json"',
+    'mkdir -p ' + runtime + '/target/aarch64-linux-android/release native/generated/pocket-jniLibs/"$1"',
+    'printf "fixture ARM64 runtime\\n" > ' + runtime + '/target/aarch64-linux-android/release/' + library,
+    'cp ' + runtime + '/target/aarch64-linux-android/release/' + library + ' native/generated/pocket-jniLibs/"$1"/' + library,
+  ].join('\n') + '\n');
+
+  const {steps} = workflow.jobs.component;
+  const start = steps.findIndex(item => item.name === 'Verify pinned Android SDK and NDK without accepting licenses');
+  const end = steps.findIndex(item => item.name === 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports');
+  assert.ok(start >= 0 && end > start + 1);
+  const runSteps = steps.slice(start + 1, end).map(item => [
+    '(',
+    'cd "' + (item['working-directory'] ?? '.') + '"',
+    item.run,
+    ')',
+    'while IFS= read -r assignment; do export "$assignment"; done < "$GITHUB_ENV"',
+  ].join('\n'));
+
+  const bash = process.platform === 'win32'
+    ? join(process.env.ProgramFiles || 'C:/Program Files', 'Git', 'bin', 'bash.exe')
+    : 'bash';
+  const result = spawnSync(bash, ['--noprofile', '--norc', '-c', [
+    'set -euo pipefail',
+    'export PATH="$PWD/bin:$PATH" ANDROID_HOME="$PWD/sdk" RUNNER_TEMP="$PWD/runner-temp"',
+    'export GITHUB_ENV="$PWD/github-env.txt" TEST_TRACE="$PWD/trace.txt"',
+    'cp() {',
+    '  if [[ "$1" == "$RUNNER_TEMP/pocket-arm64-v8a-toolchain.txt" && "$2" == "$RUNNER_TEMP/pocket-android-evidence/" ]] && (( TEST_RECEIPT_COPY_STATUS != 0 )); then',
+    '    printf "fixture receipt copy failed (exit %s)\\n" "$TEST_RECEIPT_COPY_STATUS" >&2',
+    '    return "$TEST_RECEIPT_COPY_STATUS"',
+    '  fi',
+    '  command cp "$@"',
+    '}',
+    ...runSteps,
+  ].join('\n')], {
+    cwd: scratch,
+    env: {
+      ...process.env,
+      BASH_ENV: '',
+      GITHUB_RUN_ID: '101',
+      GITHUB_RUN_ATTEMPT: '1',
+      TEST_TOOLCHAIN_RECEIPT: toolchainReceipt,
+      TEST_BUILD_STATUS: String(buildStatus),
+      TEST_RECEIPT_COPY_STATUS: String(receiptCopyStatus),
+    },
+    encoding: 'utf8',
+    timeout: 15_000,
+  });
+  assert.ifError(result.error);
+  const read = path => readFileSync(join(scratch, path), 'utf8').replace(/\r\n/g, '\n');
+  return {...result, read, trace: read('trace.txt').trim(), toolchainReceipt};
+}
+
+test('ARM64 component uses the shared producer and retains its compiler and JNI toolchain evidence', t => {
+  const result = runComponentBuildFixture(t);
+  assert.equal(result.trace, 'builder arm64-v8a', 'Expected one shared ARM64 build and no ambient Rust commands');
+  assert.equal(result.status, 0, result.stderr);
+  const evidence = 'runner-temp/pocket-android-evidence/';
+  assert.equal(result.read(evidence + 'pocket-arm64-v8a-toolchain.txt'), result.toolchainReceipt);
+  assert.equal(result.read(evidence + 'rust-version.txt'), 'rustc fixture-pinned (recorded version)\n');
+  assert.equal(result.read(evidence + 'cargo-version.txt'), 'cargo fixture-pinned (recorded version)\n');
+  assert.match(result.read(evidence + 'toolchain-sha256.txt'), /pocket-arm64-v8a\.toolchain\.cmake/);
+  assert.match(result.read('github-env.txt'), /^CMAKE_TOOLCHAIN_FILE=.*\/runner-temp\/pocket-arm64-v8a\.toolchain\.cmake$/m);
+  assert.match(result.read(evidence + 'component-sha256.txt'), /target\/aarch64-linux-android\/release\/libsign_pocket_tts_runtime\.so/);
+});
+
+test('a failed ARM64 producer retains its compiler receipt and exit status', t => {
+  const result = runComponentBuildFixture(t, {buildStatus: 47});
+  assert.match(result.stderr, /fixture producer failed \(exit 47\)/);
+  assert.equal(result.status, 47, result.stderr);
+  assert.equal(result.read('runner-temp/pocket-android-evidence/pocket-arm64-v8a-toolchain.txt'), result.toolchainReceipt);
+});
+
+test('a failed compiler receipt copy reports both errors and preserves the producer exit status', t => {
+  const result = runComponentBuildFixture(t, {buildStatus: 47, receiptCopyStatus: 53});
+  assert.match(result.stderr, /fixture producer failed \(exit 47\)/);
+  assert.match(result.stderr, /fixture receipt copy failed \(exit 53\)/);
+  assert.equal(result.status, 47, result.stderr);
+  assert.match(result.stderr, /Failed to retain compiler receipt \(copy exit 53\)/);
+});
+
+test('a failed compiler receipt copy fails the step after a successful ARM64 build', t => {
+  const result = runComponentBuildFixture(t, {receiptCopyStatus: 53});
+  assert.match(result.read('runner-temp/pocket-android-evidence/component-sha256.txt'), /libsign_pocket_tts_runtime\.so/);
+  assert.match(result.stderr, /fixture receipt copy failed \(exit 53\)/);
+  assert.equal(result.status, 53, result.stderr);
+  assert.match(result.stderr, /Failed to retain compiler receipt \(copy exit 53\)/);
+});
+
 test('hosted component workflow enforces source, cost, lock, cross compiler, ELF, and key boundaries', () => audit(workflow));
+test('Android component admits the Qwen pilot branch only for same-repository public manual runs', () => {
+  const expression = workflow.jobs.component.if;
+  const pilotBranch = 'codex/sign-to-speak-qwen-pilot-20261118';
+  const ref = 'refs/heads/' + pilotBranch;
+  assert.equal(evaluate(expression, event('workflow_dispatch')), true);
+
+  for (const [name, candidate] of [
+    ['main dispatch', event('workflow_dispatch', {ref: 'refs/heads/main'})],
+    ['other branch dispatch', event('workflow_dispatch', {ref: ref + '-other'})],
+    ['tag dispatch', event('workflow_dispatch', {ref: 'refs/tags/' + pilotBranch})],
+    ['private repository dispatch', event('workflow_dispatch', {ref, privateRepo: true})],
+    ['other repository dispatch', event('workflow_dispatch', {ref, repository: 'other/repo'})],
+    ['fork pull request', event('pull_request', {ref: 'refs/pull/1/merge', headRepo: 'fork/repo', headRef: pilotBranch})],
+    ['same-repository pull request', event('pull_request', {ref: 'refs/pull/1/merge', headRef: pilotBranch})],
+  ]) assert.equal(evaluate(expression, candidate), false, name);
+
+  assert.equal(evaluate(expression, event('workflow_dispatch', {ref})), true, 'Qwen pilot dispatch');
+});
+
 test('JNI bridge source graph binds the real Rust runtime and four Java exports', () =>
   auditSourceGraph(cmakeSource, jniSource, exportMap));
 test('Rust producer assigns a stable SONAME and Android page alignment', () => auditRustBuild(rustBuild));
@@ -181,7 +322,8 @@ for (const [name, mutate] of [
   ['write permission', w => { w.permissions.contents = 'write'; }],
   ['paid runner', w => { w.jobs.component['runs-on'] = 'ubuntu-24.04-16core'; }],
   ['unbounded job', w => { w.jobs.component['timeout-minutes'] = 60; }],
-  ['unlocked build', w => { step(w.jobs.component, 'Cross compile actual Android ARM64 C ABI library').run = 'cargo build --target aarch64-linux-android'; }],
+  ['ambient Cargo build', w => { const build = step(w.jobs.component, 'Cross compile actual Android ARM64 C ABI library'); build.run += '\ncargo build --release --locked'; }],
+  ['wrong build ABI', w => { const build = step(w.jobs.component, 'Cross compile actual Android ARM64 C ABI library'); build.run = build.run.replace('build-pocket-runtime.sh arm64-v8a', 'build-pocket-runtime.sh x86_64'); }],
   ['missing segment audit', w => { step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run = 'echo skip'; }],
   ['missing Rust SONAME audit', w => { step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run = step(w.jobs.component, 'Audit ARM64 ELF, 16 KiB segments, dependencies, and C ABI exports').run.replace("soname != ['libsign_pocket_tts_runtime.so']", 'false'); }],
   ['missing JNI probe', w => { w.jobs.component.steps.splice(w.jobs.component.steps.findIndex(x => x.name === 'Cross compile and audit actual Android JNI bridge linkage'), 1); }],
@@ -190,7 +332,7 @@ for (const [name, mutate] of [
   ['JNI runtime mismatch', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run.replace('runtime not in needed', 'false'); }],
   ['JNI path audit bypass', w => { step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage').run.replace("'/' in name", 'false'); }],
   ['JNI dynamic path audit bypass', w => { const jni = step(w.jobs.component, 'Cross compile and audit actual Android JNI bridge linkage'); jni.run = jni.run.replace(dynamicPathAudit, 'if False:'); }],
-  ['no offline metadata', w => { step(w.jobs.component, 'Fetch complete locked Cargo graph and verify offline metadata').run = 'cargo fetch --locked'; }],
+  ['no offline metadata receipt check', w => { const build = step(w.jobs.component, 'Cross compile actual Android ARM64 C ABI library'); build.run = build.run.replace('test -s "$RUNNER_TEMP/pocket-arm64-v8a-metadata.json"', ''); }],
   ['key generation', w => { w.jobs.component.steps.push({run: 'keytool -genkeypair'}); }],
   ['long artifact retention', w => { step(w.jobs.component, 'Retain source and ELF audit evidence').with['retention-days'] = 90; }],
 ]) test(`rejects ${name}`, () => { const candidate = structuredClone(workflow); mutate(candidate); assert.throws(() => audit(candidate)); });

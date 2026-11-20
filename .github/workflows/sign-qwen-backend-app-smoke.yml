@@ -1,0 +1,475 @@
+name: Sign Qwen Android backend app smoke build
+
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/sign-to-speak-qwen-pilot-20261118'
+    paths:
+      - '.github/workflows/sign-qwen-backend-app-smoke.yml'
+      - 'native/research/qwen_pilot/backend_app/**'
+      - 'native/research/qwen_pilot/runtime_qa/test_shaderc_install_config.py'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      NDK_VERSION: '27.3.13750724'
+      ANDROID_API: '28'
+      ANDROID_SDK: '36'
+      BUILD_TOOLS: '36.0.0'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      LLAMA_COMMIT: b1b770d90d94cad9e9ea5b993bdbc383a522fb28
+      SHADERC_RELEASE_MANIFEST_COMMIT: 75137cca3b41a59b8b3e5c42177da8a9490c042f
+      SHADERC_SOURCE_COMMIT: b64fd42c4a2a9d501c47aca5d3571f7673a5e9cc
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Check out llama.cpp
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ggml-org/llama.cpp
+          ref: ${{ env.LLAMA_COMMIT }}
+          path: llama.cpp
+          persist-credentials: false
+
+      - name: Check out the Shaderc release manifest
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: google/shaderc
+          ref: ${{ env.SHADERC_RELEASE_MANIFEST_COMMIT }}
+          path: shaderc-release-manifest
+          persist-credentials: false
+
+      - name: Check out Shaderc sources
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: google/shaderc
+          ref: ${{ env.SHADERC_SOURCE_COMMIT }}
+          path: shaderc
+          persist-credentials: false
+
+      - name: Install runner dependencies
+        shell: bash
+        run: |
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          mkdir -p "$diagnostics"
+          exec > >(tee "$diagnostics/dependencies.log") 2>&1
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y spirv-headers spirv-tools libvulkan-dev
+
+          sdk_packages=()
+          if [[ ! -f "$ANDROID_HOME/platforms/android-$ANDROID_SDK/android.jar" ]]; then
+            sdk_packages+=("platforms;android-$ANDROID_SDK")
+          fi
+          if [[ ! -x "$ANDROID_HOME/build-tools/$BUILD_TOOLS/aapt2" ]]; then
+            sdk_packages+=("build-tools;$BUILD_TOOLS")
+          fi
+          if [[ ! -f "$ANDROID_HOME/ndk/$NDK_VERSION/build/cmake/android.toolchain.cmake" ]]; then
+            sdk_packages+=("ndk;$NDK_VERSION")
+          fi
+          if (( ${#sdk_packages[@]} )); then
+            "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "${sdk_packages[@]}"
+          fi
+
+      - name: Check Shaderc install export configuration
+        shell: bash
+        run: |
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          mkdir -p "$diagnostics"
+          python3 "$GITHUB_WORKSPACE/native/research/qwen_pilot/runtime_qa/test_shaderc_install_config.py" \
+            "$GITHUB_WORKSPACE/.github/workflows/sign-qwen-backend-app-smoke.yml" \
+            2>&1 | tee "$diagnostics/shaderc-install-config.log"
+
+      - name: Build pinned host glslc and compile the integer-dot feature test
+        shell: bash
+        run: |
+          export LC_ALL=C
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          compiler_receipt="$diagnostics/shader-compiler"
+          mkdir -p "$compiler_receipt"
+          exec > >(tee "$diagnostics/host-glslc.log") 2>&1
+          host_build="$RUNNER_TEMP/sign-qwen-shaderc-build"
+          glslc="$host_build/glslc/glslc"
+
+          test "$(git -C shaderc-release-manifest rev-parse HEAD)" = "$SHADERC_RELEASE_MANIFEST_COMMIT"
+          test "$(git -C shaderc rev-parse HEAD)" = "$SHADERC_SOURCE_COMMIT"
+          cp shaderc-release-manifest/known_good.json "$compiler_receipt/"
+          cp shaderc/DEPS "$compiler_receipt/"
+          (
+            cd shaderc
+            python3 utils/git-sync-deps
+          )
+
+          # git-sync-deps fetches from the source DEPS file. Check every resolved
+          # checkout against the separate LunarG-selected release manifest.
+          python3 - "$compiler_receipt/known_good.json" <<'PY' | tee "$compiler_receipt/resolved-commits.txt"
+          import json
+          import os
+          from pathlib import Path
+          import subprocess
+          import sys
+
+          print("lunarg_sdk_config=https://vulkan.lunarg.com/sdk/config/1.4.363.0/linux/config.json")
+          print("shaderc_release_manifest_commit=" + os.environ["SHADERC_RELEASE_MANIFEST_COMMIT"])
+          entries = json.loads(Path(sys.argv[1]).read_text())["commits"]
+          for entry in entries:
+              name = entry["name"]
+              subdir = ("third_party/spirv-headers" if name == "spirv-headers"
+                        else entry.get("subdir", ""))
+              checkout = Path("shaderc") / subdir
+              git = ["git", "-C", str(checkout)]
+              actual = subprocess.check_output(git + ["rev-parse", "HEAD"], text=True).strip()
+              expected = entry["commit"]
+              if actual != expected:
+                  sys.exit(f"{checkout}: expected {expected}, found {actual}")
+              if name == "shaderc" and actual != os.environ["SHADERC_SOURCE_COMMIT"]:
+                  sys.exit(f"Release manifest Shaderc commit {actual} disagrees with workflow pin")
+              print(f"{name} {actual} https://github.com/{entry['subrepo']} {checkout}")
+          PY
+
+          # Keep dependency exports enabled together. This target is built without running install.
+          cmake -S shaderc -B "$host_build" -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DSHADERC_SKIP_TESTS=ON -DSHADERC_SKIP_EXAMPLES=ON -DSHADERC_SKIP_INSTALL=OFF
+          cmake --build "$host_build" --target glslc_exe --parallel 2
+          test -x "$glslc"
+          {
+            "$glslc" --version
+            sha256sum "$glslc"
+            readelf -hW "$glslc" | grep -E 'Machine: +Advanced Micro Devices X86-64$'
+          } | tee "$compiler_receipt/glslc.txt"
+          integer_dot_test=llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders/feature-tests/integer_dot.comp
+          "$glslc" -fshader-stage=compute --target-env=vulkan1.3 "$integer_dot_test" \
+            -o "$compiler_receipt/integer_dot.spv" 2>&1 | tee "$compiler_receipt/integer-dot-compile.log"
+          test -s "$compiler_receipt/integer_dot.spv"
+          sha256sum "$integer_dot_test" "$compiler_receipt/integer_dot.spv" \
+            | tee "$compiler_receipt/integer-dot-sha256.txt"
+
+      - name: Build and verify the unsigned Android QA probe
+        shell: bash
+        run: |
+          export LC_ALL=C
+          diagnostics="$RUNNER_TEMP/sign-qwen-backend-app-diagnostics"
+          exec > >(tee "$diagnostics/build.log") 2>&1
+          build_dir="$RUNNER_TEMP/sign-qwen-backend-app-build"
+          package="$RUNNER_TEMP/sign-qwen-backend-app-package"
+          mkdir -p "$package" "$build_dir"
+          qa_source=native/research/qwen_pilot/backend_app
+          java_package=com.hatsunama.signtospeak.backendprobe
+          java_path=com/hatsunama/signtospeak/backendprobe
+          entry_point="$java_package.ProbeInstrumentation"
+          build_receipt="$diagnostics/BUILD.txt"
+
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
+          toolchain="$ndk/build/cmake/android.toolchain.cmake"
+          ndk_llvm="$ndk/toolchains/llvm/prebuilt/linux-x86_64"
+          vulkan_library="$ndk_llvm/sysroot/usr/lib/aarch64-linux-android/$ANDROID_API/libvulkan.so"
+          glslc="$RUNNER_TEMP/sign-qwen-shaderc-build/glslc/glslc"
+          android_jar="$ANDROID_HOME/platforms/android-$ANDROID_SDK/android.jar"
+          build_tools="$ANDROID_HOME/build-tools/$BUILD_TOOLS"
+          test -f "$toolchain"
+          test -f "$vulkan_library"
+          test -x "$glslc"
+          test -f "$android_jar"
+          test -x "$build_tools/aapt2"
+          test -x "$build_tools/d8"
+          test -x "$build_tools/zipalign"
+          test "$(awk -F ' = ' '/^Pkg\.Revision / { print $2 }' "$ndk/source.properties")" = "$NDK_VERSION"
+          grep -Fx "Pkg.Revision=$BUILD_TOOLS" "$build_tools/source.properties"
+
+          # Restrict target Vulkan and SPIR-V headers to a staged tree and the Android sysroot.
+          vulkan_include="$(mktemp -d "$RUNNER_TEMP/sign-qwen-vulkan-include.XXXXXX")"
+          cp -RL /usr/include/vulkan /usr/include/spirv "$vulkan_include/"
+          if [[ -d /usr/include/vk_video ]]; then
+            cp -RL /usr/include/vk_video "$vulkan_include/"
+          fi
+          test -f "$vulkan_include/vulkan/vulkan.hpp"
+          test -f "$vulkan_include/spirv/unified1/spirv.hpp"
+
+          spirv_package_files="$(dpkg -L spirv-headers)"
+          spirv_config_paths="$(grep -E '/SPIRV-HeadersConfig\.cmake$' <<< "$spirv_package_files")"
+          mapfile -t spirv_configs <<< "$spirv_config_paths"
+          test "${#spirv_configs[@]}" -eq 1
+          spirv_config="${spirv_configs[0]}"
+          test -f "$spirv_config"
+          spirv_dir="${spirv_config%/*}"
+
+          workflow_commit="$(git rev-parse HEAD)"
+          test "$workflow_commit" = "$GITHUB_SHA"
+          llama_commit="$(git -C llama.cpp rev-parse HEAD)"
+          test "$llama_commit" = "$LLAMA_COMMIT"
+          host_cc="$(command -v gcc)"
+          host_cxx="$(command -v g++)"
+          apt_packages=(spirv-headers spirv-tools libvulkan-dev)
+          {
+            printf 'scope=unsigned Android Vulkan/CPU instrumentation QA APK\n'
+            printf 'workflow_source=%s\nworkflow_commit=%s\n' "$GITHUB_REPOSITORY" "$workflow_commit"
+            printf 'workflow_run=%s/actions/runs/%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'llama_source=https://github.com/ggml-org/llama.cpp\nllama_commit=%s\n' "$llama_commit"
+            printf 'runner=%s %s\nandroid_ndk=%s\nandroid_abi=arm64-v8a\nandroid_min_sdk=%s\nandroid_compile_target_sdk=%s\nandroid_build_tools=%s\n' \
+              "$ImageOS" "$ImageVersion" "$NDK_VERSION" "$ANDROID_API" "$ANDROID_SDK" "$BUILD_TOOLS"
+            cmake --version
+            ninja --version
+            "$host_cc" --version
+            "$host_cxx" --version
+            "$ndk_llvm/bin/clang++" --version
+            "$glslc" --version
+            /usr/bin/spirv-val --version
+            /usr/bin/spirv-dis --version
+            cat "$diagnostics/shader-compiler/resolved-commits.txt"
+            java -version
+            javac -version
+            "$build_tools/aapt2" version
+            "$build_tools/d8" --version
+            dpkg-query -W -f='${binary:Package}\t${Version}\n' "${apt_packages[@]}"
+            sha256sum "$toolchain" "$vulkan_library" "$glslc" "$spirv_config" "$android_jar"
+            printf '\nStaged header tree SHA-256 (sorted relative paths and file hashes)\n'
+            (
+              cd "$vulkan_include"
+              find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum
+            )
+            printf '\nBuild commands\n'
+          } > "$build_receipt" 2>&1
+
+          run_build_command() {
+            { printf '%q ' "$@"; printf '\n'; } >> "$build_receipt"
+            "$@"
+          }
+
+          mkdir -p "$build_dir"/{host-tests,classes,apk/lib/arm64-v8a}
+          run_build_command javac -source 8 -target 8 -d "$build_dir/host-tests" \
+            "$qa_source/src/$java_path/ProbeContract.java" \
+            "$qa_source/tests/$java_path/ProbeContractTest.java"
+          run_build_command java -cp "$build_dir/host-tests" "$java_package.ProbeContractTest" \
+            | tee "$diagnostics/contract-test.log"
+
+          options=(
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON
+            -DCMAKE_C_FLAGS='-ffunction-sections -fdata-sections'
+            -DCMAKE_CXX_FLAGS='-ffunction-sections -fdata-sections'
+            -DLLAMA_BUILD_IS_DEV=OFF -DLLAMA_BUILD_COMMON=OFF -DLLAMA_BUILD_TOOLS=OFF
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_APP=OFF
+            -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_UI=OFF -DLLAMA_CONNECT=OFF
+            -DLLAMA_OPENSSL=OFF -DLLAMA_SUBPROCESS=OFF -DLLAMA_BUILD_MTMD=OFF
+            -DMTMD_VIDEO=OFF -DGGML_NATIVE=OFF -DGGML_CPU=ON
+            -DGGML_BACKEND_DL=OFF -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF
+            -DGGML_BLAS=OFF -DGGML_CPU_KLEIDIAI=OFF -DGGML_RPC=OFF
+            -DGGML_CUDA=OFF -DGGML_HIP=OFF -DGGML_METAL=OFF -DGGML_VULKAN=ON
+            -DGGML_OPENCL=OFF -DGGML_WEBGPU=OFF -DGGML_SYCL=OFF -DGGML_HEXAGON=OFF
+            -DGGML_CANN=OFF -DGGML_ET=OFF -DGGML_MUSA=OFF -DGGML_VIRTGPU=OFF
+            -DGGML_VIRTGPU_BACKEND=OFF -DGGML_ZDNN=OFF -DGGML_ZENDNN=OFF -DGGML_OPENVINO=OFF
+          )
+
+          run_build_command cmake -S "$qa_source" -B "$build_dir" "${options[@]}" \
+            -DLLAMA_SOURCE_DIR:PATH="$PWD/llama.cpp" \
+            -DCMAKE_TOOLCHAIN_FILE:FILEPATH="$toolchain" -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM="android-$ANDROID_API" -DANDROID_STL=c++_static \
+            -DCMAKE_SHARED_LINKER_FLAGS='-Wl,--gc-sections,-z,max-page-size=16384,-z,common-page-size=16384' \
+            -DVulkan_INCLUDE_DIR:PATH="$vulkan_include" -DVulkan_LIBRARY:FILEPATH="$vulkan_library" \
+            -DVulkan_GLSLC_EXECUTABLE:FILEPATH="$glslc" -DSPIRV-Headers_DIR:PATH="$spirv_dir" \
+            2>&1 | tee "$diagnostics/android-configure.log"
+          grep -F 'GL_EXT_integer_dot_product supported by glslc' "$diagnostics/android-configure.log"
+
+          cache="$build_dir/CMakeCache.txt"
+          grep -Fx "LLAMA_SOURCE_DIR:PATH=$PWD/llama.cpp" "$cache"
+          grep -Fx 'GGML_VULKAN:BOOL=ON' "$cache"
+          grep -Fx 'GGML_CPU:BOOL=ON' "$cache"
+          grep -Fx 'GGML_OPENCL:BOOL=OFF' "$cache"
+          grep -Fx 'LLAMA_BUILD_SERVER:BOOL=OFF' "$cache"
+          grep -Fx 'LLAMA_BUILD_COMMON:BOOL=OFF' "$cache"
+          grep -Fx "CMAKE_TOOLCHAIN_FILE:FILEPATH=$toolchain" "$cache"
+          grep -Fx "Vulkan_INCLUDE_DIR:PATH=$vulkan_include" "$cache"
+          grep -Fx "Vulkan_LIBRARY:FILEPATH=$vulkan_library" "$cache"
+          grep -Fx "Vulkan_GLSLC_EXECUTABLE:FILEPATH=$glslc" "$cache"
+          grep -Fx "SPIRV-Headers_DIR:PATH=$spirv_dir" "$cache"
+          host_toolchain="$build_dir/host-toolchain.cmake"
+          grep -Fx "set(CMAKE_C_COMPILER \"$host_cc\")" "$host_toolchain"
+          grep -Fx "set(CMAKE_CXX_COMPILER \"$host_cxx\")" "$host_toolchain"
+
+          run_build_command cmake --build "$build_dir" --target sign_backend_probe --parallel 2
+          readelf -hW "$build_dir/Release/vulkan-shaders-gen" | grep -E 'Machine: +Advanced Micro Devices X86-64$'
+
+          library="$package/libsign_backend_probe.so"
+          install -m644 "$build_dir/lib/libsign_backend_probe.so" "$library"
+
+          vulkan_build="$build_dir/llama.cpp/ggml/src/ggml-vulkan"
+          generator_cache="$vulkan_build/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-build/CMakeCache.txt"
+          cp "$generator_cache" "$diagnostics/shader-compiler/generator-CMakeCache.txt"
+          grep -E '^GGML_VULKAN_INTEGER_DOT_GLSLC_SUPPORT:[^=]+=ON$' "$generator_cache"
+
+          shader_evidence="$diagnostics/q4-k-shaders"
+          mkdir -p "$shader_evidence"
+          q4_modules=()
+          for family in f32_f32 q8_1_f32; do
+            for suffix in '' _subgroup _subgroup_no_shmem; do
+              shader="mul_mat_vec_q4_k_${family}${suffix}"
+              cp "$vulkan_build/vulkan-shaders.spv/$shader.spv" "$shader_evidence/"
+              q4_modules+=("$shader.spv")
+            done
+          done
+          (
+            cd "$shader_evidence"
+            sha256sum "${q4_modules[@]}" > SHA256SUMS
+            sha256sum -c SHA256SUMS
+            for module in "${q4_modules[@]}"; do
+              /usr/bin/spirv-dis "$module" -o "$module.spvasm" 2>&1 | tee "$module.dis.log"
+              /usr/bin/spirv-val --target-env vulkan1.2 --scalar-block-layout "$module" \
+                2>&1 | tee "$module.val.log"
+              if [[ "$module" == mul_mat_vec_q4_k_q8_1_f32* ]]; then
+                grep -E 'Op(S|U|SU)Dot(KHR)?[[:space:]].*PackedVectorFormat4x8Bit(KHR)?$' \
+                  "$module.spvasm" > "$module.packed-dot.txt"
+              fi
+            done
+          )
+          python3 - "$library" "$shader_evidence" "${q4_modules[@]}" <<'PY' | tee "$shader_evidence/embedded.txt"
+          from pathlib import Path
+          import sys
+
+          library = Path(sys.argv[1]).read_bytes()
+          shader_dir = Path(sys.argv[2])
+          for filename in sys.argv[3:]:
+              module = (shader_dir / filename).read_bytes()
+              if not module or module not in library:
+                  sys.exit(f"Shader missing from the final Android ELF: {filename}")
+              print(f"Embedded {filename} ({len(module)} bytes)")
+          pipeline = b"mul_mat_vec_q4_k_q8_1_f32\x00"
+          if pipeline not in library:
+              sys.exit("Q4_K packed-dot pipeline name missing from Android ELF")
+          print("Q4_K packed-dot pipeline present in Android ELF")
+          PY
+          {
+            readelf -hW "$library"
+            readelf -dW "$library"
+            readelf -lW "$library"
+          } > "$diagnostics/elf.txt"
+          grep -E 'Machine: +AArch64$' "$diagnostics/elf.txt"
+          grep -E 'Type: +DYN ' "$diagnostics/elf.txt"
+          dependencies="$(awk '$2 == "(NEEDED)" { gsub(/[][]/, "", $NF); print $NF }' "$diagnostics/elf.txt")"
+          grep -Fx 'libvulkan.so' <<< "$dependencies"
+          if grep -Ev '^lib(c|m|dl|log|android|vulkan)\.so$' <<< "$dependencies"; then
+            printf 'Unexpected shared library dependency\n' >&2
+            exit 1
+          fi
+          symbols="$(readelf --dyn-syms -W "$library")"
+          if grep -E ' UND +listen(@|[[:space:]]|$)' <<< "$symbols"; then
+            printf 'Unexpected listen import\n' >&2
+            exit 1
+          fi
+          alignments="$(awk '$1 == "LOAD" { print $NF }' "$diagnostics/elf.txt")"
+          test -n "$alignments"
+          while read -r alignment; do
+            test "$((alignment))" -ge 16384
+          done <<< "$alignments"
+
+          mapfile -d '' -t java_sources < <(find "$qa_source/src" -name '*.java' -print0 | sort -z)
+          run_build_command javac -source 8 -target 8 -cp "$android_jar" \
+            -d "$build_dir/classes" "${java_sources[@]}"
+          mapfile -d '' -t classes < <(find "$build_dir/classes" -name '*.class' -print0 | sort -z)
+          run_build_command "$build_tools/d8" --release --lib "$android_jar" --min-api "$ANDROID_API" \
+            --output "$build_dir/apk" "${classes[@]}"
+          install -m644 "$library" "$build_dir/apk/lib/arm64-v8a/libsign_backend_probe.so"
+          raw_apk="$build_dir/unsigned.apk"
+          aligned_apk="$package/sign-qwen-backend-app-unsigned-aligned.apk"
+          run_build_command "$build_tools/aapt2" link --manifest "$qa_source/AndroidManifest.xml" \
+            -I "$android_jar" --min-sdk-version "$ANDROID_API" --target-sdk-version "$ANDROID_SDK" -o "$raw_apk"
+          (
+            cd "$build_dir/apk"
+            run_build_command zip -0 -X "$raw_apk" classes.dex lib/arm64-v8a/libsign_backend_probe.so
+          )
+          run_build_command "$build_tools/zipalign" -P 16 -f 4 "$raw_apk" "$aligned_apk"
+          run_build_command "$build_tools/zipalign" -c -P 16 -v 4 "$aligned_apk" > "$diagnostics/zipalign.txt"
+          cmp "$library" <(unzip -p "$aligned_apk" lib/arm64-v8a/libsign_backend_probe.so)
+
+          "$build_tools/aapt2" dump badging "$aligned_apk" > "$diagnostics/badging.txt"
+          "$build_tools/aapt2" dump permissions "$aligned_apk" > "$diagnostics/permissions.txt"
+          "$build_tools/aapt2" dump xmltree --file AndroidManifest.xml "$aligned_apk" > "$diagnostics/manifest.txt"
+          grep -F "package: name='$java_package'" "$diagnostics/badging.txt"
+          grep -Fx "minSdkVersion:'$ANDROID_API'" "$diagnostics/badging.txt"
+          grep -Fx "targetSdkVersion:'$ANDROID_SDK'" "$diagnostics/badging.txt"
+          grep -E '^[[:space:]]*E: instrumentation([[:space:]]|$)' "$diagnostics/manifest.txt"
+          grep -F "\"$entry_point\"" "$diagnostics/manifest.txt"
+          grep -E 'A: (android|http://schemas\.android\.com/apk/res/android):targetPackage' "$diagnostics/manifest.txt" | grep -F "\"$java_package\""
+          for flag in debuggable testOnly; do
+            grep -E "A: (android|http://schemas\.android\.com/apk/res/android):$flag(\([^)]+\))?=.*(true|0xffffffff|0x1)$" "$diagnostics/manifest.txt"
+          done
+          if grep -Ei 'uses-permission|android\.permission\.INTERNET' "$diagnostics/permissions.txt" ||
+             grep -E 'E: (uses-permission[^[:space:]]*|activity|activity-alias|provider|service|receiver)([[:space:]]|$)' \
+               "$diagnostics/manifest.txt"; then
+            printf 'Unexpected permission or application component\n' >&2
+            exit 1
+          fi
+
+          {
+            printf '\nNative inspection\n'
+            printf 'System shared libraries:\n%s\n' "$dependencies"
+            printf 'PT_LOAD alignments:\n%s\nlisten_import=absent\n' "$alignments"
+            printf '\nAPK inspection\n'
+            cat "$diagnostics/contract-test.log" "$diagnostics"/{badging,permissions,manifest,zipalign}.txt
+          } >> "$build_receipt"
+
+          cp -R "$diagnostics/shader-compiler" "$diagnostics/q4-k-shaders" "$package/"
+          install -Dm644 shaderc/LICENSE "$package/licenses/shaderc/LICENSE"
+          install -Dm644 shaderc/third_party/glslang/LICENSE.txt "$package/licenses/shaderc/glslang/LICENSE.txt"
+          for dep in spirv-headers spirv-tools; do
+            install -Dm644 "shaderc/third_party/$dep/LICENSE" "$package/licenses/shaderc/$dep/LICENSE"
+          done
+
+          mkdir -p "$package/source/backend_app"
+          cp -R "$qa_source/." "$package/source/backend_app/"
+          install -Dm644 .github/workflows/sign-qwen-backend-app-smoke.yml "$package/source/sign-qwen-backend-app-smoke.yml"
+          install -Dm644 llama.cpp/tests/test-backend-ops.cpp "$package/source/llama.cpp/tests/test-backend-ops.cpp"
+          install -Dm644 llama.cpp/LICENSE "$package/licenses/llama.cpp/LICENSE"
+          install -Dm644 "$ndk/NOTICE" "$package/licenses/android-ndk/NOTICE"
+          install -Dm644 /usr/share/common-licenses/Apache-2.0 "$package/licenses/Apache-2.0"
+          for apt_package in "${apt_packages[@]}"; do
+            install -Dm644 "/usr/share/doc/$apt_package/copyright" "$package/licenses/ubuntu/$apt_package/copyright"
+          done
+          find llama.cpp/vendor llama.cpp/ggml llama.cpp/licenses -type f \
+            \( -iname 'license*' -o -iname 'copying*' -o -iname 'notice*' \) -print0 |
+            while IFS= read -r -d '' license; do
+              install -Dm644 "$license" "$package/licenses/$license"
+            done
+          install -m644 "$build_receipt" "$package/BUILD.txt"
+          (
+            cd "$package"
+            find . -type f ! -path './SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          tar -czf "$RUNNER_TEMP/sign-qwen-backend-app-smoke.tar.gz" -C "$package" .
+
+      - name: Upload the unsigned Android QA artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/sign-qwen-backend-app-smoke.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload build diagnostics
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sign-qwen-backend-app-diagnostics
+          path: |
+            ${{ runner.temp }}/sign-qwen-backend-app-diagnostics/
+            ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeCache.txt
+            ${{ runner.temp }}/sign-qwen-backend-app-build/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ runner.temp }}/sign-qwen-backend-app-build/host-toolchain.cmake
+            ${{ runner.temp }}/sign-qwen-shaderc-build/CMakeCache.txt
+            ${{ runner.temp }}/sign-qwen-shaderc-build/CMakeFiles/CMakeConfigureLog.yaml
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders-gen-prefix/src/vulkan-shaders-gen-build/CMakeCache.txt
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders.spv/mul_mat_vec_q4_k_f32_f32*.spv
+            ${{ runner.temp }}/sign-qwen-backend-app-build/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders.spv/mul_mat_vec_q4_k_q8_1_f32*.spv
+            ${{ runner.temp }}/sign-qwen-backend-app-package/sign-qwen-backend-app-unsigned-aligned.apk
+            ${{ runner.temp }}/sign-qwen-backend-app-package/libsign_backend_probe.so
+          if-no-files-found: warn
+          retention-days: 7
+

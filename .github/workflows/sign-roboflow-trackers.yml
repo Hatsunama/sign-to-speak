@@ -136,6 +136,8 @@ jobs:
         run: |
           set -euo pipefail
           timeout 900 bash scripts/build-pocket-runtime.sh arm64-v8a
+          mkdir -p "$RUNNER_TEMP/sign-evidence"
+          cp "$RUNNER_TEMP/pocket-arm64-v8a-toolchain.txt" "$RUNNER_TEMP/sign-evidence/"
           python3 scripts/pocket-tts-audition.py download --asset-dir "$RUNNER_TEMP/pocket-models"
           python3 scripts/pocket-tts-audition.py verify --asset-dir "$RUNNER_TEMP/pocket-models"
           python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \

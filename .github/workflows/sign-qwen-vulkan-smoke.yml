@@ -1,0 +1,262 @@
+name: Sign Qwen Android Vulkan smoke build
+
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/sign-to-speak-qwen-pilot-20261118'
+    paths:
+      - '.github/workflows/sign-qwen-vulkan-smoke.yml'
+      - 'native/research/qwen_pilot/runtime_qa/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      NDK_VERSION: '27.3.13750724'
+      ANDROID_API: '28'
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      LLAMA_COMMIT: b1b770d90d94cad9e9ea5b993bdbc383a522fb28
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Check out llama.cpp
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ggml-org/llama.cpp
+          ref: ${{ env.LLAMA_COMMIT }}
+          path: llama.cpp
+          persist-credentials: false
+
+      - name: Install runner Vulkan build dependencies
+        shell: bash
+        run: |
+          sudo apt-get update
+          sudo apt-get install --no-install-recommends -y glslc spirv-headers spirv-tools libvulkan-dev
+
+      - name: Build, inspect and package the Android Vulkan QA tools
+        shell: bash
+        run: |
+          export LC_ALL=C
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
+          toolchain="$ndk/build/cmake/android.toolchain.cmake"
+          ndk_llvm="$ndk/toolchains/llvm/prebuilt/linux-x86_64"
+          vulkan_library="$ndk_llvm/sysroot/usr/lib/aarch64-linux-android/$ANDROID_API/libvulkan.so"
+          glslc=/usr/bin/glslc
+          test -f "$toolchain"
+          test -f "$vulkan_library"
+          test -x "$glslc"
+          test "$(awk -F ' = ' '/^Pkg\.Revision / { print $2 }' "$ndk/source.properties")" = "$NDK_VERSION"
+
+          # Restrict the target compiler to these headers and the Android sysroot.
+          vulkan_include="$(mktemp -d "$RUNNER_TEMP/sign-qwen-vulkan-include.XXXXXX")"
+          cp -RL /usr/include/vulkan /usr/include/spirv "$vulkan_include/"
+          if [[ -d /usr/include/vk_video ]]; then
+            cp -RL /usr/include/vk_video "$vulkan_include/"
+          fi
+          test -f "$vulkan_include/vulkan/vulkan.hpp"
+          test -f "$vulkan_include/spirv/unified1/spirv.hpp"
+
+          # Upstream requires this config at configure time. The staged header
+          # tree supplies the SPIR-V includes to the Android compiler.
+          spirv_package_files="$(dpkg -L spirv-headers)"
+          spirv_config_paths="$(grep -E '/SPIRV-HeadersConfig\.cmake$' <<< "$spirv_package_files")"
+          mapfile -t spirv_configs <<< "$spirv_config_paths"
+          test "${#spirv_configs[@]}" -eq 1
+          spirv_config="${spirv_configs[0]}"
+          test -f "$spirv_config"
+          spirv_dir="${spirv_config%/*}"
+
+          package="$(mktemp -d "$RUNNER_TEMP/sign-qwen-vulkan-smoke.XXXXXX")"
+          build_dir="$RUNNER_TEMP/sign-qwen-vulkan-build"
+          qa_source=native/research/qwen_pilot/runtime_qa
+          manifest="$package/BUILD.txt"
+          workflow_commit="$(git rev-parse HEAD)"
+          test "$workflow_commit" = "$GITHUB_SHA"
+          llama_commit="$(git -C llama.cpp rev-parse HEAD)"
+          test "$llama_commit" = "$LLAMA_COMMIT"
+          host_cc="$(command -v gcc)"
+          host_cxx="$(command -v g++)"
+          apt_packages=(glslc libshaderc1 spirv-headers spirv-tools libvulkan-dev)
+          {
+            printf 'scope=Android Vulkan CLI, multimodal logit probe and baseline SPIR-V diagnostics\n'
+            printf 'android_targets=llama-mtmd-cli qwen-backend-probe\n'
+            printf 'workflow_source=%s\nworkflow_commit=%s\n' "$GITHUB_REPOSITORY" "$workflow_commit"
+            printf 'workflow_run=%s/actions/runs/%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'llama_source=https://github.com/ggml-org/llama.cpp\nllama_tag=v1.0.0\nllama_commit=%s\n' "$llama_commit"
+            printf 'runner=%s %s\nandroid_ndk=%s\nandroid_abi=arm64-v8a\nandroid_api=%s\n' "$ImageOS" "$ImageVersion" "$NDK_VERSION" "$ANDROID_API"
+            cmake --version
+            ninja --version
+            "$host_cc" --version
+            "$host_cxx" --version
+            "$ndk_llvm/bin/clang++" --version
+            "$glslc" --version
+            spirv-val --version
+            spirv-dis --version
+            dpkg-query -W -f='${binary:Package}\t${Version}\n' "${apt_packages[@]}"
+            sha256sum "$toolchain" "$vulkan_library" "$glslc" "$spirv_config"
+            printf '\nQA source SHA-256\n'
+            sha256sum "$qa_source"/{CMakeLists.txt,qwen_backend_probe.cpp,README.md}
+            printf '\nStaged header tree SHA-256 (sorted relative paths and file hashes)\n'
+            (
+              cd "$vulkan_include"
+              find . -type f -print0 | sort -z | xargs -0 sha256sum | sha256sum
+            )
+            printf '\nBuild commands\n'
+          } > "$manifest"
+
+          run_build_command() {
+            { printf '%q ' "$@"; printf '\n'; } >> "$manifest"
+            "$@"
+          }
+
+          options=(
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+            -DCMAKE_C_FLAGS='-ffunction-sections -fdata-sections'
+            -DCMAKE_CXX_FLAGS='-ffunction-sections -fdata-sections'
+            -DLLAMA_BUILD_IS_DEV=OFF -DLLAMA_BUILD_COMMON=ON -DLLAMA_BUILD_TOOLS=ON
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_APP=OFF
+            -DLLAMA_BUILD_SERVER=OFF -DLLAMA_BUILD_UI=OFF -DLLAMA_CONNECT=OFF
+            -DLLAMA_OPENSSL=OFF -DLLAMA_SUBPROCESS=OFF
+            -DMTMD_VIDEO=OFF -DGGML_NATIVE=OFF -DGGML_CPU=ON
+            -DGGML_BACKEND_DL=OFF -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF
+            -DGGML_BLAS=OFF -DGGML_CPU_KLEIDIAI=OFF -DGGML_RPC=OFF
+            -DGGML_CUDA=OFF -DGGML_HIP=OFF -DGGML_METAL=OFF -DGGML_VULKAN=ON
+            -DGGML_OPENCL=OFF -DGGML_WEBGPU=OFF -DGGML_SYCL=OFF -DGGML_HEXAGON=OFF
+            -DGGML_CANN=OFF -DGGML_ET=OFF -DGGML_MUSA=OFF -DGGML_VIRTGPU=OFF
+            -DGGML_VIRTGPU_BACKEND=OFF -DGGML_ZDNN=OFF -DGGML_ZENDNN=OFF -DGGML_OPENVINO=OFF
+          )
+
+          run_build_command cmake -S "$qa_source" -B "$build_dir" "${options[@]}" \
+            -DLLAMA_SOURCE_DIR:PATH="$PWD/llama.cpp" \
+            -DCMAKE_TOOLCHAIN_FILE:FILEPATH="$toolchain" -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM="android-$ANDROID_API" -DANDROID_STL=c++_static \
+            -DCMAKE_EXE_LINKER_FLAGS='-Wl,--gc-sections,-z,max-page-size=16384,-z,common-page-size=16384' \
+            -DVulkan_INCLUDE_DIR:PATH="$vulkan_include" -DVulkan_LIBRARY:FILEPATH="$vulkan_library" \
+            -DVulkan_GLSLC_EXECUTABLE:FILEPATH="$glslc" -DSPIRV-Headers_DIR:PATH="$spirv_dir"
+
+          cache="$build_dir/CMakeCache.txt"
+          grep -Fx "LLAMA_SOURCE_DIR:PATH=$PWD/llama.cpp" "$cache"
+          grep -Fx 'GGML_VULKAN:BOOL=ON' "$cache"
+          grep -Fx 'GGML_CPU:BOOL=ON' "$cache"
+          grep -Fx "CMAKE_TOOLCHAIN_FILE:FILEPATH=$toolchain" "$cache"
+          grep -Fx "Vulkan_INCLUDE_DIR:PATH=$vulkan_include" "$cache"
+          grep -Fx "Vulkan_LIBRARY:FILEPATH=$vulkan_library" "$cache"
+          grep -Fx "Vulkan_GLSLC_EXECUTABLE:FILEPATH=$glslc" "$cache"
+          grep -Fx "SPIRV-Headers_DIR:PATH=$spirv_dir" "$cache"
+          host_toolchain="$build_dir/host-toolchain.cmake"
+          grep -Fx "set(CMAKE_C_COMPILER \"$host_cc\")" "$host_toolchain"
+          grep -Fx "set(CMAKE_CXX_COMPILER \"$host_cxx\")" "$host_toolchain"
+
+          run_build_command cmake --build "$build_dir" --target llama-mtmd-cli qwen-backend-probe --parallel 2
+          readelf -hW "$build_dir/Release/vulkan-shaders-gen" | grep -E 'Machine: +Advanced Micro Devices X86-64$'
+
+          for target in llama-mtmd-cli qwen-backend-probe; do
+            android="$package/android-arm64-v8a/$target"
+            install -Dm755 "$build_dir/bin/$target" "$android"
+
+            machine="$(readelf -hW "$android" | grep -E 'Machine: +AArch64$')"
+            dependencies="$(readelf -dW "$android" | awk '$2 == "(NEEDED)" { gsub(/[][]/, "", $NF); print $NF }')"
+            grep -Fx 'libvulkan.so' <<< "$dependencies"
+            if grep -Ev '^lib(c|m|dl|log|android|vulkan)\.so$' <<< "$dependencies"; then
+              printf 'Unexpected shared library in %s\n' "$target" >&2
+              exit 1
+            fi
+            symbols="$(readelf --dyn-syms -W "$android")"
+            if grep -E ' UND +listen(@|[[:space:]]|$)' <<< "$symbols"; then
+              printf 'Unexpected listen import in %s\n' "$target" >&2
+              exit 1
+            fi
+            alignments="$(readelf -lW "$android" | awk '$1 == "LOAD" { print $NF }')"
+            test -n "$alignments"
+            while read -r alignment; do
+              test "$((alignment))" -ge 16384
+            done <<< "$alignments"
+
+            {
+              printf '\nAndroid ELF checks for %s\n%s\n' "$target" "$machine"
+              (cd "$package" && sha256sum "android-arm64-v8a/$target")
+              printf '\nAndroid system dependencies\n%s\n' "$dependencies"
+              printf '\nAndroid Vulkan symbol imports\n'
+              awk '$7 == "UND" && $8 ~ /^vk/ { print $8 }' <<< "$symbols"
+              printf '\nAndroid PT_LOAD alignments\n%s\n' "$alignments"
+              printf 'listen_import=absent\n'
+            } >> "$manifest"
+          done
+
+          # The Samsung warmup log identifies the pipeline family. Keep all three
+          # variants because the log does not identify the selected module.
+          shader_dir="$build_dir/llama.cpp/ggml/src/ggml-vulkan/vulkan-shaders.spv"
+          shader_evidence="$package/spirv"
+          mkdir -p "$shader_evidence"
+          {
+            printf '\nQ4_K F32 Vulkan 1.2 SPIR-V diagnostics\n'
+            printf 'Validation checks the generated modules against SPIR-V rules. Device pipeline creation is unverified.\n'
+            printf 'Validation flags: --target-env vulkan1.2 --scalar-block-layout\n'
+          } >> "$manifest"
+          for shader in \
+            mul_mat_vec_q4_k_f32_f32.spv \
+            mul_mat_vec_q4_k_f32_f32_subgroup.spv \
+            mul_mat_vec_q4_k_f32_f32_subgroup_no_shmem.spv; do
+            test -s "$shader_dir/$shader"
+            install -m644 "$shader_dir/$shader" "$shader_evidence/$shader"
+            (
+              cd "$shader_evidence"
+              validation_exit=0
+              spirv-val --target-env vulkan1.2 --scalar-block-layout "$shader" \
+                > "$shader.val.log" 2>&1 || validation_exit=$?
+              disassembly_exit=0
+              spirv-dis "$shader" > "$shader.dis" 2> "$shader.dis.log" || disassembly_exit=$?
+              sha256sum "$shader"
+              printf '%s spirv_val_exit=%s spirv_dis_exit=%s\n' "$shader" "$validation_exit" "$disassembly_exit"
+            ) >> "$manifest"
+          done
+
+          {
+            printf '\nGenerated host shader toolchain\n'
+            cat "$host_toolchain"
+            printf '\nAndroid CMake cache\n'
+            cat "$cache"
+          } >> "$manifest"
+
+          for source in CMakeLists.txt qwen_backend_probe.cpp README.md; do
+            install -Dm644 "$qa_source/$source" "$package/source/runtime_qa/$source"
+          done
+          install -Dm644 /usr/share/common-licenses/Apache-2.0 "$package/licenses/runtime_qa/Apache-2.0"
+          install -Dm644 "$qa_source/README.md" "$package/licenses/runtime_qa/README.md"
+
+          install -Dm644 llama.cpp/LICENSE "$package/licenses/llama.cpp/LICENSE"
+          install -Dm644 "$ndk/NOTICE" "$package/licenses/android-ndk/NOTICE"
+          install -Dm644 /usr/share/common-licenses/Apache-2.0 "$package/licenses/ubuntu/Apache-2.0"
+          for apt_package in "${apt_packages[@]}"; do
+            install -Dm644 "/usr/share/doc/$apt_package/copyright" "$package/licenses/ubuntu/$apt_package/copyright"
+          done
+          license_list="$(mktemp "$RUNNER_TEMP/sign-qwen-vulkan-license-paths.XXXXXX")"
+          find llama.cpp/vendor llama.cpp/ggml llama.cpp/licenses -type f \
+            \( -iname 'license*' -o -iname 'copying*' -o -iname 'notice*' \) -print0 > "$license_list"
+          test -s "$license_list"
+          while IFS= read -r -d '' license; do
+            install -Dm644 "$license" "$package/licenses/$license"
+          done < "$license_list"
+
+          (
+            cd "$package"
+            find . -type f ! -path './SHA256SUMS' -print0 | sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          tar -czf "$RUNNER_TEMP/sign-qwen-vulkan-smoke.tar.gz" -C "$package" .
+
+      - name: Upload the Android Vulkan QA artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/sign-qwen-vulkan-smoke.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7

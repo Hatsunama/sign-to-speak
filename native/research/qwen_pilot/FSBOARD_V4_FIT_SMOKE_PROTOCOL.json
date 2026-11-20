@@ -1,0 +1,29 @@
+{
+  "checkpoints": [
+    0,
+    50,
+    100
+  ],
+  "early_stop_on_first_passing_trained_checkpoint": true,
+  "fit_adapter_reusable": false,
+  "fit_id": "sts-fsboard-v4-six-clip-fit-smoke-20261119-v2",
+  "generation": {
+    "do_sample": false,
+    "max_new_tokens": 32,
+    "num_beams": 1,
+    "use_cache": true
+  },
+  "generation_stop_policy": "tokenizer_assistant_eos_first_then_distinct_special_model_eos_reject_continuation",
+  "minimum_exact_matches": 6,
+  "minimum_relative_teacher_nll_reduction": 0.25,
+  "parent_experiment_id": "sts-fsboard-whole-prompt-static-ablation-20261119-v4",
+  "schedule": "cycle_selected_clips_in_frozen_training_order",
+  "schema_version": 1,
+  "scope": "engineering_training_fit_only",
+  "selection": "first_six_distinct_literal_references_in_frozen_training_order",
+  "shared_adapter_initialization_seed": 17631,
+  "static_microbatches_per_update": 0,
+  "teacher_nll": "arithmetic_mean_of_per_clip_eos_inclusive_token_mean_completion_loss",
+  "training_examples": 6,
+  "video_microbatches_per_update": 2
+}

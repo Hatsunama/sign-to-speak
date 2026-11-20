@@ -62,9 +62,83 @@ public final class RecognitionInputStageTest {
             check(retry.isDirectory());
             RecognitionInputStage.cleanupExisting(cache, TOKEN);
             check(!retry.exists());
+            exerciseHolisticRgbaTransfer(cache);
+            exerciseTransferAndCleanupFailure(cache, hash);
         } finally {
             cache.delete();
         }
+    }
+
+    private static void exerciseTransferAndCleanupFailure(File cache, String hash) throws IOException {
+        File stage = RecognitionInputStage.create(cache, TOKEN);
+        File partial = new File(stage, "labels.json.partial");
+        File sentinel = new File(partial, "sentinel");
+        IOException transferFailure = new IOException("fixture transfer failure");
+        try {
+            try {
+                RecognitionInputStage.copy(stage, "labels.json", new InputStream() {
+                    @Override public int read() throws IOException {
+                        throw transferFailure;
+                    }
+
+                    @Override public void close() throws IOException {
+                        // The output stream has closed, so its partial file can be replaced on Windows.
+                        Files.delete(partial.toPath());
+                        Files.createDirectory(partial.toPath());
+                        Files.createFile(sentinel.toPath());
+                    }
+                }, hash, 100);
+                throw new AssertionError("expected transfer failure");
+            } catch (IOException actual) {
+                if (!sentinel.isFile()) {
+                    throw new AssertionError("expected a nonempty partial directory", actual);
+                }
+                if (actual != transferFailure) {
+                    throw new AssertionError("expected the original transfer IOException", actual);
+                }
+                Throwable[] suppressed = actual.getSuppressed();
+                if (suppressed.length != 1 || !(suppressed[0] instanceof IOException)) {
+                    throw new AssertionError("expected one suppressed cleanup IOException", actual);
+                }
+            }
+        } finally {
+            if (partial.isDirectory()) {
+                Files.deleteIfExists(sentinel.toPath());
+                Files.delete(partial.toPath());
+            }
+            RecognitionInputStage.cleanup(stage);
+        }
+    }
+
+    private static void exerciseHolisticRgbaTransfer(File cache) throws Exception {
+        String name = "holistic-parity.rgba";
+        byte[] rgba = { 17, 34, 51, (byte) 255, 68, 85, 102, (byte) 255 };
+        String hash = hex(MessageDigest.getInstance("SHA-256").digest(rgba));
+        File stage = RecognitionInputStage.create(cache, TOKEN);
+        try {
+            check(RecognitionInputStage.shellPath(TOKEN, name).equals(
+                "/data/local/tmp/sign-recognition-" + TOKEN + "/" + name));
+            Tracked wrongBytes = new Tracked(new byte[rgba.length]);
+            fails(() -> RecognitionInputStage.copy(stage, name, wrongBytes, hash, rgba.length));
+            check(wrongBytes.closed);
+            check(!new File(stage, name).exists());
+            check(!new File(stage, name + ".partial").exists());
+
+            Tracked input = new Tracked(rgba);
+            File staged = RecognitionInputStage.copy(stage, name, input, hash, rgba.length);
+            check(input.closed);
+            check(staged.equals(new File(stage, name)));
+            check(java.util.Arrays.equals(Files.readAllBytes(staged.toPath()), rgba));
+
+            for (String rejected : new String[] { "../" + name, "Holistic-parity.rgba", name + ".bak", "other.rgba" }) {
+                fails(() -> RecognitionInputStage.shellPath(TOKEN, rejected));
+                fails(() -> RecognitionInputStage.copy(
+                    stage, rejected, new ByteArrayInputStream(rgba), hash, rgba.length));
+            }
+        } finally {
+            RecognitionInputStage.cleanup(stage);
+        }
+        check(!stage.exists());
     }
 
     private static void check(boolean condition) { if (!condition) throw new AssertionError(); }

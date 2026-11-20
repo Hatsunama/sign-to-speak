@@ -45,6 +45,7 @@ public final class RecognitionInputStage {
             throw new IllegalArgumentException("Input already staged");
         }
         boolean published = false;
+        Throwable primaryFailure = null;
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
             byte[] buffer = new byte[64 * 1024];
@@ -67,10 +68,17 @@ public final class RecognitionInputStage {
             published = true;
             return target;
         } catch (NoSuchAlgorithmException impossible) {
-            throw new IllegalStateException(impossible);
+            IllegalStateException failure = new IllegalStateException(impossible);
+            primaryFailure = failure;
+            throw failure;
+        } catch (IOException | RuntimeException | Error failure) {
+            primaryFailure = failure;
+            throw failure;
         } finally {
             if (!published && partial.exists() && !partial.delete()) {
-                throw new IOException("Could not clear partial input");
+                IOException cleanupFailure = new IOException("Could not clear partial input");
+                if (primaryFailure == null) throw cleanupFailure;
+                primaryFailure.addSuppressed(cleanupFailure);
             }
         }
     }
@@ -110,6 +118,7 @@ public final class RecognitionInputStage {
     private static void checkName(String name) {
         if (name == null || !(name.equals("manifest.json") || name.equals("model.tflite")
                 || name.equals("holistic.task") || name.equals("labels.json")
+                || name.equals("holistic-parity.rgba")
                 || name.matches("[a-zA-Z0-9_-]{1,40}\\.mp4"))) {
             throw new IllegalArgumentException("Unapproved input name");
         }

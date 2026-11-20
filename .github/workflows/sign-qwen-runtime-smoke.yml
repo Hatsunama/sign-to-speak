@@ -1,0 +1,147 @@
+name: Sign Qwen runtime smoke build
+
+"on":
+  workflow_dispatch:
+  push:
+    branches:
+      - 'codex/sign-to-speak-qwen-pilot-20261118'
+    paths:
+      - '.github/workflows/sign-qwen-runtime-smoke.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      NDK_VERSION: '27.3.13750724'
+      ANDROID_API: '28'
+    steps:
+      - name: Check out workflow repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+
+      - name: Check out llama.cpp
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          repository: ggml-org/llama.cpp
+          ref: b1b770d90d94cad9e9ea5b993bdbc383a522fb28 # v1.0.0
+          path: llama.cpp
+          persist-credentials: false
+
+      - name: Build, inspect and package the two CPU executables
+        shell: bash
+        run: |
+          ndk="$ANDROID_HOME/ndk/$NDK_VERSION"
+          toolchain="$ndk/build/cmake/android.toolchain.cmake"
+          ndk_bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+          test -f "$toolchain"
+          test "$(awk -F ' = ' '/^Pkg\.Revision / { print $2 }' "$ndk/source.properties")" = "$NDK_VERSION"
+
+          package="$RUNNER_TEMP/sign-qwen-runtime-smoke"
+          mkdir -p "$package/linux-x86_64" "$package/android-arm64-v8a"
+          manifest="$package/BUILD.txt"
+          {
+            printf 'workflow_source=%s\nworkflow_commit=%s\n' "$GITHUB_REPOSITORY" "$(git rev-parse HEAD)"
+            printf 'workflow_run=%s/actions/runs/%s\n' "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$GITHUB_RUN_ID"
+            printf 'llama_source=https://github.com/ggml-org/llama.cpp\nllama_tag=v1.0.0\nllama_commit=%s\n' "$(git -C llama.cpp rev-parse HEAD)"
+            printf 'runner=%s %s\nandroid_ndk=%s\nandroid_abi=arm64-v8a\nandroid_api=%s\n' "$ImageOS" "$ImageVersion" "$NDK_VERSION" "$ANDROID_API"
+            cmake --version
+            ninja --version
+            c++ --version
+            "$ndk_bin/clang++" --version
+          } > "$manifest"
+
+          run_build_command() {
+            { printf '%q ' "$@"; printf '\n'; } >> "$manifest"
+            "$@"
+          }
+
+          common=(
+            -G Ninja -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+            -DCMAKE_C_FLAGS='-ffunction-sections -fdata-sections'
+            -DCMAKE_CXX_FLAGS='-ffunction-sections -fdata-sections'
+            -DLLAMA_BUILD_IS_DEV=OFF -DLLAMA_BUILD_COMMON=ON -DLLAMA_BUILD_TOOLS=ON
+            -DLLAMA_BUILD_TESTS=OFF -DLLAMA_BUILD_EXAMPLES=OFF -DLLAMA_BUILD_APP=OFF
+            -DLLAMA_BUILD_SERVER=OFF -DLLAMA_OPENSSL=OFF -DLLAMA_SUBPROCESS=OFF
+            -DMTMD_VIDEO=OFF -DGGML_NATIVE=OFF -DGGML_CPU=ON
+            -DGGML_BACKEND_DL=OFF -DGGML_OPENMP=OFF -DGGML_LLAMAFILE=OFF
+            -DGGML_BLAS=OFF -DGGML_CPU_KLEIDIAI=OFF -DGGML_RPC=OFF
+            -DGGML_CUDA=OFF -DGGML_HIP=OFF -DGGML_METAL=OFF -DGGML_VULKAN=OFF
+            -DGGML_OPENCL=OFF -DGGML_WEBGPU=OFF -DGGML_SYCL=OFF -DGGML_HEXAGON=OFF
+          )
+
+          run_build_command cmake -S llama.cpp -B build-linux "${common[@]}" \
+            -DCMAKE_EXE_LINKER_FLAGS='-Wl,--gc-sections'
+          run_build_command cmake --build build-linux --target llama-quantize --parallel 2
+
+          run_build_command cmake -S llama.cpp -B build-android "${common[@]}" \
+            -DCMAKE_TOOLCHAIN_FILE="$toolchain" -DANDROID_ABI=arm64-v8a \
+            -DANDROID_PLATFORM="android-$ANDROID_API" -DANDROID_STL=c++_static \
+            -DCMAKE_EXE_LINKER_FLAGS='-Wl,--gc-sections,-z,max-page-size=16384,-z,common-page-size=16384'
+          run_build_command cmake --build build-android --target llama-mtmd-cli --parallel 2
+
+          host="$package/linux-x86_64/llama-quantize"
+          android="$package/android-arm64-v8a/llama-mtmd-cli"
+          install -m 0755 build-linux/bin/llama-quantize "$host"
+          install -m 0755 build-android/bin/llama-mtmd-cli "$android"
+
+          verify_executable() {
+            local binary="$1" machine="$2" platform_libraries="$3"
+            local dependencies symbols
+            readelf -hW "$binary" | grep -E "Machine: +$machine$"
+            dependencies="$(readelf -dW "$binary" | awk '$2 == "(NEEDED)" { gsub(/[][]/, "", $NF); print $NF }')"
+            if grep -Ev "$platform_libraries" <<< "$dependencies"; then
+              printf 'Unexpected shared library for %s\n' "$binary" >&2
+              return 1
+            fi
+            symbols="$(readelf --dyn-syms -W "$binary")"
+            if grep -E ' UND +listen(@|[[:space:]]|$)' <<< "$symbols"; then
+              printf 'Unexpected listen import for %s\n' "$binary" >&2
+              return 1
+            fi
+            printf '\n%s system dependencies\n%s\n' "${binary#"$package"/}" "$dependencies" >> "$manifest"
+          }
+
+          verify_executable "$host" 'Advanced Micro Devices X86-64' \
+            '^(lib(c|m|dl|pthread|rt|gcc_s|stdc\+\+)\.so\.[0-9]+)$'
+          verify_executable "$android" 'AArch64' \
+            '^(lib(c|m|dl|log|android)\.so)$'
+          alignments="$(readelf -lW "$android" | awk '$1 == "LOAD" { print $NF }')"
+          test -n "$alignments"
+          while read -r alignment; do
+            test "$((alignment))" -ge 16384
+          done <<< "$alignments"
+
+          # Upstream quantize usage may exit 1 even for --help.
+          help_status=0
+          "$host" --help > "$RUNNER_TEMP/llama-quantize-help.txt" 2>&1 || help_status=$?
+          test "$help_status" -le 1
+          grep '^usage:' "$RUNNER_TEMP/llama-quantize-help.txt"
+
+          install -Dm644 llama.cpp/LICENSE "$package/licenses/llama.cpp/LICENSE"
+          install -Dm644 "$ndk/NOTICE" "$package/licenses/android-ndk/NOTICE"
+          license_list="$(mktemp "$RUNNER_TEMP/sign-qwen-license-paths.XXXXXX")"
+          find llama.cpp/vendor llama.cpp/ggml -type f \
+            \( -iname 'license*' -o -iname 'copying*' -o -iname 'notice*' \) -print0 > "$license_list"
+          while IFS= read -r -d '' license; do
+            install -Dm644 "$license" "$package/licenses/$license"
+          done < "$license_list"
+          rm -- "$license_list"
+          (
+            cd "$package"
+            find . -type f ! -path './SHA256SUMS' -print0 | LC_ALL=C sort -z | xargs -0 sha256sum > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+          tar -czf "$RUNNER_TEMP/sign-qwen-runtime-smoke.tar.gz" -C "$package" .
+
+      - name: Upload the runtime smoke build
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          path: ${{ runner.temp }}/sign-qwen-runtime-smoke.tar.gz
+          archive: false
+          if-no-files-found: error
+          retention-days: 7
