@@ -239,3 +239,12 @@ jobs:
           if-no-files-found: error
           path: |
             ${{ runner.temp }}/pocket-android-evidence/*.txt
+
+  # Use the registered manual workflow on this topic branch for the first run.
+  reply:
+    if: >-
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event.repository.private == false &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/codex/sign-to-speak-local-reply-20261120'
+    uses: ./.github/workflows/sign-reply-component.yml

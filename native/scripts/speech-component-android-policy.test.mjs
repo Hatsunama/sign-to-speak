@@ -58,7 +58,7 @@ function audit(w) {
     'native/android/app/src/main/cpp/pocket/**']);
   assert.deepEqual(w.permissions, {contents: 'read'});
   assert.equal(w.concurrency['cancel-in-progress'], true);
-  assert.deepEqual(Object.keys(w.jobs), ['component']);
+  assert.deepEqual(Object.keys(w.jobs), ['component', 'reply']);
   const job = w.jobs.component;
   assert.equal(job['runs-on'], 'ubuntu-24.04');
   assert.equal(job['timeout-minutes'], 30);
@@ -345,3 +345,54 @@ for (const [name, source] of [
   ['missing SONAME', rustBuild.replace('-Wl,-soname,libsign_pocket_tts_runtime.so', '-Wl,--no-soname')],
   ['missing Android alignment', rustBuild.replace('-Wl,-z,max-page-size=16384', '-Wl,-z,max-page-size=4096')],
 ]) test(`rejects ${name} in Rust producer`, () => assert.throws(() => auditRustBuild(source)));
+
+test('reply component uses the registered workflow without activating Pocket or inheriting secrets', () => {
+  const job = workflow.jobs.reply;
+  assert.ok(job, 'registered workflow must route the reply component');
+  const branch = 'codex/sign-to-speak-local-reply-20261120';
+  const ref = 'refs/heads/' + branch;
+  const callerPath = repo + '/.github/workflows/sign-speech-component-android.yml@' + ref;
+  const eligible = event('workflow_dispatch', {ref});
+  assert.equal(job.uses, './.github/workflows/sign-reply-component.yml');
+  assert.deepEqual(Object.keys(job).sort(), ['if', 'uses']);
+  assert.equal(evaluate(workflow.jobs.component.if, eligible), false);
+  const callee = yaml.parse(readFileSync(new URL('../../.github/workflows/sign-reply-component.yml', import.meta.url), 'utf8'));
+  assert.deepEqual(callee.on, {workflow_call: null});
+  assert.deepEqual(callee.permissions, {contents: 'read'});
+  assert.deepEqual(Object.keys(callee.jobs), ['component']);
+  const component = callee.jobs.component;
+  assert.equal(component['runs-on'], 'ubuntu-24.04');
+  assert.equal(component['timeout-minutes'], 20);
+  assert.equal(evaluate(job.if, eligible), true);
+  assert.equal(evaluate(component.if, {...eligible, workflow_ref: callerPath}), true);
+  for (const rejected of [
+    event('pull_request', {ref, headRef: branch}),
+    event('push', {ref}),
+    event('workflow_dispatch', {ref, privateRepo: true}),
+    event('workflow_dispatch', {ref, repository: 'fork/repo'}),
+    event('workflow_dispatch', {ref: 'refs/tags/' + branch}),
+    event('workflow_dispatch', {ref: ref + '-different'}),
+  ]) {
+    assert.equal(evaluate(job.if, rejected), false);
+    assert.equal(evaluate(component.if, {...rejected, workflow_ref: callerPath}), false);
+  }
+  assert.equal(evaluate(component.if, {...eligible, workflow_ref: callerPath.replace('speech-', 'other-')}), false);
+  assert.equal(component.env.EXPECTED_SOURCE_SHA, '${{ github.sha }}');
+  assert.equal(component.env.CMAKE_BUILD_PARALLEL_LEVEL, '2');
+  const checkout = step(component, 'Checkout exact candidate');
+  assert.equal(checkout.with.ref, component.env.EXPECTED_SOURCE_SHA);
+  assert.equal(checkout.with['persist-credentials'], false);
+  for (const name of ['host', 'arm64-v8a', 'x86_64']) {
+    const build = component.steps.find(item => item.run?.trim() === 'bash native/scripts/build-reply-asr-component.sh ' + name);
+    assert.ok(build, name);
+    assert.notEqual(build['continue-on-error'], true);
+  }
+  const retain = step(component, 'Retain bounded component evidence');
+  assert.equal(retain.if, 'always()');
+  assert.equal(retain.with['retention-days'], 3);
+  assert.equal(retain.with.path, '${{ runner.temp }}/sign-reply-component/evidence/');
+  for (const item of component.steps) {
+    if (item.uses) assert.match(item.uses, /^[\w-]+\/[\w-]+@[a-f0-9]{40}$/);
+    assert.doesNotMatch(item.run ?? '', /npm (?:ci|install)|gradlew|--licenses|keytool|\badb\b|\bemulator\b|secrets\./);
+  }
+});
