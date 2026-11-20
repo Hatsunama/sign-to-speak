@@ -103,7 +103,7 @@ jobs:
           test -s vendor/pocket-tts-runtime/Cargo.lock
           timeout 900 bash scripts/build-pocket-runtime.sh x86_64
           timeout 900 bash scripts/build-pocket-runtime.sh arm64-v8a
-          cp "$RUNNER_TEMP"/pocket-{x86_64,arm64-v8a}-{header,segments,dynamic,symbols}.txt "$RUNNER_TEMP/sign-evidence/"
+          cp "$RUNNER_TEMP"/pocket-{x86_64,arm64-v8a}-{header,segments,dynamic,symbols,toolchain}.txt "$RUNNER_TEMP/sign-evidence/"
       - name: Prepare pinned Pocket model and license assets
         id: pocket_assets
         if: ${{ !cancelled() && steps.pocket_runtime.outcome == 'success' }}
