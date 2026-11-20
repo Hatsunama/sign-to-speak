@@ -31,9 +31,10 @@ struct sts_reply_turn {
 // thread. A caller can only set turn.cancelled concurrently. Retain the turn and
 // its observer until the worker returns. The consumer must recheck turn eligibility
 // at publication because cancellation can race native return.
-// Borrow an immutable regular-file span; verify its bundled SHA-256 on this same
-// fd before entering the model parser. The fd is required only until open returns.
-// No call changes its position or closes it. Open itself may not be interruptible.
+// Borrow immutable regular-file spans for the Whisper and VAD models. The fds are
+// required only until open returns. No call changes their positions or closes them.
+// The caller verifies each bundled SHA-256 on the same fd before calling open.
+// Open itself may not be interruptible.
 #if defined(__GNUC__)
 #define STS_REPLY_EXPORT __attribute__((visibility("default")))
 #else
@@ -42,8 +43,9 @@ struct sts_reply_turn {
 
 extern "C" {
 STS_REPLY_EXPORT sts_reply_status sts_reply_open(
-    int fd, std::int64_t offset, std::int64_t length, sts_reply_turn* turn,
-    sts_reply_engine** result) noexcept;
+    int model_fd, std::int64_t model_offset, std::int64_t model_length,
+    int vad_fd, std::int64_t vad_offset, std::int64_t vad_length,
+    sts_reply_turn* turn, sts_reply_engine** result) noexcept;
 
 // Input is finite 16 kHz mono normalized PCM. On success, output is NUL-terminated
 // standard UTF-8. The owner provides and clears the caller-owned PCM and text buffers.

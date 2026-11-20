@@ -15,12 +15,16 @@
 
 namespace {
 constexpr std::int64_t kModelBytes = 77704715;
+constexpr std::int64_t kVadModelBytes = 885098;
 constexpr unsigned char kModelHeader[] = {
     0x6c, 0x6d, 0x67, 0x67, 0x98, 0xca, 0x00, 0x00, 0xdc, 0x05, 0x00, 0x00,
     0x80, 0x01, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00,
     0xc0, 0x01, 0x00, 0x00, 0x80, 0x01, 0x00, 0x00, 0x06, 0x00, 0x00, 0x00,
     0x04, 0x00, 0x00, 0x00, 0x50, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00
 };
+// The pinned Silero model starts with the GGML_FILE_MAGIC checked by the
+// pinned whisper.cpp VAD loader (the little-endian bytes for 0x67676d6c).
+constexpr unsigned char kVadModelHeader[] = {0x6c, 0x6d, 0x67, 0x67};
 static_assert(WHISPER_SAMPLE_RATE == 16000);
 static_assert(sizeof(off_t) >= sizeof(std::int64_t));
 
@@ -125,45 +129,87 @@ void clear_output(char* output, std::size_t capacity) {
 
 using Weights = std::unique_ptr<whisper_context, decltype(&whisper_free)>;
 using State = std::unique_ptr<whisper_state, decltype(&whisper_free_state)>;
+using Vad = std::unique_ptr<whisper_vad_context, decltype(&whisper_vad_free)>;
+using VadSegments =
+    std::unique_ptr<whisper_vad_segments, decltype(&whisper_vad_free_segments)>;
+
+bool valid_span(int fd, std::int64_t offset, std::int64_t length,
+                std::int64_t expected_length) {
+    struct stat info{};
+    return fd >= 0 && offset >= 0 && length == expected_length &&
+           fstat(fd, &info) == 0 && S_ISREG(info.st_mode) &&
+           offset <= info.st_size && length <= info.st_size - offset;
+}
+
+struct ClearVadTurn {
+    whisper_vad_context* context;
+
+    ~ClearVadTurn() {
+        if (!context) return;
+        const int count = whisper_vad_n_probs(context);
+        volatile float* probabilities = whisper_vad_probs(context);
+        if (probabilities) {
+            for (int i = 0; i < count; ++i) probabilities[i] = 0.f;
+        }
+        whisper_vad_reset_state(context);
+    }
+};
 }
 
 struct sts_reply_engine {
     Weights weights;
+    Vad vad;
     std::thread::id owner = std::this_thread::get_id();
     bool decoding = false;
 };
 
-sts_reply_status sts_reply_open(int fd, std::int64_t offset, std::int64_t length,
+sts_reply_status sts_reply_open(int model_fd, std::int64_t model_offset,
+                               std::int64_t model_length, int vad_fd,
+                               std::int64_t vad_offset, std::int64_t vad_length,
                                sts_reply_turn* turn, sts_reply_engine** result) noexcept {
     if (!result) return STS_REPLY_INVALID_INPUT;
     *result = nullptr;
     if (!turn) return STS_REPLY_INVALID_INPUT;
     if (cancelled(turn)) return STS_REPLY_CANCELLED;
-    struct stat info{};
-    if (fd < 0 || offset < 0 || length != kModelBytes ||
-        fstat(fd, &info) != 0 || !S_ISREG(info.st_mode) ||
-        offset > info.st_size || length > info.st_size - offset) {
+    if (!valid_span(model_fd, model_offset, model_length, kModelBytes) ||
+        !valid_span(vad_fd, vad_offset, vad_length, kVadModelBytes)) {
         return STS_REPLY_MODEL_UNAVAILABLE;
     }
     try {
-        Span span{fd, offset, length};
-        unsigned char header[sizeof(kModelHeader)]{};
-        read_span(&span, header, sizeof(header));
-        if (std::memcmp(header, kModelHeader, sizeof(header)) != 0) {
+        Span model_span{model_fd, model_offset, model_length};
+        Span vad_span{vad_fd, vad_offset, vad_length};
+        unsigned char model_header[sizeof(kModelHeader)]{};
+        unsigned char vad_header[sizeof(kVadModelHeader)]{};
+        read_span(&model_span, model_header, sizeof(model_header));
+        read_span(&vad_span, vad_header, sizeof(vad_header));
+        if (std::memcmp(model_header, kModelHeader, sizeof(model_header)) != 0 ||
+            std::memcmp(vad_header, kVadModelHeader, sizeof(vad_header)) != 0) {
             return STS_REPLY_MODEL_UNAVAILABLE;
         }
-        span.cursor = 0;
-        whisper_model_loader loader{&span, read_span, span_eof, ignore_close};
+        model_span.cursor = 0;
+        vad_span.cursor = 0;
+        whisper_model_loader model_loader{
+            &model_span, read_span, span_eof, ignore_close};
+        whisper_model_loader vad_loader{&vad_span, read_span, span_eof, ignore_close};
         static std::once_flag logging;
         std::call_once(logging, [] { whisper_log_set(ignore_log, nullptr); });
         auto params = whisper_context_default_params();
         params.use_gpu = false;
         params.flash_attn = false;
         params.dtw_token_timestamps = false;
-        Weights weights(whisper_init_with_params_no_state(&loader, params), whisper_free);
+        Weights weights(
+            whisper_init_with_params_no_state(&model_loader, params), whisper_free);
         if (cancelled(turn)) return STS_REPLY_CANCELLED;
-        if (!weights || span.cursor != length) return STS_REPLY_MODEL_UNAVAILABLE;
-        *result = new sts_reply_engine{std::move(weights)};
+        if (!weights || model_span.cursor != model_length) {
+            return STS_REPLY_MODEL_UNAVAILABLE;
+        }
+        auto vad_params = whisper_vad_default_context_params();
+        vad_params.use_gpu = false;
+        vad_params.n_threads = 2;
+        Vad vad(whisper_vad_init_with_params(&vad_loader, vad_params), whisper_vad_free);
+        if (cancelled(turn)) return STS_REPLY_CANCELLED;
+        if (!vad || vad_span.cursor != vad_length) return STS_REPLY_MODEL_UNAVAILABLE;
+        *result = new sts_reply_engine{std::move(weights), std::move(vad)};
         return STS_REPLY_OK;
     } catch (...) {
         return cancelled(turn) ? STS_REPLY_CANCELLED : STS_REPLY_MODEL_UNAVAILABLE;
@@ -197,6 +243,22 @@ sts_reply_status sts_reply_decode(sts_reply_engine* engine, const float* samples
         ~ClearDecoding() { decoding = false; }
     } clear_decoding{engine->decoding};
     try {
+        if (cancelled(turn)) return STS_REPLY_CANCELLED;
+        ClearVadTurn clear_vad{engine->vad.get()};
+        if (!whisper_vad_detect_speech(engine->vad.get(), samples,
+                                       static_cast<int>(count))) {
+            return cancelled(turn) ? STS_REPLY_CANCELLED : STS_REPLY_DECODE_FAILED;
+        }
+        if (cancelled(turn)) return STS_REPLY_CANCELLED;
+        VadSegments vad_segments(
+            whisper_vad_segments_from_probs(engine->vad.get(), whisper_vad_default_params()),
+            whisper_vad_free_segments);
+        if (!vad_segments) return STS_REPLY_DECODE_FAILED;
+        if (cancelled(turn)) return STS_REPLY_CANCELLED;
+        if (whisper_vad_segments_n_segments(vad_segments.get()) == 0) {
+            return STS_REPLY_NO_SPEECH;
+        }
+
         auto* context = engine->weights.get();
         State state(whisper_init_state(context), whisper_free_state);
         if (cancelled(turn)) return STS_REPLY_CANCELLED;
