@@ -10,6 +10,10 @@ import android.util.Base64
 import android.util.JsonReader
 import android.util.JsonToken
 import androidx.test.platform.app.InstrumentationRegistry
+import com.google.mediapipe.tasks.components.containers.NormalizedLandmark
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.vision.core.RunningMode
+import com.google.mediapipe.tasks.vision.holisticlandmarker.HolisticLandmarker
 import org.json.JSONArray
 import org.json.JSONObject
 import org.junit.Assume.assumeTrue
@@ -37,6 +41,20 @@ class PhoneHolisticProducerParityTest {
     fun canonicalRgbaReplay() {
         val args = InstrumentationRegistry.getArguments()
         assumeTrue("Opt in with -e signHolisticParity 1", args.getString("signHolisticParity") == "1")
+        runReplay(args, optionalOutputs = false)
+    }
+
+    @Test
+    fun optionalOutputsGraphDiagnostic() {
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue(
+            "Opt in with -e signHolisticOptionalOutputs 1",
+            args.getString("signHolisticOptionalOutputs") == "1",
+        )
+        runReplay(args, optionalOutputs = true)
+    }
+
+    private fun runReplay(args: Bundle, optionalOutputs: Boolean) {
         val instrumentation = InstrumentationRegistry.getInstrumentation()
         val context = instrumentation.targetContext
         require(context.packageName == "com.xmilo_at_your_side.sign_to_speak.qa") { "Isolated QA target required" }
@@ -55,13 +73,23 @@ class PhoneHolisticProducerParityTest {
             val framesFile = transfer(stage, runId, RGBA_NAME, framesSha, fixture.bytes)
             require(framesFile.length() == fixture.bytes) { "Staged RGBA length differs from manifest" }
             val modelSha = hashBundledModel(context)
+            val createDetector: () -> LiveHandDetector = if (optionalOutputs) {
+                { createOptionalOutputDetector(context) }
+            } else {
+                { LiveHolisticHandDetector.create(context) }
+            }
             val runs = JSONArray()
-                .put(replay(context, framesFile, "initial", fixture.frames, complete = true))
-                .put(replay(context, framesFile, "interrupted", fixture.frames.take(17), complete = false))
-                .put(replay(context, framesFile, "recovered", fixture.frames, complete = true))
+                .put(replay(createDetector, framesFile, "initial", fixture.frames, complete = true))
+                .put(replay(createDetector, framesFile, "interrupted", fixture.frames.take(17), complete = false))
+                .put(replay(createDetector, framesFile, "recovered", fixture.frames, complete = true))
 
+            val resultType = if (optionalOutputs) {
+                "phone_holistic_optional_output_diagnostic"
+            } else {
+                "phone_holistic_producer_parity"
+            }
             JSONObject()
-                .put("type", "phone_holistic_producer_parity")
+                .put("type", resultType)
                 .put("schema_version", 1)
                 .put("status", "COMPLETED")
                 .put("run_id", runId)
@@ -70,6 +98,14 @@ class PhoneHolisticProducerParityTest {
                 .put("model_sha256", modelSha)
                 .put("input_mode", "canonical_rgba")
                 .put("camera_path_tested", false)
+                .apply {
+                    if (optionalOutputs) {
+                        put("diagnostic_mode", "optional_outputs_enabled")
+                        put("production_path_tested", false)
+                        put("outputFaceBlendshapes", true)
+                        put("outputPoseSegmentationMasks", true)
+                    }
+                }
                 .put("runs", runs)
                 .toString().toByteArray(Charsets.UTF_8)
         }
@@ -77,8 +113,15 @@ class PhoneHolisticProducerParityTest {
             require(payload.size in 1..(512 * 1024)) { "Parity result exceeds stream bound" }
             val encoded = Base64.encodeToString(payload, Base64.NO_WRAP)
             check(encoded.isNotEmpty()) { "Parity result could not be encoded" }
+            val marker = if (optionalOutputs) {
+                // Instrumentation sends a UTF-16 string through Binder.
+                require(encoded.length <= 350_000) { "Diagnostic result exceeds Binder stream bound" }
+                "SIGN_HOLISTIC_OPTIONAL_OUTPUT_RESULT_BASE64="
+            } else {
+                "SIGN_HOLISTIC_PARITY_RESULT_BASE64="
+            }
             instrumentation.sendStatus(2, Bundle().apply {
-                putString("stream", "\nSIGN_HOLISTIC_PARITY_RESULT_BASE64=" + encoded + "\n")
+                putString("stream", "\n" + marker + encoded + "\n")
             })
         } finally {
             payload.fill(0)
@@ -230,7 +273,7 @@ class PhoneHolisticProducerParityTest {
     }
 
     private fun replay(
-        context: Context,
+        createDetector: () -> LiveHandDetector,
         framesFile: File,
         name: String,
         frames: List<Frame>,
@@ -238,7 +281,7 @@ class PhoneHolisticProducerParityTest {
     ): JSONObject {
         val results = JSONArray()
         val createStart = SystemClock.elapsedRealtimeNanos()
-        val detector = LiveHolisticHandDetector.create(context)
+        val detector = createDetector()
         val createElapsed = detector.use {
             val elapsed = SystemClock.elapsedRealtimeNanos() - createStart
             DataInputStream(framesFile.inputStream().buffered()).use { input ->
@@ -251,6 +294,59 @@ class PhoneHolisticProducerParityTest {
             .put("detector_create_elapsed_ns", createElapsed)
             .put("detector_closed", true)
             .put("frames", results)
+    }
+
+    private fun createOptionalOutputDetector(context: Context): LiveHandDetector {
+        val base = BaseOptions.builder().setModelAssetPath(LiveHolisticHandDetector.ASSET).build()
+        val options = HolisticLandmarker.HolisticLandmarkerOptions.builder()
+            .setBaseOptions(base)
+            .setRunningMode(RunningMode.VIDEO)
+            .setOutputPoseSegmentationMasks(true)
+            .setOutputFaceBlendshapes(true)
+            .build()
+        val graph = HolisticLandmarker.createFromOptions(context, options)
+        return object : LiveHandDetector {
+            override fun detect(bitmap: Bitmap, timestampMs: Long): DetectedHands {
+                var left: FloatArray? = null
+                var right: FloatArray? = null
+                try {
+                    return HolisticBitmapInput.consume(bitmap) { image ->
+                        val result = graph.detectForVideo(image, timestampMs)
+                        val mask = result.segmentationMask().orElse(null)
+                        AutoCloseable { mask?.close() }.use {
+                            left = copyDiagnosticHand(result.leftHandLandmarks())
+                            right = copyDiagnosticHand(result.rightHandLandmarks())
+                            DetectedHands(left, right)
+                        }
+                    }
+                } catch (failure: Throwable) {
+                    left?.fill(0f)
+                    right?.fill(0f)
+                    throw failure
+                }
+            }
+
+            override fun close() = graph.close()
+        }
+    }
+
+    private fun copyDiagnosticHand(points: List<NormalizedLandmark>): FloatArray? {
+        if (points.isEmpty()) return null
+        require(points.size == 21)
+        val coordinates = FloatArray(63)
+        try {
+            for (index in points.indices) {
+                val point = points[index]
+                val offset = index * 3
+                coordinates[offset] = point.x()
+                coordinates[offset + 1] = point.y()
+                coordinates[offset + 2] = point.z()
+            }
+            return coordinates
+        } catch (failure: Throwable) {
+            coordinates.fill(0f)
+            throw failure
+        }
     }
 
     private fun detectFrame(detector: LiveHandDetector, input: DataInputStream, frame: Frame): JSONObject {
