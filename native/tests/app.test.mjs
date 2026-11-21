@@ -282,14 +282,63 @@ test('reply timeout finishes exactly once and Cancel clears its timer', async t 
   assert.deepEqual(finishes, ['finish'], 'a cancelled timeout cannot finish the retired session');
 });
 
+test('unresolved reply startup is bounded, marks native state uncertain, and ignores a late token', async t => {
+  const timers = replyTimers();
+  const beginning = {};
+  beginning.promise = new Promise(resolve => { beginning.resolve = resolve; });
+  const events = [];
+  const reply = {
+    begin: () => beginning.promise,
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(timers.timeoutDelays(), [30000], 'native admission has a thirty-second deadline');
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['uncertain'], 'fault latch precedes any token cleanup');
+  assert.match(h.replyStatus(), /close and reopen/i);
+  assert.equal(h.button('Start listening').props.disabled, true);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+
+  await act(() => beginning.resolve('late-reply'));
+  assert.deepEqual(events, ['uncertain', 'cancel:late-reply']);
+  assert.equal(h.button('Stop and caption'), undefined, 'a late token cannot revive listening');
+  assert.equal(h.replyInput().props.value, '');
+});
+
+test('ordinary reply cancellation during unresolved startup never marks native state uncertain', async t => {
+  const timers = replyTimers();
+  let resolveBegin;
+  const events = [];
+  const reply = {
+    begin: () => new Promise(resolve => { resolveBegin = resolve; }),
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  await h.press('Cancel / Clear');
+  assert.deepEqual(events, []);
+  assert.equal(timers.timeoutCount(), 0);
+  await act(() => resolveBegin('cancelled-late'));
+  assert.deepEqual(events, ['cancel:cancelled-late']);
+  assert.doesNotMatch(h.replyStatus(), /close and reopen/i);
+});
+
 test('reply finalization is bounded, cancellable, and cannot publish a late caption', async t => {
   const timers = replyTimers();
   const finishes = [];
   const cancelled = [];
+  const uncertain = [];
   let next = 0;
   const reply = {
     begin: async () => `reply-${++next}`,
     finish: token => new Promise(resolve => {finishes.push({token, resolve});}),
+    markUncertain: () => uncertain.push('uncertain'),
     cancel: token => cancelled.push(token),
   };
   const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
@@ -322,6 +371,7 @@ test('reply finalization is bounded, cancellable, and cannot publish a late capt
   assert.equal(timers.timeoutCount(), 0, 'Home/background clears its watchdog');
   await h.state('active');
   await act(() => cancelledByHome.resolve({status: 'COMPLETED', text: 'home stale'}));
+  assert.deepEqual(uncertain, [], 'button, Back, and Home cancellation never mark a process fault');
 
   const expired = await startAndFinish();
   const deadline = timers.takeTimeout();
@@ -329,6 +379,7 @@ test('reply finalization is bounded, cancellable, and cannot publish a late capt
   assert.match(h.replyStatus(), /close and reopen/i);
   assert.equal(h.button('Start listening').props.disabled, true, 'deadline latches microphone closed');
   assert.equal(h.button('Speak typed text').props.disabled, true, 'deadline latches typed speech closed');
+  assert.deepEqual(uncertain, ['uncertain'], 'only the elapsed finalization deadline marks native state uncertain');
   assert.ok(cancelled.includes(expired.token), 'deadline asks native reply ownership to stop');
   await act(() => expired.resolve({status: 'COMPLETED', text: 'too late'}));
   assert.equal(h.replyInput().props.value, '', 'late native completion never publishes a caption');
@@ -879,6 +930,63 @@ test('pending begin and speech results cannot revive stopped or cleared private 
   assert.doesNotMatch(h.speechStatus(), /complete|spoken|finished/i);
   await h.state('active');
   assert.equal(h.input().props.value, '');
+});
+
+test('unresolved typed speech startup is bounded, fail-closed, and cannot publish a late success', async t => {
+  const timers = replyTimers();
+  let resolveBegin;
+  const events = [];
+  const speech = {
+    begin: () => new Promise(resolve => { resolveBegin = resolve; }),
+    speak: async () => 'COMPLETED',
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, speech, undefined, undefined, timers);
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.deepEqual(timers.timeoutDelays(), [180000]);
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['uncertain']);
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  assert.equal(h.button('Start listening').props.disabled, true);
+
+  await act(() => resolveBegin('late-speech'));
+  assert.deepEqual(events, ['uncertain', 'cancel:late-speech']);
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
+});
+
+test('unresolved typed synthesis is bounded and ordinary Stop never marks native state uncertain', async t => {
+  const timers = replyTimers();
+  const playbacks = [];
+  const events = [];
+  let next = 0;
+  const speech = {
+    begin: async () => `speech:${++next}`,
+    speak: () => new Promise(resolve => playbacks.push(resolve)),
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, speech, undefined, undefined, timers);
+  await h.edit('FIRST');
+  await h.press('Speak typed text');
+  assert.deepEqual(timers.timeoutDelays(), [180000]);
+  await h.press('Stop speech');
+  assert.deepEqual(events, ['cancel:speech:1']);
+  assert.equal(timers.timeoutCount(), 0);
+  await act(() => playbacks[0]('COMPLETED'));
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
+
+  await h.edit('SECOND');
+  await h.press('Speak typed text');
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['cancel:speech:1', 'uncertain', 'cancel:speech:2']);
+  assert.match(h.speechStatus(), /close and reopen/i);
+  await act(() => playbacks[1]('COMPLETED'));
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
 });
 
 test('Back and route navigation clear typed draft and cancel native speech', async t => {

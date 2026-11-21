@@ -10,7 +10,9 @@ import {createLocalSpeech} from './src/local-speech.mjs';
 import {createLocalReply} from './src/local-reply.mjs';
 
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
+const REPLY_START_TIMEOUT_MS = 30000;
 const REPLY_FINALIZATION_TIMEOUT_MS = 120000;
+const SPEECH_ATTEMPT_TIMEOUT_MS = 180000;
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
   lensFacing: 'back' | 'front';
@@ -64,9 +66,13 @@ function Home() {
   const replyRequest = useRef<{canStart: boolean} | null>(null);
   const replyInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const replyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyStartWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const replyFinishWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speech = useRef(createLocalSpeech(localSpeechBridge(), () => {
     if (!mounted.current || speechFaultRef.current) return;
+    if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+    speechWatchdog.current = null;
     speechFaultRef.current = true;
     speechEpoch.current++;
     speechAttempt.current = false;
@@ -76,7 +82,9 @@ function Home() {
   })).current;
   const reply = useRef(createLocalReply(localReplyBridge(), () => {
     if (!mounted.current || replyFaultRef.current) return;
+    if (replyStartWatchdog.current !== null) clearTimeout(replyStartWatchdog.current);
     if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
+    replyStartWatchdog.current = null;
     replyFinishWatchdog.current = null;
     replyFaultRef.current = true;
     replyEpoch.current++;
@@ -91,6 +99,8 @@ function Home() {
   })).current;
 
   const stopSpeech = useCallback((clearDraft: boolean, message: string) => {
+    if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+    speechWatchdog.current = null;
     speechEpoch.current++;
     speechAttempt.current = false;
     speech.stop();
@@ -104,9 +114,11 @@ function Home() {
   const clearReplyTimers = useCallback(() => {
     if (replyInterval.current !== null) clearInterval(replyInterval.current);
     if (replyTimeout.current !== null) clearTimeout(replyTimeout.current);
+    if (replyStartWatchdog.current !== null) clearTimeout(replyStartWatchdog.current);
     if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
     replyInterval.current = null;
     replyTimeout.current = null;
+    replyStartWatchdog.current = null;
     replyFinishWatchdog.current = null;
   }, []);
 
@@ -161,6 +173,8 @@ function Home() {
       gate.stop();
       speechEpoch.current++;
       speechAttempt.current = false;
+      if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+      speechWatchdog.current = null;
       speech.stop();
       clearReplyTimers();
       replyRequest.current = null;
@@ -208,6 +222,17 @@ function Home() {
     speechAttempt.current = true;
     setSpeechBusy(true);
     setSpeechStatus('Preparing local speech...');
+    speechWatchdog.current = setTimeout(() => {
+      if (!mounted.current || epoch !== speechEpoch.current || !speechAttempt.current) return;
+      speechWatchdog.current = null;
+      speechEpoch.current++;
+      speechAttempt.current = false;
+      speech.failClosed();
+      speechFaultRef.current = true;
+      setSpeechBusy(false);
+      setSpeechFault(true);
+      setSpeechStatus('Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.');
+    }, SPEECH_ATTEMPT_TIMEOUT_MS);
     try {
       const token = await speech.start();
       if (!mounted.current || epoch !== speechEpoch.current) return;
@@ -234,6 +259,8 @@ function Home() {
       }
     } finally {
       if (mounted.current && epoch === speechEpoch.current) {
+        if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+        speechWatchdog.current = null;
         speechAttempt.current = false;
         setSpeechBusy(false);
       }
@@ -250,7 +277,7 @@ function Home() {
       if (!mounted.current || epoch !== replyEpoch.current || reply.state() !== 'finishing') return;
       replyFinishWatchdog.current = null;
       replyEpoch.current++;
-      reply.stop();
+      reply.failClosed();
       replyFaultRef.current = true;
       setReplyFault(true);
       setReplyPhase('idle');
@@ -310,7 +337,22 @@ function Home() {
       }
       setReplyPhase('starting');
       setReplyStatus('Starting local listening...');
+      replyStartWatchdog.current = setTimeout(() => {
+        if (!mounted.current || epoch !== replyEpoch.current || attempt !== replyRequest.current || reply.state() !== 'starting') return;
+        replyStartWatchdog.current = null;
+        replyRequest.current = null;
+        replyEpoch.current++;
+        reply.failClosed();
+        replyFaultRef.current = true;
+        setReplyFault(true);
+        setReplyPhase('idle');
+        setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+      }, REPLY_START_TIMEOUT_MS);
       const token = await reply.start();
+      if (attempt === replyRequest.current && epoch === replyEpoch.current && replyStartWatchdog.current !== null) {
+        clearTimeout(replyStartWatchdog.current);
+        replyStartWatchdog.current = null;
+      }
       if (!mounted.current || epoch !== replyEpoch.current || attempt !== replyRequest.current) return;
       if (token === null) {
         setReplyStatus('Local reply captions are unavailable or the microphone is busy. Try again.');

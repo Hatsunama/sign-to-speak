@@ -106,6 +106,12 @@ export function createLocalReply(bridge, onCleanupFailure = () => {}) {
       retire();
     },
 
+    failClosed() {
+      try { bridge?.markUncertain?.(); } catch { /* Local retirement must still run. */ }
+      ++generation;
+      retire();
+    },
+
     state() { return phase; },
   });
 }

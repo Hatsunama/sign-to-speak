@@ -10,6 +10,7 @@ import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
@@ -85,15 +86,27 @@ public class ReplyLifecycleTest {
     }
   }
 
-  @Test public void stalledReplyBeginFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes() {
+  @Test public void stalledReplyBeginFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes()
+      throws Exception {
     Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Started> started = new AtomicReference<>();
     AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    AtomicReference<Thread> cancellationThread = new AtomicReference<>();
+    CountDownLatch cancellationRequested = new CountDownLatch(1);
     try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
          MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
-             (session, ignored) -> when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
-               completion.set(call.getArgument(2));
-               return 41L; // The worker never reports whether recording started.
-             }))) {
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 started.set(call.getArgument(1));
+                 completion.set(call.getArgument(2));
+                 return 41L; // The worker reports a successful start only after the deadline.
+               });
+               doAnswer(call -> {
+                 cancellationThread.set(Thread.currentThread());
+                 cancellationRequested.countDown();
+                 return null;
+               }).when(session).cancel(41L);
+             })) {
       ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
       ReactApplicationContext context = mock(ReactApplicationContext.class);
       when(context.getCurrentActivity()).thenReturn(controller.get());
@@ -116,6 +129,16 @@ public class ReplyLifecycleTest {
       verify(begun).reject(eq("CLEANUP_FAILED"), anyString());
       verify(begun, never()).resolve(any());
 
+      Thread mainTestThread = Thread.currentThread();
+      started.get().complete(true);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      assertTrue("late successful start must request cancellation",
+          cancellationRequested.await(1, TimeUnit.SECONDS));
+      assertNotSame("ReplySession.cancel must not run on the main looper",
+          mainTestThread, cancellationThread.get());
+      verify(sessions.constructed().get(0), timeout(1000).times(1)).cancel(41L);
+      assertTrue("lease remains held until worker completion", app.isLocalAudioLeaseHeld());
+
       completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
       assertFalse(app.isLocalAudioLeaseHeld());
       verifyNoMoreInteractions(begun);
@@ -123,9 +146,12 @@ public class ReplyLifecycleTest {
     }
   }
 
-  @Test public void stalledReplyFinishFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes() {
+  @Test public void stalledReplyFinishFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes()
+      throws Exception {
     Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
     AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    AtomicReference<Thread> cancellationThread = new AtomicReference<>();
+    CountDownLatch cancellationRequested = new CountDownLatch(1);
     try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
          MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
              (session, ignored) -> {
@@ -135,6 +161,11 @@ public class ReplyLifecycleTest {
                  return 43L;
                });
                when(session.finish(43L)).thenReturn(true);
+               doAnswer(call -> {
+                 cancellationThread.set(Thread.currentThread());
+                 cancellationRequested.countDown();
+                 return null;
+               }).when(session).cancel(43L);
              })) {
       ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
       ReactApplicationContext context = mock(ReactApplicationContext.class);
@@ -160,8 +191,55 @@ public class ReplyLifecycleTest {
         assertTrue(app.getSpeechCleanupFaulted());
         assertTrue("deadline must not claim worker cleanup", app.isLocalAudioLeaseHeld());
         assertResolvedResult(finished, "CLEANUP_FAILED", null);
+        assertTrue("finish deadline must request cancellation",
+            cancellationRequested.await(1, TimeUnit.SECONDS));
+        assertNotSame("ReplySession.cancel must not run on the main looper",
+            Thread.currentThread(), cancellationThread.get());
+        verify(sessions.constructed().get(0), timeout(1000).times(1)).cancel(43L);
+        assertTrue("lease remains held until worker completion", app.isLocalAudioLeaseHeld());
         completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
         assertFalse(app.isLocalAudioLeaseHeld());
+        verifyNoMoreInteractions(finished);
+      }
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void replyCompletionBeforeDeadlinesCancelsTimersAndReleasesLease() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 45L;
+               });
+               when(session.finish(45L)).thenReturn(true);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        completion.get().complete(ReplySession.Outcome.completed("hello"));
+        MainApplication app = (MainApplication) controller.get().getApplication();
+        assertResolvedResult(finished, "COMPLETED", "hello");
+        assertFalse(app.isLocalAudioLeaseHeld());
+
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(181, TimeUnit.SECONDS);
+        assertFalse(app.getReplyCleanupFaulted());
+        assertFalse(app.getSpeechCleanupFaulted());
+        assertFalse(app.isLocalAudioLeaseHeld());
+        verifyNoMoreInteractions(begun);
         verifyNoMoreInteractions(finished);
       }
       controller.pause().stop().destroy();

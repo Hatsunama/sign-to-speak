@@ -9,6 +9,7 @@ import com.facebook.react.defaults.DefaultReactActivityDelegate;
 import android.content.Context;
 import android.media.AudioAttributes;
 import android.media.AudioManager;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
@@ -73,8 +74,11 @@ public class SpeechLifecycleTest {
         }
     }
 
-    @Test public void stalledSpeechCallbackFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes() {
+    @Test public void stalledSpeechCallbackFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes()
+            throws Exception {
         AtomicReference<SpeechSession.Completion> completion = new AtomicReference<>();
+        AtomicReference<Thread> cancellationThread = new AtomicReference<>();
+        CountDownLatch cancellationRequested = new CountDownLatch(1);
         try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
              MockedConstruction<SpeechSession> sessions = mockConstruction(SpeechSession.class,
                      (session, ignored) -> {
@@ -83,6 +87,11 @@ public class SpeechLifecycleTest {
                              completion.set(call.getArgument(2));
                              return null; // The worker accepts speech but never completes it.
                          }).when(session).speak(anyLong(), any(byte[].class), any());
+                         doAnswer(call -> {
+                             cancellationThread.set(Thread.currentThread());
+                             cancellationRequested.countDown();
+                             return null;
+                         }).when(session).stop();
                      })) {
             ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
             ReactApplicationContext context = mock(ReactApplicationContext.class);
@@ -109,9 +118,51 @@ public class SpeechLifecycleTest {
             assertTrue(app.getSpeechCleanupFaulted());
             assertTrue("deadline must not claim worker cleanup", app.isLocalAudioLeaseHeld());
             verify(speaking).resolve("CLEANUP_FAILED");
+            assertTrue("speech deadline must request stop",
+                    cancellationRequested.await(1, TimeUnit.SECONDS));
+            assertNotSame("SpeechSession.stop must not run on the main looper",
+                    Thread.currentThread(), cancellationThread.get());
+            verify(sessions.constructed().get(0), timeout(1000).times(1)).stop();
+            assertTrue("lease remains held until worker completion", app.isLocalAudioLeaseHeld());
 
             completion.get().complete(SpeechSession.Result.CANCELLED);
             assertFalse(app.isLocalAudioLeaseHeld());
+            verifyNoMoreInteractions(speaking);
+            controller.pause().stop().destroy();
+        }
+    }
+
+    @Test public void speechCompletionBeforeDeadlineCancelsTimerAndReleasesLease() {
+        try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+             MockedConstruction<SpeechSession> sessions = mockConstruction(SpeechSession.class,
+                     (session, ignored) -> {
+                         when(session.begin(true)).thenReturn(59L);
+                         doAnswer(call -> {
+                             ((SpeechSession.Completion) call.getArgument(2))
+                                     .complete(SpeechSession.Result.COMPLETED);
+                             return null;
+                         }).when(session).speak(anyLong(), any(byte[].class), any());
+                     })) {
+            ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+            ReactApplicationContext context = mock(ReactApplicationContext.class);
+            when(context.getCurrentActivity()).thenReturn(controller.get());
+            LocalSpeechModule bridge = new LocalSpeechModule(context);
+            Promise begun = mock(Promise.class);
+            bridge.begin(begun);
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+            ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+            verify(begun).resolve(token.capture());
+            Promise speaking = mock(Promise.class);
+            bridge.speak((String) token.getValue(), "HELLO", speaking);
+            verify(speaking).resolve("COMPLETED");
+            MainApplication app = (MainApplication) controller.get().getApplication();
+            assertFalse(app.isLocalAudioLeaseHeld());
+
+            Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(181, TimeUnit.SECONDS);
+            assertFalse(app.getReplyCleanupFaulted());
+            assertFalse(app.getSpeechCleanupFaulted());
+            assertFalse(app.isLocalAudioLeaseHeld());
+            verifyNoMoreInteractions(begun);
             verifyNoMoreInteractions(speaking);
             controller.pause().stop().destroy();
         }

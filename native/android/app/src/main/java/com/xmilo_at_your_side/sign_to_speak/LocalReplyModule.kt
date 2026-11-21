@@ -11,6 +11,12 @@ import com.facebook.react.bridge.UiThreadUtil
 class LocalReplyModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   override fun getName() = "LocalReply"
 
+  @ReactMethod fun markUncertain() {
+    val app = ((reactApplicationContext.currentActivity as? MainActivity)?.application
+      ?: reactApplicationContext.applicationContext) as? MainApplication
+    app?.recordLocalAudioCleanupFault()
+  }
+
   @ReactMethod fun begin(promise: Promise) {
     val expected = reactApplicationContext.currentActivity as? MainActivity
     UiThreadUtil.runOnUiThread {

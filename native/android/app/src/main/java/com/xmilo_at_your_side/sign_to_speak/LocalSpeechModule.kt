@@ -10,6 +10,12 @@ import com.facebook.react.bridge.UiThreadUtil
 class LocalSpeechModule(context: ReactApplicationContext) : ReactContextBaseJavaModule(context) {
   override fun getName() = "LocalSpeech"
 
+  @ReactMethod fun markUncertain() {
+    val app = ((reactApplicationContext.currentActivity as? MainActivity)?.application
+      ?: reactApplicationContext.applicationContext) as? MainApplication
+    app?.recordLocalAudioCleanupFault()
+  }
+
   @ReactMethod fun begin(promise: Promise) {
     val expected = reactApplicationContext.currentActivity as? MainActivity
     UiThreadUtil.runOnUiThread {
