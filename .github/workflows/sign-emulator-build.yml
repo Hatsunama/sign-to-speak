@@ -74,6 +74,7 @@ jobs:
           python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
             --metadata "$RUNNER_TEMP/pocket-x86_64-metadata.json" \
             --output-dir generated/pocket-assets
+          mkdir -p generated
           python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
           sha256sum generated/reply-asr-component/assets/reply-asr/*.bin \
             generated/reply-asr-component/inputs.json \

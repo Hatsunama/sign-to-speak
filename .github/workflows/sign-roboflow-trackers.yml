@@ -122,6 +122,7 @@ jobs:
         timeout-minutes: 8
         run: |
           set -euo pipefail
+          mkdir -p generated
           python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
       - name: Compile changed Android sources and tests before expensive native preparation
         timeout-minutes: 10

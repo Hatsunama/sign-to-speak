@@ -8,6 +8,12 @@ ROOT = NATIVE.parent
 
 
 class ReplyAppAssetsPolicyTest(unittest.TestCase):
+    APP_WORKFLOWS = (
+        "sign-android.yml",
+        "sign-emulator-build.yml",
+        "sign-roboflow-trackers.yml",
+    )
+
     def test_gradle_applies_fail_closed_reply_asset_contract(self):
         build = (NATIVE / "android/app/build.gradle").read_text(encoding="utf-8")
         self.assertIn('apply from: "reply-asr-assets.gradle"', build)
@@ -44,6 +50,17 @@ class ReplyAppAssetsPolicyTest(unittest.TestCase):
         self.assertLess(command, first_gradle)
         self.assertIn("scripts/reply-asr-component.py", workflow[:first_gradle])
         self.assertIn("vendor/reply-asr/pins.json", workflow[:first_gradle])
+
+    def test_every_app_prepare_creates_its_checkout_owned_parent(self):
+        guarded_prepare = (
+            "mkdir -p generated\n"
+            "          python3 scripts/reply-asr-component.py prepare "
+            "generated/reply-asr-component"
+        )
+        for name in self.APP_WORKFLOWS:
+            with self.subTest(workflow=name):
+                workflow = (ROOT / ".github/workflows" / name).read_text(encoding="utf-8")
+                self.assertEqual(workflow.count(guarded_prepare), 1)
 
     def test_app_integration_pr_branch_is_narrowly_allowlisted(self):
         workflow = (ROOT / ".github/workflows/sign-android.yml").read_text(encoding="utf-8")

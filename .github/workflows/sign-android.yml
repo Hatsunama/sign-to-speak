@@ -90,6 +90,7 @@ jobs:
         timeout-minutes: 8
         run: |
           set -euo pipefail
+          mkdir -p generated
           python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
           sha256sum \
             generated/reply-asr-component/inputs.json \
