@@ -161,7 +161,7 @@ public class ReplyLifecycleTest {
       try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
         bridge.finish((String) token.getValue(), finished);
         verify(sessions.constructed().get(0)).cancel(29L);
-        assertResolvedResult(finished, "CANCELLED", null);
+        assertResolvedResult(finished, "UNAVAILABLE", null);
       }
       controller.pause().stop().destroy();
     }
