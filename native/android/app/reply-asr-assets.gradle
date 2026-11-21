@@ -96,7 +96,7 @@ def verifyReplyAsrInputs = tasks.register("verifyReplyAsrInputs") {
         def gitOutput = { List<String> arguments ->
             providers.exec {
                 commandLine((["git", "-C", source.absolutePath] + arguments) as List<String>)
-            }.standardOutput.asText.get().trim()
+            }.standardOutput.asText.get().replaceFirst(/\r?\n\z/, "")
         }
         if (gitOutput(["rev-parse", "HEAD"]) != "d1be6fde11ac6e0407606b4e42fe72d34add8037" ||
                 gitOutput(["rev-parse", "HEAD^{tree}"]) != "6fe2755682242a5c01aba65a22b3c0305d747841") {

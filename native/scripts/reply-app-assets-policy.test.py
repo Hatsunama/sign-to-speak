@@ -1,5 +1,7 @@
 import re
 from pathlib import Path
+import subprocess
+import tempfile
 import unittest
 
 
@@ -39,6 +41,45 @@ class ReplyAppAssetsPolicyTest(unittest.TestCase):
         compact = re.sub(r"\s+", " ", policy)
         self.assertRegex(compact, r'tasks\.matching.*merge.*Assets.*dependsOn\(verifyReplyAsrInputs\)')
         self.assertRegex(compact, r'tasks\.matching.*package.*dependsOn\(verifyReplyAsrInputs\)')
+
+    def test_gradle_preserves_porcelain_leading_status_column(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            checkout = Path(temporary)
+            subprocess.run(["git", "init", "--quiet"], cwd=checkout, check=True)
+            subprocess.run(
+                ["git", "config", "user.email", "reply-asr-fixture@example.invalid"],
+                cwd=checkout,
+                check=True,
+            )
+            subprocess.run(
+                ["git", "config", "user.name", "Reply ASR fixture"],
+                cwd=checkout,
+                check=True,
+            )
+            for relative in ("include/whisper.h", "src/whisper.cpp"):
+                path = checkout / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text("pinned\n", encoding="utf-8")
+            subprocess.run(["git", "add", "."], cwd=checkout, check=True)
+            subprocess.run(
+                ["git", "commit", "--quiet", "-m", "fixture"], cwd=checkout, check=True
+            )
+            for relative in ("include/whisper.h", "src/whisper.cpp"):
+                (checkout / relative).write_text("repaired\n", encoding="utf-8")
+
+            porcelain = subprocess.check_output(
+                ["git", "status", "--porcelain", "--untracked-files=all"],
+                cwd=checkout,
+                text=True,
+            )
+
+        expected = {" M include/whisper.h", " M src/whisper.cpp"}
+        self.assertEqual(set(porcelain.rstrip("\r\n").splitlines()), expected)
+        self.assertNotEqual(set(porcelain.strip().splitlines()), expected)
+
+        policy = (NATIVE / "android/app/reply-asr-assets.gradle").read_text(encoding="utf-8")
+        self.assertIn('.replaceFirst(/\\r?\\n\\z/, "")', policy)
+        self.assertNotIn(".standardOutput.asText.get().trim()", policy)
 
     def test_hosted_prepare_precedes_every_gradle_invocation(self):
         workflow = (ROOT / ".github/workflows/sign-android.yml").read_text(encoding="utf-8")
