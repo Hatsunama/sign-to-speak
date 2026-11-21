@@ -10,6 +10,7 @@ import {createLocalSpeech} from './src/local-speech.mjs';
 import {createLocalReply} from './src/local-reply.mjs';
 
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
+const REPLY_FINALIZATION_TIMEOUT_MS = 120000;
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
   lensFacing: 'back' | 'front';
@@ -63,6 +64,7 @@ function Home() {
   const replyRequest = useRef<{canStart: boolean} | null>(null);
   const replyInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const replyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyFinishWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speech = useRef(createLocalSpeech(localSpeechBridge(), () => {
     if (!mounted.current || speechFaultRef.current) return;
     speechFaultRef.current = true;
@@ -74,6 +76,8 @@ function Home() {
   })).current;
   const reply = useRef(createLocalReply(localReplyBridge(), () => {
     if (!mounted.current || replyFaultRef.current) return;
+    if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
+    replyFinishWatchdog.current = null;
     replyFaultRef.current = true;
     replyEpoch.current++;
     reply.stop();
@@ -100,8 +104,10 @@ function Home() {
   const clearReplyTimers = useCallback(() => {
     if (replyInterval.current !== null) clearInterval(replyInterval.current);
     if (replyTimeout.current !== null) clearTimeout(replyTimeout.current);
+    if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
     replyInterval.current = null;
     replyTimeout.current = null;
+    replyFinishWatchdog.current = null;
   }, []);
 
   const stopReply = useCallback((clearCaption: boolean, message: string) => {
@@ -240,7 +246,21 @@ function Home() {
     clearReplyTimers();
     setReplyPhase('finishing');
     setReplyStatus('Creating a local caption...');
+    replyFinishWatchdog.current = setTimeout(() => {
+      if (!mounted.current || epoch !== replyEpoch.current || reply.state() !== 'finishing') return;
+      replyFinishWatchdog.current = null;
+      replyEpoch.current++;
+      reply.stop();
+      replyFaultRef.current = true;
+      setReplyFault(true);
+      setReplyPhase('idle');
+      setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+    }, REPLY_FINALIZATION_TIMEOUT_MS);
     const result = await reply.finish();
+    if (epoch === replyEpoch.current && replyFinishWatchdog.current !== null) {
+      clearTimeout(replyFinishWatchdog.current);
+      replyFinishWatchdog.current = null;
+    }
     if (!mounted.current || epoch !== replyEpoch.current || result === null) return;
     setReplyPhase('idle');
     switch (result.status) {

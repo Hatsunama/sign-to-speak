@@ -94,17 +94,18 @@ function replyTimers() {
   const intervals = new Map();
   return {
     Date,
-    setTimeout(fn) { const id = next++; timeouts.set(id, fn); return id; },
+    setTimeout(fn, delay) { const id = next++; timeouts.set(id, {fn, delay}); return id; },
     clearTimeout(id) { timeouts.delete(id); },
     setInterval(fn) { const id = next++; intervals.set(id, fn); return id; },
     clearInterval(id) { intervals.delete(id); },
     timeoutCount() { return timeouts.size; },
     intervalCount() { return intervals.size; },
+    timeoutDelays() { return [...timeouts.values()].map(entry => entry.delay); },
     takeTimeout() {
       const entry = timeouts.entries().next().value;
       assert.ok(entry, 'an active timeout exists');
       timeouts.delete(entry[0]);
-      return entry[1];
+      return entry[1].fn;
     },
   };
 }
@@ -281,6 +282,73 @@ test('reply timeout finishes exactly once and Cancel clears its timer', async t 
   assert.deepEqual(finishes, ['finish'], 'a cancelled timeout cannot finish the retired session');
 });
 
+test('reply finalization is bounded, cancellable, and cannot publish a late caption', async t => {
+  const timers = replyTimers();
+  const finishes = [];
+  const cancelled = [];
+  let next = 0;
+  const reply = {
+    begin: async () => `reply-${++next}`,
+    finish: token => new Promise(resolve => {finishes.push({token, resolve});}),
+    cancel: token => cancelled.push(token),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  async function startAndFinish() {
+    await h.press('Start listening');
+    await h.resolve('granted');
+    await h.press('Stop and caption');
+    assert.equal(timers.timeoutCount(), 1, 'native finalization has one watchdog');
+    assert.deepEqual(timers.timeoutDelays(), [120000], 'slow on-device decoding gets a separate two-minute deadline');
+    return finishes.at(-1);
+  }
+
+  const completed = await startAndFinish();
+  await act(() => completed.resolve({status: 'COMPLETED', text: 'normal caption'}));
+  assert.equal(h.replyInput().props.value, 'normal caption');
+  assert.equal(timers.timeoutCount(), 0, 'normal completion clears its watchdog');
+
+  const cancelledByButton = await startAndFinish();
+  await h.press('Cancel / Clear');
+  assert.equal(timers.timeoutCount(), 0, 'explicit cancellation clears its watchdog');
+  await act(() => cancelledByButton.resolve({status: 'COMPLETED', text: 'button stale'}));
+
+  const cancelledByBack = await startAndFinish();
+  assert.deepEqual(await h.back(), [true]);
+  assert.equal(timers.timeoutCount(), 0, 'Back clears its watchdog');
+  await act(() => cancelledByBack.resolve({status: 'COMPLETED', text: 'back stale'}));
+
+  const cancelledByHome = await startAndFinish();
+  await h.state('background');
+  assert.equal(timers.timeoutCount(), 0, 'Home/background clears its watchdog');
+  await h.state('active');
+  await act(() => cancelledByHome.resolve({status: 'COMPLETED', text: 'home stale'}));
+
+  const expired = await startAndFinish();
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.match(h.replyStatus(), /close and reopen/i);
+  assert.equal(h.button('Start listening').props.disabled, true, 'deadline latches microphone closed');
+  assert.equal(h.button('Speak typed text').props.disabled, true, 'deadline latches typed speech closed');
+  assert.ok(cancelled.includes(expired.token), 'deadline asks native reply ownership to stop');
+  await act(() => expired.resolve({status: 'COMPLETED', text: 'too late'}));
+  assert.equal(h.replyInput().props.value, '', 'late native completion never publishes a caption');
+  assert.doesNotMatch(h.text(), /too late/);
+
+  const unmountTimers = replyTimers();
+  const unmountReply = {
+    begin: async () => 'unmount-reply',
+    finish: () => new Promise(() => {}),
+    cancel() {},
+  };
+  const unmountHome = await renderHome(t, {ready: true}, undefined, undefined, unmountReply, unmountTimers);
+  await unmountHome.press('Start listening');
+  await unmountHome.resolve('granted');
+  await unmountHome.press('Stop and caption');
+  assert.equal(unmountTimers.timeoutCount(), 1);
+  await act(() => unmountHome.app.unmount());
+  assert.equal(unmountTimers.timeoutCount(), 0, 'unmount clears its watchdog');
+});
+
 for (const [status, message] of [
   ['NO_SPEECH', /No speech was detected/i],
   ['MODEL_UNAVAILABLE', /model is unavailable/i],
@@ -320,11 +388,22 @@ test('Cancel/Clear and stale native results cannot restore a retired reply capti
 });
 
 test('reply cleanup uncertainty latches both local audio controls closed', async t => {
-  const reply = {begin: async () => 'reply', finish: async () => ({status: 'CLEANUP_FAILED'}), cancel() {}};
-  const h = await renderHome(t, {ready: true}, undefined, undefined, reply);
+  const timers = replyTimers();
+  let finish;
+  const reply = {
+    begin: async () => 'reply',
+    finish: () => new Promise(resolve => {finish = resolve;}),
+    cancel() {},
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
   await h.press('Start listening');
   await h.resolve('granted');
   await h.press('Stop and caption');
+  await act(async () => {
+    finish({status: 'CLEANUP_FAILED'});
+    await Promise.resolve();
+  });
+  assert.equal(timers.timeoutCount(), 0, 'cleanup failure clears its finalization watchdog');
   assert.match(h.replyStatus(), /close and reopen/i);
   assert.equal(h.button('Start listening').props.disabled, true);
   assert.equal(h.button('Speak typed text').props.disabled, true);
