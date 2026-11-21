@@ -48,6 +48,21 @@ FRAMEWORK_SHA256={
     'camera-libyuv-LICENSE.txt':'2b2cc1180c7e6988328ad2033b04b80117419db9c4c584918bbb3cfec7e9364f',
 }
 
+CAMERA_METADATA_SERVICE='androidx.camera.core.impl.MetadataHolderService'
+STARTUP_PROVIDER='androidx.startup.InitializationProvider'
+PROFILE_RECEIVER='androidx.profileinstaller.ProfileInstallReceiver'
+STARTUP_INITIALIZERS={
+    'androidx.emoji2.text.EmojiCompatInitializer',
+    'androidx.lifecycle.ProcessLifecycleInitializer',
+    'androidx.profileinstaller.ProfileInstallerInitializer',
+}
+PROFILE_ACTIONS={
+    'androidx.profileinstaller.action.INSTALL_PROFILE',
+    'androidx.profileinstaller.action.SKIP_FILE',
+    'androidx.profileinstaller.action.SAVE_PROFILE',
+    'androidx.profileinstaller.action.BENCHMARK_OPERATION',
+}
+
 def require(condition, message='APK validation failed'):
     if not condition:
         raise AssertionError(message)
@@ -55,6 +70,57 @@ def require(condition, message='APK validation failed'):
 
 def require_unique_names(names):
     require(len(names) == len(set(names)), 'Duplicate APK ZIP entry')
+
+
+def require_android_attributes(element, expected, message):
+    require(element.attrib=={ANDROID+name:value for name,value in expected.items()}, message)
+
+
+def validate_reviewed_background_components(app):
+    """Pin the local AndroidX/CameraX manifest surface without admitting arbitrary workers."""
+    message='Unexpected application background component'
+    services=app.findall('service')
+    providers=app.findall('provider')
+    receivers=app.findall('receiver')
+    # Pin the dependency responsibilities as well as excluding unreviewed workers.
+    # Losing CameraX configuration or an expected initializer is also a build change.
+    require(len(services)==len(providers)==len(receivers)==1, message)
+
+    for service in services:
+        require_android_attributes(service, {
+            'name':CAMERA_METADATA_SERVICE, 'enabled':'false', 'exported':'false'}, message)
+        service_metadata=service.findall('meta-data')
+        require(len(service_metadata)==1 and len(list(service))==1, message)
+        require_android_attributes(service_metadata[0], {
+            'name':CAMERA_METADATA_SERVICE+'.DEFAULT_CONFIG_PROVIDER',
+            'value':'androidx.camera.camera2.Camera2Config$DefaultProvider'}, message)
+
+    for provider in providers:
+        require_android_attributes(provider, {
+            'name':STARTUP_PROVIDER, 'exported':'false',
+            'authorities':PACKAGE+'.androidx-startup'}, message)
+        initializers=provider.findall('meta-data')
+        require(len(initializers)==len(STARTUP_INITIALIZERS)==len(list(provider)), message)
+        actual_initializers=set()
+        for initializer in initializers:
+            require(set(initializer.attrib)=={ANDROID+'name',ANDROID+'value'} and
+                    initializer.get(ANDROID+'value')=='androidx.startup', message)
+            actual_initializers.add(initializer.get(ANDROID+'name'))
+        require(actual_initializers==STARTUP_INITIALIZERS, message)
+
+    for receiver in receivers:
+        require_android_attributes(receiver, {
+            'name':PROFILE_RECEIVER, 'permission':'android.permission.DUMP',
+            'enabled':'true', 'exported':'true', 'directBootAware':'false'}, message)
+        filters=receiver.findall('intent-filter')
+        require(len(filters)==len(PROFILE_ACTIONS)==len(list(receiver)), message)
+        actual_actions=set()
+        for intent_filter in filters:
+            actions=intent_filter.findall('action')
+            require(not intent_filter.attrib and len(actions)==len(list(intent_filter))==1, message)
+            require(set(actions[0].attrib)=={ANDROID+'name'}, message)
+            actual_actions.add(actions[0].get(ANDROID+'name'))
+        require(actual_actions==PROFILE_ACTIONS, message)
 
 
 def is_retired_speech_artifact(name):
@@ -194,8 +260,7 @@ def validate_app_manifest(manifest, identity_message='APK must use the isolated 
     require(app.get(ANDROID+'testOnly')=='true')
     require(app.get(ANDROID+'debuggable') in (None,'false'))
     require(app.get(ANDROID+'allowBackup')=='false' and app.get(ANDROID+'usesCleartextTraffic')=='false')
-    require(not any(app.findall(tag) for tag in ('service','receiver','provider')),
-            'Unexpected application background component')
+    validate_reviewed_background_components(app)
     return root
 
 

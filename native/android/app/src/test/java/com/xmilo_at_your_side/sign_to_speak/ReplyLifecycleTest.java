@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 
 import android.Manifest;
+import com.facebook.react.bridge.Arguments;
+import com.facebook.react.bridge.JavaOnlyMap;
 import com.facebook.react.bridge.Promise;
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMap;
@@ -13,6 +15,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedConstruction;
+import org.mockito.MockedStatic;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
 import org.robolectric.RuntimeEnvironment;
@@ -122,12 +125,14 @@ public class ReplyLifecycleTest {
       ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
       verify(begun).resolve(token.capture());
       Promise finished = mock(Promise.class);
-      bridge.finish((String) token.getValue(), finished);
-      activity.onBackPressed();
-      verify(finished, never()).resolve(any());
-      verify(sessions.constructed().get(0)).cancel(23L);
-      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
-      verify(finished).resolve(any());
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        activity.onBackPressed();
+        verify(finished, never()).resolve(any());
+        verify(sessions.constructed().get(0)).cancel(23L);
+        completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+        assertResolvedResult(finished, "CANCELLED", null);
+      }
       controller.pause().stop().destroy();
     }
   }
@@ -153,9 +158,11 @@ public class ReplyLifecycleTest {
 
       Shadows.shadowOf(RuntimeEnvironment.getApplication()).denyPermissions(Manifest.permission.RECORD_AUDIO);
       Promise finished = mock(Promise.class);
-      bridge.finish((String) token.getValue(), finished);
-      verify(sessions.constructed().get(0)).cancel(29L);
-      verify(finished).resolve(any());
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        verify(sessions.constructed().get(0)).cancel(29L);
+        assertResolvedResult(finished, "CANCELLED", null);
+      }
       controller.pause().stop().destroy();
     }
   }
@@ -183,10 +190,10 @@ public class ReplyLifecycleTest {
       completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CLEANUP_FAILED));
 
       Promise finished = mock(Promise.class);
-      bridge.finish((String) token.getValue(), finished);
-      ArgumentCaptor<Object> result = ArgumentCaptor.forClass(Object.class);
-      verify(finished).resolve(result.capture());
-      assertEquals("CLEANUP_FAILED", ((ReadableMap) result.getValue()).getString("status"));
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        assertResolvedResult(finished, "CLEANUP_FAILED", null);
+      }
       verify(sessions.constructed().get(0), never()).finish(anyLong());
       controller.pause().stop().destroy();
     }
@@ -207,5 +214,21 @@ public class ReplyLifecycleTest {
       assertTrue(sessions.constructed().isEmpty());
       first.pause().stop().destroy(); second.pause().stop().destroy();
     }
+  }
+
+  /** Robolectric has no React Native JNI runtime, so keep result assertions on a Java test map. */
+  private static MockedStatic<Arguments> mockArgumentsMaps() {
+    MockedStatic<Arguments> arguments = mockStatic(Arguments.class);
+    arguments.when(Arguments::createMap).thenAnswer(ignored -> new JavaOnlyMap());
+    return arguments;
+  }
+
+  private static void assertResolvedResult(Promise promise, String status, String text) {
+    ArgumentCaptor<Object> result = ArgumentCaptor.forClass(Object.class);
+    verify(promise).resolve(result.capture());
+    ReadableMap map = (ReadableMap) result.getValue();
+    assertEquals(status, map.getString("status"));
+    assertEquals(text != null, map.hasKey("text"));
+    if (text != null) assertEquals(text, map.getString("text"));
   }
 }
