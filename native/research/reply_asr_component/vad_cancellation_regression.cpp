@@ -1,5 +1,6 @@
 #include "reply_asr.h"
 #include "ggml-backend.h"
+#include "whisper.h"
 
 #include <algorithm>
 #include <array>
@@ -17,6 +18,11 @@
 namespace {
 std::atomic<bool> count_scheduler_calls{false};
 std::atomic<int> scheduler_calls{0};
+std::atomic<bool> cancellation_observed{false};
+std::atomic<bool> cleanup_sentinel_injected{false};
+std::atomic<int> cleanup_reset_calls{0};
+std::atomic<bool> cleanup_probability_count_positive{false};
+std::atomic<bool> cleanup_probabilities_zero{false};
 
 std::uint16_t read_u16(const unsigned char* bytes) {
     return std::uint16_t(bytes[0]) | (std::uint16_t(bytes[1]) << 8);
@@ -110,6 +116,7 @@ struct CancelOnFirstPoll {
         auto& observer = *static_cast<CancelOnFirstPoll*>(data);
         if (observer.polls.fetch_add(1, std::memory_order_relaxed) == 0) {
             observer.turn->cancelled.store(true, std::memory_order_release);
+            cancellation_observed.store(true, std::memory_order_release);
         }
     }
 };
@@ -124,6 +131,40 @@ extern "C" enum ggml_status __wrap_ggml_backend_sched_graph_compute(
         scheduler_calls.fetch_add(1, std::memory_order_relaxed);
     }
     return __real_ggml_backend_sched_graph_compute(sched, graph);
+}
+
+extern "C" void __real_whisper_vad_reset_state(struct whisper_vad_context* context);
+extern "C" float* __real_whisper_vad_probs(struct whisper_vad_context* context);
+
+extern "C" float* __wrap_whisper_vad_probs(struct whisper_vad_context* context) {
+    float* probabilities = __real_whisper_vad_probs(context);
+    bool expected = false;
+    if (cancellation_observed.load(std::memory_order_acquire) &&
+        cleanup_sentinel_injected.compare_exchange_strong(
+            expected, true, std::memory_order_acq_rel)) {
+        const int count = whisper_vad_n_probs(context);
+        if (count > 0 && probabilities != nullptr) {
+            probabilities[0] = 0.5f;
+        } else {
+            cleanup_sentinel_injected.store(false, std::memory_order_release);
+        }
+    }
+    return probabilities;
+}
+
+extern "C" void __wrap_whisper_vad_reset_state(struct whisper_vad_context* context) {
+    if (cancellation_observed.load(std::memory_order_acquire)) {
+        const int count = whisper_vad_n_probs(context);
+        const float* probabilities = __real_whisper_vad_probs(context);
+        bool all_zero = count > 0 && probabilities != nullptr;
+        for (int i = 0; all_zero && i < count; ++i) {
+            all_zero = probabilities[i] == 0.f;
+        }
+        cleanup_probability_count_positive.store(count > 0, std::memory_order_relaxed);
+        cleanup_probabilities_zero.store(all_zero, std::memory_order_relaxed);
+        cleanup_reset_calls.fetch_add(1, std::memory_order_relaxed);
+    }
+    __real_whisper_vad_reset_state(context);
 }
 
 int main(int argc, char** argv) {
@@ -164,6 +205,11 @@ int main(int argc, char** argv) {
         std::array<char, STS_REPLY_TEXT_CAPACITY> output;
         output.fill('x');
         scheduler_calls.store(0, std::memory_order_relaxed);
+        cancellation_observed.store(false, std::memory_order_relaxed);
+        cleanup_sentinel_injected.store(false, std::memory_order_relaxed);
+        cleanup_reset_calls.store(0, std::memory_order_relaxed);
+        cleanup_probability_count_positive.store(false, std::memory_order_relaxed);
+        cleanup_probabilities_zero.store(false, std::memory_order_relaxed);
         count_scheduler_calls.store(true, std::memory_order_release);
         const auto cancelled_status = sts_reply_decode(
             engine, fixture.data(), fixture.size(), &cancelled_turn,
@@ -176,11 +222,23 @@ int main(int argc, char** argv) {
             std::all_of(output.begin(), output.end(), [](char value) { return value == 0; });
         const bool borrowed_after_cancel = position_is(model_fd, model_position) &&
                                            position_is(vad_fd, vad_position);
+        const int reset_calls = cleanup_reset_calls.load(std::memory_order_relaxed);
+        const bool sentinel_injected =
+            cleanup_sentinel_injected.load(std::memory_order_relaxed);
+        const bool probability_count_positive =
+            cleanup_probability_count_positive.load(std::memory_order_relaxed);
+        const bool probabilities_zero =
+            cleanup_probabilities_zero.load(std::memory_order_relaxed);
         std::cout << "STS_VAD_CANCELLATION_FIRST status=" << cancelled_status
                   << " scheduler_calls=" << calls << " observer_polls=" << polls
                   << " output_cleared=" << output_cleared << std::endl;
+        std::cout << "STS_VAD_CANCELLATION_CLEANUP reset_calls=" << reset_calls
+                  << " sentinel_injected=" << sentinel_injected
+                  << " probability_count_positive=" << probability_count_positive
+                  << " probabilities_zero=" << probabilities_zero << std::endl;
         if (cancelled_status != STS_REPLY_CANCELLED || !output_cleared || polls == 0 ||
-            calls != 1 || !borrowed_after_cancel) {
+            calls != 1 || !borrowed_after_cancel || reset_calls < 1 ||
+            !sentinel_injected || !probability_count_positive || !probabilities_zero) {
             sts_reply_close(engine);
             std::cout << "STS_VAD_CANCELLATION_RED" << std::endl;
             return 1;
@@ -208,7 +266,8 @@ int main(int argc, char** argv) {
 
         std::cout << "STS_VAD_CANCELLATION_PASS scheduler_calls=" << calls
                   << " observer_polls=" << polls << " retry_text=" << expected_text
-                  << " borrowed_spans=true" << std::endl;
+                  << " borrowed_spans=true cleanup_reset_calls=" << reset_calls
+                  << " sentinel_injected=true probabilities_zero=true" << std::endl;
         return 0;
     } catch (const std::exception& error) {
         count_scheduler_calls.store(false, std::memory_order_release);

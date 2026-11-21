@@ -41,7 +41,9 @@ if(NOT ANDROID)
     target_link_libraries(reply_asr_vad_cancellation_regression PRIVATE
         whisper Threads::Threads)
     target_link_options(reply_asr_vad_cancellation_regression PRIVATE
-        -Wl,--wrap=ggml_backend_sched_graph_compute)
+        -Wl,--wrap=ggml_backend_sched_graph_compute
+        -Wl,--wrap=whisper_vad_probs
+        -Wl,--wrap=whisper_vad_reset_state)
 
     # Hosted-only repaired-source regression for the general Whisper loader.
     add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)

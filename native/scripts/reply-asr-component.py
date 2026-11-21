@@ -201,6 +201,97 @@ def repair_vad_compute_failure_bytes(source, pin):
     return repaired
 
 
+def repair_vad_cancellation_cpp_bytes(source, pin):
+    if hashlib.sha256(source).hexdigest() != pin["original_sha256"]:
+        raise ValueError("VAD cancellation implementation SHA-256 differs from pin")
+    transformations = (
+        (b"bool whisper_vad_detect_speech_no_reset(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples) {",
+         b"static bool whisper_vad_detect_speech_no_reset_internal(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples,\n"
+         b"        ggml_abort_callback abort_callback,\n"
+         b"        void * abort_callback_user_data) {"),
+        (b"        }\n\n"
+         b"        // Get the probability for this chunk.\n"
+         b"        ggml_backend_tensor_get(prob, &vctx->probs[i], 0, sizeof(float));",
+         b"        }\n\n"
+         b"        if (abort_callback && abort_callback(abort_callback_user_data)) {\n"
+         b"            compute_ok = false;\n"
+         b"            break;\n"
+         b"        }\n\n"
+         b"        // Get the probability for this chunk.\n"
+         b"        ggml_backend_tensor_get(prob, &vctx->probs[i], 0, sizeof(float));"),
+        (b"bool whisper_vad_detect_speech(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples) {\n"
+         b"    whisper_vad_reset_state(vctx);\n"
+         b"    return whisper_vad_detect_speech_no_reset(vctx, samples, n_samples);\n"
+         b"}",
+         b"bool whisper_vad_detect_speech_no_reset(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples) {\n"
+         b"    return whisper_vad_detect_speech_no_reset_internal(vctx, samples, n_samples, nullptr, nullptr);\n"
+         b"}\n\n"
+         b"bool whisper_vad_detect_speech(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples) {\n"
+         b"    whisper_vad_reset_state(vctx);\n"
+         b"    return whisper_vad_detect_speech_no_reset_internal(vctx, samples, n_samples, nullptr, nullptr);\n"
+         b"}\n\n"
+         b"bool whisper_vad_detect_speech_with_abort(\n"
+         b"        struct whisper_vad_context * vctx,\n"
+         b"        const float * samples,\n"
+         b"        int n_samples,\n"
+         b"        ggml_abort_callback abort_callback,\n"
+         b"        void * abort_callback_user_data) {\n"
+         b"    whisper_vad_reset_state(vctx);\n"
+         b"    return whisper_vad_detect_speech_no_reset_internal(\n"
+         b"            vctx, samples, n_samples, abort_callback, abort_callback_user_data);\n"
+         b"}"),
+    )
+    repaired = source
+    for before, after in transformations:
+        if repaired.count(before) != 1:
+            raise ValueError("VAD cancellation implementation branch differs from pin")
+        repaired = repaired.replace(before, after)
+    if hashlib.sha256(repaired).hexdigest() != pin["repaired_sha256"]:
+        raise ValueError("VAD cancellation implementation repair SHA-256 differs from pin")
+    return repaired
+
+
+def repair_vad_cancellation_header_bytes(source, pin):
+    if hashlib.sha256(source).hexdigest() != pin["original_sha256"]:
+        raise ValueError("VAD cancellation header SHA-256 differs from pin")
+    before = (
+        b"    WHISPER_API bool whisper_vad_detect_speech(\n"
+        b"            struct whisper_vad_context * vctx,\n"
+        b"                           const float * samples,\n"
+        b"                                   int   n_samples);"
+    )
+    after = before + (
+        b"\n\n"
+        b"    WHISPER_API bool whisper_vad_detect_speech_with_abort(\n"
+        b"            struct whisper_vad_context * vctx,\n"
+        b"                           const float * samples,\n"
+        b"                                   int   n_samples,\n"
+        b"                   ggml_abort_callback abort_callback,\n"
+        b"                                void * abort_callback_user_data);"
+    )
+    if source.count(before) != 1:
+        raise ValueError("VAD cancellation header branch differs from pin")
+    repaired = source.replace(before, after)
+    if hashlib.sha256(repaired).hexdigest() != pin["repaired_sha256"]:
+        raise ValueError("VAD cancellation header repair SHA-256 differs from pin")
+    return repaired
+
+
 def model_path(stage, pin):
     return stage / "assets/reply-asr" / output_name(pin["file"])
 
@@ -226,6 +317,16 @@ def prepare(output):
             raise ValueError("Whisper repairs unexpectedly target different files")
         repair_file.write_bytes(
             repair_vad_compute_failure_bytes(repair_file.read_bytes(), compute_repair))
+        cancellation_repair = PINS["source"]["vad_cancellation_repair"]
+        implementation_repair = cancellation_repair["implementation"]
+        if implementation_repair["path"] != repair["path"]:
+            raise ValueError("Whisper implementation repairs unexpectedly target different files")
+        repair_file.write_bytes(
+            repair_vad_cancellation_cpp_bytes(repair_file.read_bytes(), implementation_repair))
+        header_repair = cancellation_repair["header"]
+        header_file = stage / "whisper.cpp" / header_repair["path"]
+        header_file.write_bytes(
+            repair_vad_cancellation_header_bytes(header_file.read_bytes(), header_repair))
         notices = stage / "notices"
         notices.mkdir()
         for name, pin in {**PINS["notices"], **PINS["additional_notices"]}.items():

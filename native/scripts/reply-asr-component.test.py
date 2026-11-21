@@ -291,6 +291,86 @@ class ProducerTest(unittest.TestCase):
         self.assertEqual(source["vad_compute_failure_repair"]["repaired_sha256"],
                          "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6")
 
+    def test_vad_cancellation_repairs_header_and_callback_poll_boundary(self):
+        cpp_before = (
+            b"bool whisper_vad_detect_speech_no_reset(\n"
+            b"        struct whisper_vad_context * vctx,\n"
+            b"        const float * samples,\n"
+            b"        int n_samples) {\n"
+            b"        if (!ggml_graph_compute_helper(sched, gf, vctx->n_threads, false)) {\n"
+            b"            WHISPER_LOG_ERROR(\"%s: failed to compute VAD graph\\n\", __func__);\n"
+            b"            compute_ok = false;\n"
+            b"            break;\n"
+            b"        }\n\n"
+            b"        // Get the probability for this chunk.\n"
+            b"        ggml_backend_tensor_get(prob, &vctx->probs[i], 0, sizeof(float));\n"
+            b"    ggml_backend_sched_reset(sched);\n\n"
+            b"    return compute_ok;\n"
+            b"}\n\n"
+            b"bool whisper_vad_detect_speech(\n"
+            b"        struct whisper_vad_context * vctx,\n"
+            b"        const float * samples,\n"
+            b"        int n_samples) {\n"
+            b"    whisper_vad_reset_state(vctx);\n"
+            b"    return whisper_vad_detect_speech_no_reset(vctx, samples, n_samples);\n"
+            b"}\n"
+        )
+        cpp_pin = {
+            "original_sha256": hashlib.sha256(cpp_before).hexdigest(),
+            "repaired_sha256": "87420ad74a11e213dff632ccd5b5c54b85d1b7fa8ccbed5db576aca489f4705c",
+        }
+        cpp_after = probe.repair_vad_cancellation_cpp_bytes(cpp_before, cpp_pin)
+        self.assertIn(b"static bool whisper_vad_detect_speech_no_reset_internal(", cpp_after)
+        self.assertIn(b"ggml_abort_callback abort_callback", cpp_after)
+        compute = cpp_after.index(b"ggml_graph_compute_helper")
+        poll = cpp_after.index(b"abort_callback && abort_callback(abort_callback_user_data)")
+        probability = cpp_after.index(b"ggml_backend_tensor_get(prob")
+        self.assertLess(compute, poll)
+        self.assertLess(poll, probability)
+        self.assertIn(b"compute_ok = false;\n            break;", cpp_after[poll:probability])
+        self.assertIn(
+            b"return whisper_vad_detect_speech_no_reset_internal(vctx, samples, n_samples, nullptr, nullptr);",
+            cpp_after,
+        )
+        self.assertIn(b"bool whisper_vad_detect_speech_with_abort(", cpp_after)
+        self.assertLess(cpp_after.index(b"ggml_backend_sched_reset(sched)"),
+                        cpp_after.index(b"return compute_ok"))
+        with self.assertRaises(ValueError):
+            probe.repair_vad_cancellation_cpp_bytes(cpp_before + b"unexpected", cpp_pin)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_cancellation_cpp_bytes(
+                cpp_before, {**cpp_pin, "repaired_sha256": "0" * 64})
+
+        header_before = (
+            b"    WHISPER_API bool whisper_vad_detect_speech(\n"
+            b"            struct whisper_vad_context * vctx,\n"
+            b"                           const float * samples,\n"
+            b"                                   int   n_samples);\n"
+        )
+        header_pin = {
+            "original_sha256": hashlib.sha256(header_before).hexdigest(),
+            "repaired_sha256": "f8a5552056ec49d13504bbadd470c1ace330fd7a706e5005cb3277a02fadf671",
+        }
+        header_after = probe.repair_vad_cancellation_header_bytes(header_before, header_pin)
+        self.assertEqual(header_after.count(b"whisper_vad_detect_speech_with_abort"), 1)
+        self.assertIn(b"ggml_abort_callback abort_callback", header_after)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_cancellation_header_bytes(header_before + b"unexpected", header_pin)
+        with self.assertRaises(ValueError):
+            probe.repair_vad_cancellation_header_bytes(
+                header_before, {**header_pin, "repaired_sha256": "0" * 64})
+
+        source = probe.PINS["source"]
+        cancellation = source["vad_cancellation_repair"]
+        self.assertEqual(source["vad_compute_failure_repair"]["repaired_sha256"],
+                         cancellation["implementation"]["original_sha256"])
+        self.assertEqual(cancellation["implementation"]["repaired_sha256"],
+                         "7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c")
+        self.assertEqual(cancellation["header"]["original_sha256"],
+                         "a7d19f7feb5be52426628ff07e0602de28a30dc4312d0d0603e1e536753f76dd")
+        self.assertEqual(cancellation["header"]["repaired_sha256"],
+                         "89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125")
+
 
 class LeakGatePolicyTest(unittest.TestCase):
     NATIVE = SCRIPT.parent.parent
@@ -337,6 +417,14 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn("calls != 1", source["vad_cancellation"])
         self.assertIn("STS_VAD_CANCELLATION_RED", source["vad_cancellation"])
         self.assertIn("STS_VAD_CANCELLATION_PASS", source["vad_cancellation"])
+        self.assertIn("__wrap_whisper_vad_reset_state", source["vad_cancellation"])
+        self.assertIn("__real_whisper_vad_reset_state(context)", source["vad_cancellation"])
+        self.assertIn("__wrap_whisper_vad_probs", source["vad_cancellation"])
+        self.assertIn("__real_whisper_vad_probs(context)", source["vad_cancellation"])
+        self.assertIn("probabilities[0] = 0.5f", source["vad_cancellation"])
+        self.assertIn("sentinel_injected", source["vad_cancellation"])
+        self.assertIn("cleanup_reset_calls", source["vad_cancellation"])
+        self.assertIn("probabilities[i] == 0.f", source["vad_cancellation"])
 
         self.assertIn(
             "add_executable(reply_asr_model_load_leak_regression model_load_leak_regression.cpp)",
@@ -358,13 +446,24 @@ class LeakGatePolicyTest(unittest.TestCase):
         )
         self.assertIn("vad_cancellation_regression.cpp", source["cmake"])
         self.assertIn("-Wl,--wrap=ggml_backend_sched_graph_compute", source["cmake"])
+        self.assertIn("-Wl,--wrap=whisper_vad_probs", source["cmake"])
+        self.assertIn("-Wl,--wrap=whisper_vad_reset_state", source["cmake"])
 
         build = source["build"]
         self.assertIn('whisper_source="$stage/whisper.cpp"', build)
         final_source_sha256 = (
-            "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6"
+            "7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c"
         )
         self.assertEqual(build.count(final_source_sha256), 3)
+        final_header_sha256 = (
+            "89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125"
+        )
+        self.assertEqual(build.count(final_header_sha256), 3)
+        self.assertEqual(build.count('"$whisper_source/include/whisper.h"'), 8)
+        self.assertNotIn(
+            "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
+            build,
+        )
         self.assertNotIn(
             "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
             build,
@@ -380,6 +479,11 @@ class LeakGatePolicyTest(unittest.TestCase):
         self.assertIn('"$evidence/vad-cancellation-source-sha256.txt"', build)
         self.assertIn('"$evidence/vad-cancellation-regression.txt"', build)
         self.assertIn("STS_VAD_CANCELLATION_GREEN status=3 scheduler_calls=1", build)
+        self.assertIn(
+            "STS_VAD_CANCELLATION_CLEANUP reset_calls=[1-9][0-9]* "
+            "sentinel_injected=1",
+            build,
+        )
         self.assertIn("STS_VAD_CANCELLATION_EXPECTED_RED status=3 scheduler_calls=%s", build)
         self.assertIn('[[ "$status" -eq 1 && "$calls" -gt 1 ]]', build)
         self.assertIn('targets=(reply_asr_model_load_leak_regression)', build)

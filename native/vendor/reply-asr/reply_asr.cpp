@@ -245,8 +245,9 @@ sts_reply_status sts_reply_decode(sts_reply_engine* engine, const float* samples
     try {
         if (cancelled(turn)) return STS_REPLY_CANCELLED;
         ClearVadTurn clear_vad{engine->vad.get()};
-        if (!whisper_vad_detect_speech(engine->vad.get(), samples,
-                                       static_cast<int>(count))) {
+        if (!whisper_vad_detect_speech_with_abort(engine->vad.get(), samples,
+                                                   static_cast<int>(count), abort_decode,
+                                                   turn)) {
             return cancelled(turn) ? STS_REPLY_CANCELLED : STS_REPLY_DECODE_FAILED;
         }
         if (cancelled(turn)) return STS_REPLY_CANCELLED;

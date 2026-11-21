@@ -60,31 +60,40 @@ if [[ "$role" == host-vad-compute-failure-regression ||
       "$role" == host-vad-cancellation-regression ]]; then
     # The fault-injection regression belongs to the same exact fully repaired
     # input as the two independent lifetime gates, but does not modify it.
-    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
-        "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
     if [[ "$role" == host-wrapper-vad-compute-failure-regression ]]; then
-        sha256sum "$whisper_source/src/whisper.cpp" > \
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
             "$evidence/wrapper-vad-compute-failure-source-sha256.txt"
     elif [[ "$role" == host-vad-cancellation-regression ]]; then
-        sha256sum "$whisper_source/src/whisper.cpp" > \
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
             "$evidence/vad-cancellation-source-sha256.txt"
     else
-        sha256sum "$whisper_source/src/whisper.cpp" > \
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
             "$evidence/vad-compute-failure-source-sha256.txt"
     fi
 elif [[ "$role" == host-leak-regression ]]; then
     # The producer stages the pinned repair in place. Freeze that boundary so
     # this existing green regression can never silently move to pristine input.
-    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
-        "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
-    sha256sum "$whisper_source/src/whisper.cpp" > \
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
+    sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
         "$evidence/model-load-leak-source-sha256.txt"
 elif [[ "$role" == host-vad-leak-regression ]]; then
-    # Freeze the final staged source after all three exact-byte repairs. This gate
+    # Freeze the final staged source after all four exact-byte repairs. This gate
     # remains independent from the general Whisper loader regression above.
-    printf '%s  %s\n' 79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6 \
-        "$whisper_source/src/whisper.cpp" | sha256sum --check --strict
-    sha256sum "$whisper_source/src/whisper.cpp" > \
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
+    sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
         "$evidence/vad-leak-source-sha256.txt"
 fi
 
@@ -210,6 +219,9 @@ elif [[ "$role" == host-vad-cancellation-regression ]]; then
     first="$(grep -E '^STS_VAD_CANCELLATION_FIRST status=3 scheduler_calls=[0-9]+ observer_polls=[1-9][0-9]* output_cleared=1$' \
         "$evidence/vad-cancellation-regression.txt" || true)"
     test -n "$first" || exit 96
+    cleanup="$(grep -E '^STS_VAD_CANCELLATION_CLEANUP reset_calls=[1-9][0-9]* sentinel_injected=1 probability_count_positive=1 probabilities_zero=1$' \
+        "$evidence/vad-cancellation-regression.txt" || true)"
+    test -n "$cleanup" || exit 101
     calls="${first#* scheduler_calls=}"
     calls="${calls%% *}"
     if [[ "$status" -eq 0 ]]; then

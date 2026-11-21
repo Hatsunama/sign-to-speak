@@ -7,21 +7,34 @@ pinned source and both models over HTTPS. The engine
 consumes an already verified, immutable local fd span during initialization.
 The same core and static CPU library configuration build for the Linux host,
 Android ARM64 and Android x86_64. After verifying the pristine source commit,
-tree and exact `src/whisper.cpp` SHA-256, the producer applies three ordered,
+tree and exact `src/whisper.cpp` SHA-256, the producer applies four ordered,
 exact-byte repairs. The first changes the Whisper model-load failure branch to
 call the existing `whisper_free` cleanup. The second explicitly includes
 `<memory>`, value-initializes the VAD context and holds it in a
 `whisper_vad_free` RAII guard until initialization succeeds. The third records
 VAD graph-compute failure, resets the scheduler, then returns `false` instead
 of misreporting the failed inference as valid silence; successful computation
-still returns `true`. Every input and resulting source hash is pinned. The
-hosted graph-compute wrapper requires one injected scheduler failure and a
+still returns `true`. A fourth repair adds the ABI-preserving
+`whisper_vad_detect_speech_with_abort` entry point and polls its request-local
+callback immediately after each successful 512-sample VAD graph, before reading
+or storing the chunk probability. Cancellation and graph-compute failure both
+flow through scheduler reset and return `false`; legacy VAD APIs pass null
+callbacks and retain their signatures. Every input and resulting implementation
+and public-header hash is pinned. The hosted graph-compute wrapper requires one
+injected scheduler failure and a
 `false` detection result. The hosted green regressions independently
 exercise the Whisper late-read cleanup and the VAD early-malformed-metadata and
 late-short-read cleanup paths against the final staged source. Both sanitizer
 gates require their trigger markers, a zero exit status and no sanitizer leak.
 They retain separate source, build and execution evidence. The prior pristine
 v1.9.5 expected-red evidence remains in the pull-request run history.
+
+Hosted reply-component run `44825567460` at source `a72995e` reproduced the
+pre-repair cancellation defect: the first cancelled decode returned status 3
+with 56 VAD scheduler calls, one observer poll and cleared output. The other
+host, graph-compute failure, leak and Android ABI gates were green in that run.
+The repaired source still needs a fresh hosted component run; no local native
+build, publication or device execution is claimed.
 
 The application integration must verify SHA-256 on the immutable fd span
 before opening it. The native loader enforces the model length, header,

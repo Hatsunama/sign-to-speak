@@ -24,6 +24,19 @@
       "original_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
       "repaired_sha256": "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
       "reason": "After resetting the scheduler, propagate VAD graph-compute failure as false instead of reporting valid silence."
+    },
+    "vad_cancellation_repair": {
+      "implementation": {
+        "path": "src/whisper.cpp",
+        "original_sha256": "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
+        "repaired_sha256": "7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c"
+      },
+      "header": {
+        "path": "include/whisper.h",
+        "original_sha256": "a7d19f7feb5be52426628ff07e0602de28a30dc4312d0d0603e1e536753f76dd",
+        "repaired_sha256": "89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125"
+      },
+      "reason": "Add an ABI-preserving VAD entry point that polls a request-local abort callback after each successful 512-sample graph and before publishing its probability."
     }
   },
   "model": {
