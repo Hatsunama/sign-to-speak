@@ -33,8 +33,20 @@ Hosted reply-component run `44825567460` at source `a72995e` reproduced the
 pre-repair cancellation defect: the first cancelled decode returned status 3
 with 56 VAD scheduler calls, one observer poll and cleared output. The other
 host, graph-compute failure, leak and Android ABI gates were green in that run.
-The repaired source still needs a fresh hosted component run; no local native
-build, publication or device execution is claimed.
+Hosted reply-component run `44853080029` passed at commit
+`f38bc42f23da86359d38cd3cc7361505f924136b`, tree
+`b817e079b00c9859a90bd4855b264e22f4e95ca4`. Its cancellation evidence was
+`status=3 scheduler_calls=1 observer_polls=1 output_cleared=1`; its cleanup
+evidence was
+`reset_calls=1 sentinel_injected=1 probability_count_positive=1 probabilities_zero=1`.
+The same-engine retry returned exactly `please call my family`. The repaired
+implementation and header source hashes,
+`7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c` and
+`89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125`,
+were verified. Host smoke, the compute-error gate, both leak gates and both
+Android ABI audits passed. This evidence is component-only: it does not cover
+the application microphone path, UI, an APK or physical phones. No local
+native build, release publication or device execution is claimed.
 
 The application integration must verify SHA-256 on the immutable fd span
 before opening it. The native loader enforces the model length, header,
