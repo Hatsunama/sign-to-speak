@@ -1,0 +1,24 @@
+Offline English reply caption component attribution
+
+whisper.cpp and bundled ggml, ggml-org and contributors, v1.9.5
+d1be6fde11ac6e0407606b4e42fe72d34add8037. See WHISPER-CPP-MIT.txt.
+https://github.com/ggml-org/whisper.cpp
+
+OpenAI Whisper tiny.en weights, derived mel filters and GPT-2 vocabulary.
+See OPENAI-WHISPER-MIT.txt and OPENAI-GPT2-LICENSE.txt.
+https://github.com/openai/whisper
+https://github.com/openai/gpt-2
+The whisper.cpp project distributes the preconverted GGML ftype 1
+(mixed F16/F32) file. The historical conversion command and environment
+are unknown. This project uses the publisher's converted bytes verbatim.
+https://huggingface.co/ggerganov/whisper.cpp/tree/5359861c739e955e79d9a303bcbc70fb988958b1
+
+Software FP16 conversion follows Maratyszcza/FP16. See FP16-MIT.txt.
+YaRN rotary scaling adaptation. See YARN-MIT.txt.
+The baseline Arm NEON vector exponential uses Arm Optimized Routines
+polynomial constants under the MIT option. See ARM-EXP-COPYRIGHT.txt and
+ARM-OPTIMIZED-ROUTINES-LICENSE.txt.
+Silero VAD v6.2 weights, converted and distributed by ggml-org/whisper-vad.
+See SILERO-MIT.txt.
+https://huggingface.co/ggml-org/whisper-vad/tree/9ffd54a1e1ee413ddf265af9913beaf518d1639b
+Upstream cites PyTorch SpectralOps for a frame-count formula.

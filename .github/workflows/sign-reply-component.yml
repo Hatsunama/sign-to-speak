@@ -1,0 +1,116 @@
+name: Local reply ASR component
+'on':
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  component:
+    if: >-
+      github.repository == 'Hatsunama/sign-to-speak' &&
+      github.event.repository.private == false &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/codex/sign-to-speak-local-reply-20261120' &&
+      github.workflow_ref == 'Hatsunama/sign-to-speak/.github/workflows/sign-speech-component-android.yml@refs/heads/codex/sign-to-speak-local-reply-20261120'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      EXPECTED_SOURCE_SHA: ${{ github.sha }}
+      CMAKE_BUILD_PARALLEL_LEVEL: '2'
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - name: Checkout exact candidate
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Verify candidate and run producer tests
+        timeout-minutes: 1
+        run: |
+          set -euo pipefail
+          test "$RUNNER_OS" = Linux
+          test "$RUNNER_ARCH" = X64
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE_SHA"
+          evidence="$RUNNER_TEMP/sign-reply-component/evidence"
+          mkdir -p "$evidence" "$RUNNER_TEMP/sign-reply-component/test-tmp"
+          printf 'commit=%s\ntree=%s\nrunner-image=%s\nrun=%s\nattempt=%s\n' \
+            "$EXPECTED_SOURCE_SHA" "$(git rev-parse HEAD^{tree})" "${ImageVersion:-unknown}" \
+            "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" > "$evidence/runner.txt"
+          sha256sum native/vendor/reply-asr/* native/research/reply_asr_component/* \
+            native/scripts/reply-asr-component*.py native/scripts/build-reply-asr-component.sh \
+            native/scripts/ci-sdk.sh native/scripts/check-pocket-elf.py \
+            .github/workflows/sign-reply-component.yml .github/workflows/sign-speech-component-android.yml \
+            > "$evidence/component-source-sha256.txt"
+          SIGN_REPLY_TEST_TMP="$RUNNER_TEMP/sign-reply-component/test-tmp" \
+            python3 native/scripts/reply-asr-component.test.py -v 2>&1 | tee "$evidence/producer-tests.txt"
+
+      - name: Verify pinned Android toolchain without accepting licenses
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          bash native/scripts/ci-sdk.sh 2>&1 | tee "$RUNNER_TEMP/sign-reply-component/evidence/sdk.txt"
+          evidence="$RUNNER_TEMP/sign-reply-component/evidence"
+          sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+          cp "$RUNNER_TEMP/sign-evidence/ndk-source.properties" "$evidence/"
+          cp "$sdk/ndk/27.1.12297006/NOTICE.toolchain" "$evidence/ndk-NOTICE.toolchain"
+
+      - name: Prepare and verify public component inputs
+        id: prepare
+        timeout-minutes: 4
+        run: |
+          set -euo pipefail
+          root="$RUNNER_TEMP/sign-reply-component"
+          python3 native/scripts/reply-asr-component.py prepare "$root/inputs" \
+            2>&1 | tee "$root/evidence/prepare.txt"
+          cp "$root/inputs/inputs.json" "$root/evidence/"
+          cp -R "$root/inputs/notices" "$root/evidence/"
+
+      - name: Build and run real host inference
+        timeout-minutes: 7
+        run: bash native/scripts/build-reply-asr-component.sh host
+
+      - name: Reject VAD graph-compute failure as valid silence
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-compute-failure-regression
+
+      - name: Map wrapper VAD graph-compute failure and recover
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-wrapper-vad-compute-failure-regression
+
+      - name: Cancel during VAD before Whisper polling
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-cancellation-regression
+
+      - name: Cross compile and audit ARM64
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 6
+        run: bash native/scripts/build-reply-asr-component.sh arm64-v8a
+
+      - name: Cross compile and audit x86_64
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 6
+        run: bash native/scripts/build-reply-asr-component.sh x86_64
+
+      - name: Verify repaired Whisper model-load cleanup
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-leak-regression
+
+      - name: Verify repaired VAD initialization lifetime
+        if: ${{ !cancelled() && steps.prepare.outcome == 'success' }}
+        timeout-minutes: 4
+        run: bash native/scripts/build-reply-asr-component.sh host-vad-leak-regression
+
+      - name: Retain bounded component evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: reply-asr-component-${{ github.sha }}-${{ github.run_attempt }}
+          retention-days: 3
+          if-no-files-found: error
+          path: ${{ runner.temp }}/sign-reply-component/evidence/

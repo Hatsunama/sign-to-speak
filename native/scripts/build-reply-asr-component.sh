@@ -1,0 +1,320 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+role="${1:?expected host, host-vad-compute-failure-regression, host-wrapper-vad-compute-failure-regression, host-vad-cancellation-regression, host-leak-regression, host-vad-leak-regression, arm64-v8a, or x86_64}"
+sdk="${ANDROID_HOME:-${ANDROID_SDK_ROOT:-}}"
+root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+work="${RUNNER_TEMP:?missing hosted runner scratch}/sign-reply-component"
+stage="$work/inputs"
+evidence="$work/evidence"
+build="$work/build-$role"
+cmake="$sdk/cmake/3.31.5/bin/cmake"
+ninja="$sdk/cmake/3.31.5/bin/ninja"
+ndk="$sdk/ndk/27.1.12297006"
+bin="$ndk/toolchains/llvm/prebuilt/linux-x86_64/bin"
+export CMAKE_BUILD_PARALLEL_LEVEL=2
+whisper_source="$stage/whisper.cpp"
+
+case "$role" in
+    host)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_smoke reply_asr_vad_semantic_probe)
+        ;;
+    host-vad-compute-failure-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_vad_compute_failure_regression)
+        ;;
+    host-wrapper-vad-compute-failure-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_wrapper_vad_compute_failure_regression)
+        ;;
+    host-vad-cancellation-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++)
+        targets=(reply_asr_vad_cancellation_regression)
+        ;;
+    host-leak-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+               -DCMAKE_C_FLAGS=-fsanitize=address
+               -DCMAKE_CXX_FLAGS=-fsanitize=address
+               -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
+        targets=(reply_asr_model_load_leak_regression)
+        ;;
+    host-vad-leak-regression)
+        flags=(-DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++
+               -DCMAKE_C_FLAGS=-fsanitize=address
+               -DCMAKE_CXX_FLAGS=-fsanitize=address
+               -DCMAKE_EXE_LINKER_FLAGS=-fsanitize=address)
+        targets=(reply_asr_vad_model_load_leak_regression)
+        ;;
+    arm64-v8a|x86_64)
+        flags=(-DCMAKE_TOOLCHAIN_FILE="$ndk/build/cmake/android.toolchain.cmake"
+               -DANDROID_ABI="$role" -DANDROID_PLATFORM=android-26
+               -DANDROID_STL=c++_shared -DANDROID_SUPPORT_FLEXIBLE_PAGE_SIZES=ON)
+        targets=(sign_reply_asr)
+        ;;
+    *) exit 2 ;;
+esac
+
+if [[ "$role" == host-vad-compute-failure-regression ||
+      "$role" == host-wrapper-vad-compute-failure-regression ||
+      "$role" == host-vad-cancellation-regression ]]; then
+    # The fault-injection regression belongs to the same exact fully repaired
+    # input as the two independent lifetime gates, but does not modify it.
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
+    if [[ "$role" == host-wrapper-vad-compute-failure-regression ]]; then
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
+            "$evidence/wrapper-vad-compute-failure-source-sha256.txt"
+    elif [[ "$role" == host-vad-cancellation-regression ]]; then
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
+            "$evidence/vad-cancellation-source-sha256.txt"
+    else
+        sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
+            "$evidence/vad-compute-failure-source-sha256.txt"
+    fi
+elif [[ "$role" == host-leak-regression ]]; then
+    # The producer stages the pinned repair in place. Freeze that boundary so
+    # this existing green regression can never silently move to pristine input.
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
+    sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
+        "$evidence/model-load-leak-source-sha256.txt"
+elif [[ "$role" == host-vad-leak-regression ]]; then
+    # Freeze the final staged source after all four exact-byte repairs. This gate
+    # remains independent from the general Whisper loader regression above.
+    printf '%s  %s\n%s  %s\n' \
+        7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c \
+        "$whisper_source/src/whisper.cpp" \
+        89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125 \
+        "$whisper_source/include/whisper.h" | sha256sum --check --strict
+    sha256sum "$whisper_source/src/whisper.cpp" "$whisper_source/include/whisper.h" > \
+        "$evidence/vad-leak-source-sha256.txt"
+fi
+
+"$cmake" --version > "$evidence/cmake-version.txt"
+"$cmake" -S "$root/research/reply_asr_component" -B "$build" -G Ninja \
+    -DCMAKE_MAKE_PROGRAM="$ninja" -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
+    -DREPLY_WHISPER_SOURCE="$whisper_source" "${flags[@]}" \
+    2>&1 | tee "$evidence/$role-configure.txt"
+"$cmake" --build "$build" --target "${targets[@]}" --parallel 2 --verbose \
+    2>&1 | tee "$evidence/$role-build.txt"
+
+if [[ "$role" == host ]]; then
+    python3 "$root/scripts/reply-asr-component.py" smoke \
+        "$build/reply_asr_smoke" "$build/reply_asr_vad_semantic_probe" "$stage" "$evidence"
+elif [[ "$role" == host-vad-compute-failure-regression ]]; then
+    log="$work/vad-compute-failure-regression.full.txt"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    sha256sum "$vad_model" > "$evidence/vad-compute-failure-model-sha256.txt"
+    set +e
+    "$build/reply_asr_vad_compute_failure_regression" "$vad_model" > "$log" 2>&1
+    status=$?
+    set -e
+    tail -c 131072 "$log" > "$evidence/vad-compute-failure-regression.txt"
+    rm -f "$log"
+    cat "$evidence/vad-compute-failure-regression.txt"
+    if ! grep -Fq 'STS_VAD_COMPUTE_MODEL_LOAD_PASS' \
+        "$evidence/vad-compute-failure-regression.txt"; then
+        exit 90
+    fi
+    if ! grep -Fq 'STS_VAD_COMPUTE_INJECTION wrapper_calls=1 injected_failures=1' \
+        "$evidence/vad-compute-failure-regression.txt"; then
+        exit 91
+    fi
+    exit "$status"
+elif [[ "$role" == host-wrapper-vad-compute-failure-regression ]]; then
+    log="$work/wrapper-vad-compute-failure-regression.full.txt"
+    model="$stage/assets/reply-asr/ggml-tiny.en.bin"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    fixture="$root/../qa-artifacts/pocket-tts-audition-20261025/02-request.wav"
+    test "$(stat -c %s "$model")" = 77704715
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f \
+        "$model" | sha256sum --check --strict
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    printf '%s  %s\n' f9d617b62f3741408ecd5b17ff0cc4c20d1079e3d88044a6b8aaae3b80e4529b \
+        "$fixture" | sha256sum --check --strict
+    model_span="$work/wrapper-model-span.bin"
+    vad_span="$work/wrapper-vad-span.bin"
+    model_prefix='non-model-prefix!'
+    vad_prefix='non-vad-prefix!'
+    printf '%s' "$model_prefix" > "$model_span"
+    cat "$model" >> "$model_span"
+    printf '%s' 'non-model-suffix' >> "$model_span"
+    printf '%s' "$vad_prefix" > "$vad_span"
+    cat "$vad_model" >> "$vad_span"
+    printf '%s' 'non-vad-suffix' >> "$vad_span"
+    exec {model_fd}<"$model_span"
+    exec {vad_fd}<"$vad_span"
+    set +e
+    "$build/reply_asr_wrapper_vad_compute_failure_regression" \
+        "$model_fd" "${#model_prefix}" 77704715 \
+        "$vad_fd" "${#vad_prefix}" 885098 "$fixture" 'please call my family' \
+        > "$log" 2>&1
+    status=$?
+    set -e
+    exec {model_fd}<&-
+    exec {vad_fd}<&-
+    tail -c 131072 "$log" > "$evidence/wrapper-vad-compute-failure-regression.txt"
+    rm -f "$log" "$model_span" "$vad_span"
+    cat "$evidence/wrapper-vad-compute-failure-regression.txt"
+    if ! grep -Fq \
+        'STS_WRAPPER_VAD_COMPUTE_INJECTION wrapper_calls=1 injected_failures=1 status=5 output_cleared=1' \
+        "$evidence/wrapper-vad-compute-failure-regression.txt"; then
+        exit 94
+    fi
+    if ! grep -Fq \
+        'STS_WRAPPER_VAD_COMPUTE_MAPPING_PASS status=5 retry_status=0 text=please call my family borrowed_spans=true' \
+        "$evidence/wrapper-vad-compute-failure-regression.txt"; then
+        exit 95
+    fi
+    exit "$status"
+elif [[ "$role" == host-vad-cancellation-regression ]]; then
+    log="$work/vad-cancellation-regression.full.txt"
+    model="$stage/assets/reply-asr/ggml-tiny.en.bin"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    fixture="$root/../qa-artifacts/pocket-tts-audition-20261025/02-request.wav"
+    test "$(stat -c %s "$model")" = 77704715
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f \
+        "$model" | sha256sum --check --strict
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    printf '%s  %s\n' f9d617b62f3741408ecd5b17ff0cc4c20d1079e3d88044a6b8aaae3b80e4529b \
+        "$fixture" | sha256sum --check --strict
+    model_span="$work/vad-cancellation-model-span.bin"
+    vad_span="$work/vad-cancellation-vad-span.bin"
+    model_prefix='non-model-prefix!'
+    vad_prefix='non-vad-prefix!'
+    printf '%s' "$model_prefix" > "$model_span"
+    cat "$model" >> "$model_span"
+    printf '%s' 'non-model-suffix' >> "$model_span"
+    printf '%s' "$vad_prefix" > "$vad_span"
+    cat "$vad_model" >> "$vad_span"
+    printf '%s' 'non-vad-suffix' >> "$vad_span"
+    exec {model_fd}<"$model_span"
+    exec {vad_fd}<"$vad_span"
+    set +e
+    "$build/reply_asr_vad_cancellation_regression" \
+        "$model_fd" "${#model_prefix}" 77704715 \
+        "$vad_fd" "${#vad_prefix}" 885098 "$fixture" 'please call my family' \
+        > "$log" 2>&1
+    status=$?
+    set -e
+    exec {model_fd}<&-
+    exec {vad_fd}<&-
+    tail -c 131072 "$log" > "$evidence/vad-cancellation-regression.txt"
+    rm -f "$log" "$model_span" "$vad_span"
+    cat "$evidence/vad-cancellation-regression.txt"
+    first="$(grep -E '^STS_VAD_CANCELLATION_FIRST status=3 scheduler_calls=[0-9]+ observer_polls=[1-9][0-9]* output_cleared=1$' \
+        "$evidence/vad-cancellation-regression.txt" || true)"
+    test -n "$first" || exit 96
+    cleanup="$(grep -E '^STS_VAD_CANCELLATION_CLEANUP reset_calls=[1-9][0-9]* sentinel_injected=1 probability_count_positive=1 probabilities_zero=1$' \
+        "$evidence/vad-cancellation-regression.txt" || true)"
+    test -n "$cleanup" || exit 101
+    calls="${first#* scheduler_calls=}"
+    calls="${calls%% *}"
+    if [[ "$status" -eq 0 ]]; then
+        test "$calls" -eq 1 || exit 97
+        grep -Fq 'STS_VAD_CANCELLATION_PASS scheduler_calls=1 ' \
+            "$evidence/vad-cancellation-regression.txt" || exit 98
+        ! grep -Fq 'STS_VAD_CANCELLATION_RED' \
+            "$evidence/vad-cancellation-regression.txt" || exit 99
+        printf 'STS_VAD_CANCELLATION_GREEN status=3 scheduler_calls=1\n' | \
+            tee -a "$evidence/vad-cancellation-regression.txt"
+        exit 0
+    fi
+    if [[ "$status" -eq 1 && "$calls" -gt 1 ]] && \
+       grep -Fxq 'STS_VAD_CANCELLATION_RED' \
+           "$evidence/vad-cancellation-regression.txt" && \
+       ! grep -Fq 'STS_VAD_CANCELLATION_PASS' \
+           "$evidence/vad-cancellation-regression.txt"; then
+        printf 'STS_VAD_CANCELLATION_EXPECTED_RED status=3 scheduler_calls=%s\n' "$calls" | \
+            tee -a "$evidence/vad-cancellation-regression.txt"
+        exit 1
+    fi
+    exit 100
+elif [[ "$role" == host-leak-regression ]]; then
+    log="$work/model-load-leak-regression.full.txt"
+    model="$stage/assets/reply-asr/ggml-tiny.en.bin"
+    set +e
+    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 \
+        "$build/reply_asr_model_load_leak_regression" \
+        "$model" > "$log" 2>&1
+    status=$?
+    set -e
+    tail -c 131072 "$log" > "$evidence/model-load-leak-regression.txt"
+    rm -f "$log"
+    cat "$evidence/model-load-leak-regression.txt"
+    if [[ "$status" -ne 0 ]]; then
+        exit "$status"
+    fi
+    if ! grep -Fq 'late-model-read-failure pass' \
+        "$evidence/model-load-leak-regression.txt"; then
+        printf 'STS_MODEL_LOAD_LEAK_MARKER_MISSING status=%s\n' "$status" | \
+            tee -a "$evidence/model-load-leak-regression.txt"
+        exit 93
+    fi
+elif [[ "$role" == host-vad-leak-regression ]]; then
+    log="$work/vad-model-load-leak-regression.full.txt"
+    vad_model="$stage/assets/reply-asr/ggml-silero-v6.2.0.bin"
+    test "$(stat -c %s "$vad_model")" = 885098
+    printf '%s  %s\n' 2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987 \
+        "$vad_model" | sha256sum --check --strict
+    sha256sum "$vad_model" > "$evidence/vad-leak-model-sha256.txt"
+    set +e
+    ASAN_OPTIONS=detect_leaks=1:halt_on_error=1:exitcode=23 \
+        LSAN_OPTIONS=exitcode=23:max_leaks=20:report_objects=0 \
+        "$build/reply_asr_vad_model_load_leak_regression" \
+        "$vad_model" > "$log" 2>&1
+    status=$?
+    set -e
+    tail -c 131072 "$log" > "$evidence/vad-model-load-leak-regression.txt"
+    if ! grep -Fq 'STS_VAD_EARLY_METADATA_CLEANUP_PASS reads=9 close_calls=1' "$log" || \
+       ! grep -Fq 'STS_VAD_LATE_READ_CLEANUP_PASS reads=8 bytes=99238 close_calls=1' "$log"; then
+        printf 'STS_VAD_LEAK_TRIGGER_UNTRIGGERED status=%s\n' "$status" | \
+            tee -a "$evidence/vad-model-load-leak-regression.txt"
+        rm -f "$log"
+        exit 90
+    fi
+    if grep -Eq 'ERROR: (AddressSanitizer|LeakSanitizer)' "$log"; then
+        printf 'STS_VAD_SANITIZER_DIAGNOSTIC status=%s\n' "$status" | \
+            tee -a "$evidence/vad-model-load-leak-regression.txt"
+        rm -f "$log"
+        exit 91
+    fi
+    if [[ "$status" -ne 0 ]]; then
+        printf 'STS_VAD_LEAK_UNEXPECTED_SANITIZER_STATUS status=%s\n' "$status" | \
+            tee -a "$evidence/vad-model-load-leak-regression.txt"
+        rm -f "$log"
+        exit 92
+    fi
+    printf 'STS_VAD_INIT_LIFETIME_REPAIRED sanitizer_status=0\n' | \
+        tee -a "$evidence/vad-model-load-leak-regression.txt"
+    rm -f "$log"
+    cat "$evidence/vad-model-load-leak-regression.txt"
+else
+    so="$build/reply-asr/libsign_reply_asr.so"
+    prefix="$evidence/$role"
+    cp "$build/compile_commands.json" "$prefix-compile-commands.json"
+    cp "$build/reply-asr/sign_reply_asr.map" "$prefix-link-map.txt"
+    "$ninja" -C "$build" -t deps > "$prefix-includes.txt"
+    "$bin/llvm-readelf" -h "$so" > "$prefix-header.txt"
+    "$bin/llvm-readelf" -lW "$so" > "$prefix-segments.txt"
+    "$bin/llvm-readelf" -dW "$so" > "$prefix-dynamic.txt"
+    "$bin/llvm-nm" --defined-only --dynamic --extern-only "$so" > "$prefix-symbols.txt"
+    "$bin/llvm-nm" --undefined-only --dynamic "$so" > "$prefix-imports.txt"
+    sha256sum "$so" > "$prefix-sha256.txt"
+    "$bin/clang" --version > "$prefix-clang-version.txt"
+    python3 "$root/scripts/reply-asr-component.py" audit "$role" "$build" "$stage" "$evidence"
+fi

@@ -1,0 +1,130 @@
+{
+  "schema": 1,
+  "source": {
+    "repo": "https://github.com/ggml-org/whisper.cpp",
+    "tag": "v1.9.5",
+    "tag_object": "d2a764c648779feb36d44363f212a29b00aad1af",
+    "commit": "d1be6fde11ac6e0407606b4e42fe72d34add8037",
+    "tree": "6fe2755682242a5c01aba65a22b3c0305d747841",
+    "vendored_ggml_version": "0.26.0",
+    "model_load_cleanup_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "891168a838301bd2baa5e8b87422a854dafeeb7da914d40a2e4c6bf33ff448ed",
+      "repaired_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+      "reason": "Release ggml contexts and backend buffers on model-load failure using the existing whisper_free cleanup path."
+    },
+    "vad_init_lifetime_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "b1641a842cc9ec6edc3e8236d53335d52c5fc1eca9a8426d8c416b442214e4a9",
+      "repaired_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
+      "reason": "Value-initialize VAD ownership fields and hold the context in an explicit whisper_vad_free RAII guard until initialization succeeds."
+    },
+    "vad_compute_failure_repair": {
+      "path": "src/whisper.cpp",
+      "original_sha256": "576b8513b6679aa5fe66a7e414a565af81f51a373d5807838a98dc0a85900aa5",
+      "repaired_sha256": "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
+      "reason": "After resetting the scheduler, propagate VAD graph-compute failure as false instead of reporting valid silence."
+    },
+    "vad_cancellation_repair": {
+      "implementation": {
+        "path": "src/whisper.cpp",
+        "original_sha256": "79f21daa732c073967d802725fa78d71100da0cdc34ef2fceae7e28dffa6cbd6",
+        "repaired_sha256": "7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c"
+      },
+      "header": {
+        "path": "include/whisper.h",
+        "original_sha256": "a7d19f7feb5be52426628ff07e0602de28a30dc4312d0d0603e1e536753f76dd",
+        "repaired_sha256": "89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125"
+      },
+      "reason": "Add an ABI-preserving VAD entry point that polls a request-local abort callback after each successful 512-sample graph and before publishing its probability."
+    }
+  },
+  "model": {
+    "repository": "ggerganov/whisper.cpp",
+    "revision": "5359861c739e955e79d9a303bcbc70fb988958b1",
+    "file": "ggml-tiny.en.bin",
+    "bytes": 77704715,
+    "sha256": "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f",
+    "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/5359861c739e955e79d9a303bcbc70fb988958b1/ggml-tiny.en.bin",
+    "format": "whisper.cpp GGML ftype 1, mixed F16/F32",
+    "upstream_conversion": "Publisher-preconverted file. The exact historical conversion command and environment are unknown.",
+    "openai_reference": {
+      "url": "https://openaipublic.azureedge.net/main/whisper/models/d3dd57d32accea0b295c96e26691aa14d8822fac7d9d27d5dc00b4ca2826dd03/tiny.en.pt",
+      "sha256": "d3dd57d32accea0b295c96e26691aa14d8822fac7d9d27d5dc00b4ca2826dd03",
+      "bytes": null
+    }
+  },
+  "vad_model": {
+    "repository": "ggml-org/whisper-vad",
+    "revision": "9ffd54a1e1ee413ddf265af9913beaf518d1639b",
+    "file": "ggml-silero-v6.2.0.bin",
+    "bytes": 885098,
+    "sha256": "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987",
+    "url": "https://huggingface.co/ggml-org/whisper-vad/resolve/9ffd54a1e1ee413ddf265af9913beaf518d1639b/ggml-silero-v6.2.0.bin",
+    "format": "whisper.cpp GGML Silero VAD v6.2.0"
+  },
+  "notices": {
+    "WHISPER-CPP-MIT.txt": {
+      "url": "https://raw.githubusercontent.com/ggml-org/whisper.cpp/d1be6fde11ac6e0407606b4e42fe72d34add8037/LICENSE",
+      "bytes": 1078,
+      "sha256": "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"
+    },
+    "OPENAI-WHISPER-MIT.txt": {
+      "url": "https://raw.githubusercontent.com/openai/whisper/31243bad24cc746f07d4c8bfdd2d974872cb1803/LICENSE",
+      "bytes": 1063,
+      "sha256": "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"
+    },
+    "OPENAI-GPT2-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/openai/gpt-2/a74da5d99abaaba920de8131d64da2862a8f213b/LICENSE",
+      "bytes": 1403,
+      "sha256": "0dbeda4bc78823b1d67ec0ee414d8690ee4cad826bc9c147b215adc3af202436"
+    },
+    "ARM-OPTIMIZED-ROUTINES-LICENSE.txt": {
+      "url": "https://raw.githubusercontent.com/ARM-software/optimized-routines/5fe8f2a1f33eeba0946cbf72b9d287cbc7ae2e25/LICENSE",
+      "bytes": 13491,
+      "sha256": "650afbf29f214451e02241adc42534e82c9d6ae2b38e2444b92b5a1ffcaf9346"
+    },
+    "FP16-MIT.txt": {
+      "url": "https://raw.githubusercontent.com/Maratyszcza/FP16/782eea126dc5c755827be751a099eb01826175cf/LICENSE",
+      "bytes": 1157,
+      "sha256": "17e4f539024be2749ee729d1e2f01d24cef12ece8c9bf18e91a4349be29c80bf"
+    },
+    "YARN-MIT.txt": {
+      "url": "https://raw.githubusercontent.com/jquesnelle/yarn/ce518ee3b6427a010cc732bef6b07011c721055d/LICENSE",
+      "bytes": 1088,
+      "sha256": "c3ec00ded224ebaaa673373961babc2d79f3081914897f3325cb7927a76234c1"
+    },
+    "SILERO-MIT.txt": {
+      "url": "https://raw.githubusercontent.com/snakers4/silero-vad/0dd45f0bcd7271463c234f3bae5ad25181f9df8b/LICENSE",
+      "bytes": 1075,
+      "sha256": "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b"
+    }
+  },
+  "fixtures": [
+    {
+      "file": "02-request.wav",
+      "sha256": "f9d617b62f3741408ecd5b17ff0cc4c20d1079e3d88044a6b8aaae3b80e4529b",
+      "expected": "please call my family",
+      "pcm_sha256": "13beb9a41a5eedacea33f44e31e13e62da3bb390d39d34c2ef32674500d4e8ca"
+    },
+    {
+      "file": "03-need.wav",
+      "sha256": "6e387eae550ada50d31f8d6110965eccfdb9572286a9ffde945cf242c0eeebae",
+      "expected": "i need water please",
+      "pcm_sha256": "12927d593ca0b5d0249beecb1f494d452051eba2840cdc281ef00743ebfb1a11"
+    }
+  ],
+  "additional_notices": {
+    "ARM-EXP-COPYRIGHT.txt": {
+      "bytes": 158,
+      "sha256": "bbba1005b7a0ecee1fb059e81a755d0fd2f9b9fa78371fa39d8d378963d92571",
+      "source": "verbatim header excerpt",
+      "url": "https://raw.githubusercontent.com/ARM-software/optimized-routines/5fe8f2a1f33eeba0946cbf72b9d287cbc7ae2e25/math/v_expf.c"
+    },
+    "ATTRIBUTION.txt": {
+      "bytes": 1269,
+      "sha256": "63299e2ee1c91e6cd3814897ec8c1eae8f67b28f5e46af216d2c611740971e89",
+      "source": "Sign to Speak attribution"
+    }
+  }
+}

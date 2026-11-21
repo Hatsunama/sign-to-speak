@@ -1,0 +1,8 @@
+{
+    global:
+        sts_reply_open;
+        sts_reply_decode;
+        sts_reply_close;
+    local:
+        *;
+};
