@@ -272,6 +272,10 @@ function Home() {
     try {
       const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
       if (attempt !== replyRequest.current || epoch !== replyEpoch.current) return;
+      if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        setReplyStatus('Microphone access is blocked. Enable microphone permission in Android Settings, then tap Start listening again. No audio was captured.');
+        return;
+      }
       if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
         setReplyStatus('Microphone permission was not granted. No audio was captured.');
         return;

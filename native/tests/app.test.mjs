@@ -152,6 +152,22 @@ test('reply permission denial survives the Android permission-dialog pause and r
   assert.deepEqual(begins, ['begin'], 'a fresh foreground retry can start listening');
 });
 
+test('permanently blocked microphone permission directs the user to Android Settings without capturing', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.resolve('never_ask_again');
+
+  assert.deepEqual(begins, [], 'a permanently blocked permission never reaches the native microphone owner');
+  assert.equal(
+    h.replyStatus(),
+    'Microphone access is blocked. Enable microphone permission in Android Settings, then tap Start listening again. No audio was captured.',
+  );
+  assert.equal(h.button('Start listening').props.disabled, false, 'the app remains ready after Settings changes');
+});
+
 test('reply permission grant after the Android permission-dialog pause requires a fresh explicit Start', async t => {
   const begins = [];
   const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};

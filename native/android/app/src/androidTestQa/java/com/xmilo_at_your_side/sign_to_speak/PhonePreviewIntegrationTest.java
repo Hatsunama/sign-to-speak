@@ -720,6 +720,57 @@ public final class PhonePreviewIntegrationTest {
         }
     }
 
+    private static TextGeometry noticeGeometry(View root, Pattern notice) {
+        if (root instanceof TextView) {
+            CharSequence text = ((TextView) root).getText();
+            if (text != null && notice.matcher(text).matches()) {
+                int[] position = new int[2];
+                root.getLocationOnScreen(position);
+                Rect full = new Rect(position[0], position[1], position[0] + root.getWidth(),
+                        position[1] + root.getHeight());
+                ViewParent parent = root.getParent();
+                while (parent instanceof View && !(parent instanceof ScrollView)) {
+                    parent = parent.getParent();
+                }
+                ScrollView scroll = parent instanceof ScrollView ? (ScrollView) parent : null;
+                return new TextGeometry(full, scroll == null ? -1 : scroll.getScrollY(), scroll,
+                        text.toString());
+            }
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                TextGeometry found = noticeGeometry(group.getChildAt(i), notice);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static int scrollNoticeTowardViewport(View root, Pattern notice, Rect viewport) {
+        TextGeometry geometry = noticeGeometry(root, notice);
+        if (geometry == null || geometry.scroll == null) return -1;
+        int target = ButtonScrollTarget.forGeometry(geometry.scrollY, geometry.full.top,
+                geometry.full.bottom, viewport.top, viewport.bottom);
+        if (target == geometry.scrollY) return -1;
+        geometry.scroll.scrollTo(geometry.scroll.getScrollX(), target);
+        int actual = geometry.scroll.getScrollY();
+        return actual == geometry.scrollY ? -1 : actual;
+    }
+
+    private static final class TextGeometry {
+        final Rect full;
+        final int scrollY;
+        final ScrollView scroll;
+        final String text;
+        TextGeometry(Rect full, int scrollY, ScrollView scroll, String text) {
+            this.full = full; this.scrollY = scrollY; this.scroll = scroll; this.text = text;
+        }
+        @Override public String toString() {
+            return "{text=" + text + ",full=" + full + ",scrollY=" + scrollY + "}";
+        }
+    }
+
     private UiObject2 findLiveNotice() throws Exception {
         return findLiveNotice(LIVE_NOTICE);
     }
@@ -731,10 +782,25 @@ public final class PhonePreviewIntegrationTest {
             UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(notice));
             if (node != null) return node;
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (scroll == null) SystemClock.sleep(100);
-            else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+            TextGeometry rendered = onMain(() -> noticeGeometry(
+                    activity.getWindow().getDecorView(), notice));
+            if (scroll == null || rendered == null) {
+                if (scroll == null) SystemClock.sleep(100);
+                else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+                continue;
+            }
+            Rect targetViewport = new Rect(scroll.getVisibleBounds());
+            int correctedScrollY = onMain(() -> scrollNoticeTowardViewport(
+                    activity.getWindow().getDecorView(), notice, targetViewport));
+            // Once the rendered TextView is in the viewport, keep it still while the
+            // accessibility snapshot catches up instead of scrolling past it again.
+            SystemClock.sleep(correctedScrollY >= 0 ? 50 : 100);
         }
-        throw new AssertionError("QA UI missing preview/tracking notice matching " + notice + "; " + snapshot());
+        TextGeometry rendered = onMain(() -> noticeGeometry(
+                activity.getWindow().getDecorView(), notice));
+        throw new AssertionError("QA UI missing preview/tracking notice matching " + notice
+                + "; native rendered notice=" + rendered + "; UIA labels=" + uiLabels()
+                + "; " + snapshot());
     }
 
     private static Object field(Object owner, String name) throws ReflectiveOperationException {

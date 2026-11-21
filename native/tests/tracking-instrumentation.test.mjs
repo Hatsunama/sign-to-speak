@@ -30,6 +30,15 @@ test('physical preview checks accept bounded settled tracking notices, never sta
   assert.match(phone, /if \(!state\.streaming\(\)\) return false/);
   assert.match(phone, /findLiveNotice\(\);\s*assertStreaming\("After scrolling to live notice"/);
   assert.match(phone, /findLiveNotice\(\);\s*assertStreaming\("After scrolling to switched-camera notice"/);
+  const findLiveNoticeStart = phone.indexOf('private UiObject2 findLiveNotice(Pattern notice)');
+  const findLiveNoticeEnd = phone.indexOf('private static Object field(', findLiveNoticeStart);
+  assert.ok(findLiveNoticeStart >= 0 && findLiveNoticeEnd > findLiveNoticeStart,
+    'The live-notice search helper must remain inspectable');
+  const findLiveNotice = phone.slice(findLiveNoticeStart, findLiveNoticeEnd);
+  assert.match(findLiveNotice, /noticeGeometry\(\s*activity\.getWindow\(\)\.getDecorView\(\), notice\)/,
+    'The live-notice search must locate the rendered React TextView even while UI Automator omits it offscreen');
+  assert.match(findLiveNotice, /scrollNoticeTowardViewport\(\s*activity\.getWindow\(\)\.getDecorView\(\), notice, targetViewport\)/,
+    'The live-notice search must target native geometry instead of oscillating across the short notice');
   assert.match(phone, /stream == PreviewView\.StreamState\.STREAMING && resumed/);
 });
 
