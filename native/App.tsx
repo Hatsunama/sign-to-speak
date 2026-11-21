@@ -132,12 +132,18 @@ function Home() {
       setForeground(state === 'active');
       if (state !== 'active') {
         // Every pause revokes capture eligibility, but the latest permission
-        // outcome can still explain why the camera is off when it resolves.
+        // outcome can still explain why the camera or microphone is off when
+        // it resolves. A reply request that has reached native startup is no
+        // longer only a permission request and must be cancelled normally.
         if (request.current) request.current.canStart = false;
+        const replyPermissionPending = replyRequest.current !== null && reply.state() === 'idle';
+        if (replyRequest.current) replyRequest.current.canStart = false;
         const wasPreviewing = gate.state().phase === 'preview';
         gate.stop();
         stopSpeech(true, 'Speech stopped. Type text to speak again.');
-        stopReply(true, 'Listening stopped in the background. Tap Start listening to begin again.');
+        if (!replyPermissionPending) {
+          stopReply(true, 'Listening stopped in the background. Tap Start listening to begin again.');
+        }
         setRequesting(false);
         if (wasPreviewing) setNotice('Camera is off.');
       }

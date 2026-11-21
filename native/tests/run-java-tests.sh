@@ -21,7 +21,9 @@ fi
   android/app/src/androidTestQa/java/com/xmilo_at_your_side/sign_to_speak/RecognitionInputStage.java \
   tests/java/RecognitionInputStageTest.java \
   android/app/src/androidTestQa/java/com/xmilo_at_your_side/sign_to_speak/ButtonSettleDeadline.java \
-  tests/java/ButtonSettleDeadlineTest.java
+  tests/java/ButtonSettleDeadlineTest.java \
+  android/app/src/androidTestQa/java/com/xmilo_at_your_side/sign_to_speak/ButtonScrollTarget.java \
+  tests/java/ButtonScrollTargetTest.java
 "$JAVA_HOME/bin/javac" -J-Xmx128m -cp "$ANDROID_JAR:$OUT" -d "$OUT" \
   android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/ReplyModelSpan.java \
   android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/ReplyAsrRequest.java \
@@ -36,3 +38,4 @@ fi
 "$JAVA_HOME/bin/java" -Xmx128m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.PocketModelStoreTest "$OUT"
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.RecognitionInputStageTest
 "$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.ButtonSettleDeadlineTest
+"$JAVA_HOME/bin/java" -Xmx64m -cp "$OUT" com.xmilo_at_your_side.sign_to_speak.ButtonScrollTargetTest

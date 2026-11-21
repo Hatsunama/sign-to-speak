@@ -133,6 +133,44 @@ test('reply captions request microphone only on explicit Start and handle grant,
   assert.match(h.replyStatus(), /Listening locally.*30 seconds remaining/i);
 });
 
+test('reply permission denial survives the Android permission-dialog pause and remains retryable', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.state('background');
+  await h.resolve('denied');
+  await h.state('active');
+
+  assert.deepEqual(begins, [], 'permission denial never reaches the native microphone owner');
+  assert.equal(h.replyStatus(), 'Microphone permission was not granted. No audio was captured.');
+  assert.equal(h.button('Start listening').props.disabled, false, 'denial permits another explicit request');
+
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(begins, ['begin'], 'a fresh foreground retry can start listening');
+});
+
+test('reply permission grant after the Android permission-dialog pause requires a fresh explicit Start', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.state('background');
+  await h.resolve('granted');
+  await h.state('active');
+
+  assert.deepEqual(begins, [], 'a lifecycle-interrupted grant cannot start microphone capture');
+  assert.equal(h.replyStatus(), 'Microphone is off. Permission was granted; tap Start listening to begin.');
+  assert.equal(h.button('Start listening').props.disabled, false);
+
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(begins, ['begin'], 'only the fresh foreground request starts listening');
+});
+
 test('reply caption success is editable, separate from typed speech and never auto-speaks', async t => {
   const spoken = [];
   const speech = {begin: async () => 'speech', speak: async (_, text) => {spoken.push(text); return 'COMPLETED';}, cancel() {}};
