@@ -11,6 +11,7 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.ArgumentCaptor;
@@ -28,6 +29,145 @@ import org.robolectric.annotation.Config;
 @Config(sdk = 36, application = MainApplication.class,
     shadows = {ReactBootstrapShadow.class, CaptureAudioManagerShadow.class})
 public class ReplyLifecycleTest {
+  @Test public void markUncertainFaultsProcessAndBlocksBothAudioBridgesAcrossRecreation()
+      throws Exception {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> replies = mockConstruction(ReplySession.class);
+         MockedConstruction<SpeechSession> speeches = mockConstruction(SpeechSession.class)) {
+      ActivityController<MainActivity> first = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(first.get());
+      LocalReplyModule reply = new LocalReplyModule(context);
+      invokeNoArg(reply, "markUncertain");
+
+      MainApplication app = (MainApplication) first.get().getApplication();
+      assertTrue(app.getReplyCleanupFaulted());
+      assertTrue(app.getSpeechCleanupFaulted());
+      assertBothAudioBeginsRejected(reply, new LocalSpeechModule(context));
+
+      first.pause().stop().destroy();
+      ActivityController<MainActivity> recreated = Robolectric.buildActivity(MainActivity.class).setup();
+      when(context.getCurrentActivity()).thenReturn(recreated.get());
+      assertBothAudioBeginsRejected(new LocalReplyModule(context), new LocalSpeechModule(context));
+      assertTrue(replies.constructed().isEmpty());
+      assertTrue(speeches.constructed().isEmpty());
+      recreated.pause().stop().destroy();
+    }
+  }
+
+  @Test public void ordinaryReplyCancellationDoesNotFaultEitherAudioPath() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+               completion.set(call.getArgument(2));
+               ((ReplySession.Started) call.getArgument(1)).complete(true);
+               return 37L;
+             }))) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      bridge.cancel((String) token.getValue());
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+      MainApplication app = (MainApplication) controller.get().getApplication();
+      assertFalse(app.getReplyCleanupFaulted());
+      assertFalse(app.getSpeechCleanupFaulted());
+      assertFalse(app.isLocalAudioLeaseHeld());
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void stalledReplyBeginFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+               completion.set(call.getArgument(2));
+               return 41L; // The worker never reports whether recording started.
+             }))) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      Promise begun = mock(Promise.class);
+      new LocalReplyModule(context).begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      MainApplication app = (MainApplication) controller.get().getApplication();
+      assertTrue(app.isLocalAudioLeaseHeld());
+
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(29, TimeUnit.SECONDS);
+      assertFalse(app.getReplyCleanupFaulted());
+      assertFalse(app.getSpeechCleanupFaulted());
+      assertTrue(app.isLocalAudioLeaseHeld());
+      verifyNoInteractions(begun);
+
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS);
+      assertTrue(app.getReplyCleanupFaulted());
+      assertTrue(app.getSpeechCleanupFaulted());
+      assertTrue("deadline must not claim worker cleanup", app.isLocalAudioLeaseHeld());
+      verify(begun).reject(eq("CLEANUP_FAILED"), anyString());
+      verify(begun, never()).resolve(any());
+
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+      assertFalse(app.isLocalAudioLeaseHeld());
+      verifyNoMoreInteractions(begun);
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void stalledReplyFinishFaultsByNativeDeadlineButKeepsLeaseUntilWorkerCompletes() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 43L;
+               });
+               when(session.finish(43L)).thenReturn(true);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        MainApplication app = (MainApplication) controller.get().getApplication();
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(119, TimeUnit.SECONDS);
+        assertFalse(app.getReplyCleanupFaulted());
+        assertFalse(app.getSpeechCleanupFaulted());
+        assertTrue(app.isLocalAudioLeaseHeld());
+        verifyNoInteractions(finished);
+
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS);
+        assertTrue(app.getReplyCleanupFaulted());
+        assertTrue(app.getSpeechCleanupFaulted());
+        assertTrue("deadline must not claim worker cleanup", app.isLocalAudioLeaseHeld());
+        assertResolvedResult(finished, "CLEANUP_FAILED", null);
+        completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+        assertFalse(app.isLocalAudioLeaseHeld());
+        verifyNoMoreInteractions(finished);
+      }
+      controller.pause().stop().destroy();
+    }
+  }
+
   @Test @Config(sdk = 29, application = MainApplication.class,
       shadows = {ReactBootstrapShadow.class, CaptureAudioManagerShadow.class})
   public void api29FailsClosedWithoutPrivacySensitiveAudioRecord() {
@@ -230,5 +370,21 @@ public class ReplyLifecycleTest {
     assertEquals(status, map.getString("status"));
     assertEquals(text != null, map.hasKey("text"));
     if (text != null) assertEquals(text, map.getString("text"));
+  }
+
+  private static void invokeNoArg(Object target, String method) throws Exception {
+    target.getClass().getMethod(method).invoke(target);
+  }
+
+  private static void assertBothAudioBeginsRejected(LocalReplyModule reply, LocalSpeechModule speech) {
+    Promise deniedReply = mock(Promise.class);
+    Promise deniedSpeech = mock(Promise.class);
+    reply.begin(deniedReply);
+    speech.begin(deniedSpeech);
+    Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+    verify(deniedReply).reject(eq("CLEANUP_FAILED"), anyString());
+    verify(deniedReply, never()).resolve(any());
+    verify(deniedSpeech).reject(eq("CLEANUP_FAILED"), anyString());
+    verify(deniedSpeech, never()).resolve(any());
   }
 }
