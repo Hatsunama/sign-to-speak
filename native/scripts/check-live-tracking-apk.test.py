@@ -45,6 +45,7 @@ class ApkTest(unittest.TestCase):
         self.xml = '''<manifest xmlns:android="http://schemas.android.com/apk/res/android"
           package="com.xmilo_at_your_side.sign_to_speak.qa">
           <uses-permission android:name="android.permission.CAMERA"/>
+          <uses-permission android:name="android.permission.RECORD_AUDIO"/>
           <uses-permission android:name="com.xmilo_at_your_side.sign_to_speak.qa.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/>
           <application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false"/>
         </manifest>'''

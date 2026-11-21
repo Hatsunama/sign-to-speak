@@ -52,7 +52,7 @@ class PhoneQaApkTest(unittest.TestCase):
     self.assertEqual(qa.FRAMEWORK_SHA256[name],hashlib.sha256((qa.LICENSE_ROOT/'framework'/name).read_bytes()).hexdigest())
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.addCleanup(self.tmp.cleanup);self.root=pathlib.Path(self.tmp.name)
-  self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
+  self.xml=f'''<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="{qa.PACKAGE}"><uses-sdk android:minSdkVersion="26" android:targetSdkVersion="36"/><uses-permission android:name="android.permission.CAMERA"/><uses-permission android:name="android.permission.RECORD_AUDIO"/><uses-permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"/><permission android:name="{qa.PACKAGE}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" android:protectionLevel="signature"/><application android:allowAudioPlaybackCapture="false" android:allowBackup="false" android:usesCleartextTraffic="false" android:testOnly="true"/></manifest>'''
   self.models={name:(name+'-fixture').encode() for name in qa.POCKET_MODEL}
   self.notice_root=self.root/'pocket-assets'/'pocket-licenses';self.notice_root.mkdir(parents=True)
   (self.notice_root/'cargo-declaration-routes.json').write_text(json.dumps({'status':'declarations-selected-for-component-probe','packages':[{}]*133,'blocked_packages':[]}))
@@ -207,6 +207,15 @@ class PhoneQaApkTest(unittest.TestCase):
   with self.assertRaises(AssertionError):self.verify()
  def test_network_rejected(self):
   self.xml=self.xml.replace('</manifest>','<uses-permission-sdk-23 android:name="android.permission.INTERNET"/></manifest>')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_missing_microphone_permission_rejected(self):
+  self.xml=self.xml.replace('<uses-permission android:name="android.permission.RECORD_AUDIO"/>','')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_storage_permission_rejected(self):
+  self.xml=self.xml.replace('</manifest>','<uses-permission android:name="android.permission.READ_MEDIA_AUDIO"/></manifest>')
+  with self.assertRaises(AssertionError):self.verify()
+ def test_unreviewed_service_rejected(self):
+  self.xml=self.xml.replace('/></manifest>','><service android:name="other.package.UploadService"/></application></manifest>')
   with self.assertRaises(AssertionError):self.verify()
  def test_permission_weakening_rejected(self):
   self.xml=self.xml.replace('protectionLevel="signature"','protectionLevel="normal"')

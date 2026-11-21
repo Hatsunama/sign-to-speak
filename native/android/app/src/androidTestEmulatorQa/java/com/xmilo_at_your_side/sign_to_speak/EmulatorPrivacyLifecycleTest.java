@@ -260,20 +260,26 @@ public final class EmulatorPrivacyLifecycleTest {
 
     @SuppressWarnings("deprecation")
     private void assertInstalledPrivacyContract() throws Exception {
-        PackageInfo info = target.getPackageManager().getPackageInfo(QA_PACKAGE, PackageManager.GET_PERMISSIONS);
+        PackageInfo info = target.getPackageManager().getPackageInfo(QA_PACKAGE,
+                PackageManager.GET_PERMISSIONS | PackageManager.GET_SERVICES);
         Set<String> expected = new HashSet<>(Arrays.asList(Manifest.permission.CAMERA,
+                Manifest.permission.RECORD_AUDIO,
                 QA_PACKAGE + ".DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"));
         assertNotNull(info.requestedPermissions);
         assertEquals("Exactly the merged app permissions must survive install", expected,
                 new HashSet<>(Arrays.asList(info.requestedPermissions)));
-        assertEquals("No duplicate installed permission requests", 2, info.requestedPermissions.length);
+        assertEquals("No duplicate installed permission requests", 3, info.requestedPermissions.length);
         assertEquals(36, info.applicationInfo.targetSdkVersion);
         assertTrue("QA must be test-only", (info.applicationInfo.flags & ApplicationInfo.FLAG_TEST_ONLY) != 0);
         assertEquals("Release-like QA has no debugger", 0,
                 info.applicationInfo.flags & ApplicationInfo.FLAG_DEBUGGABLE);
         assertEquals("App backup remains disabled", 0,
                 info.applicationInfo.flags & ApplicationInfo.FLAG_ALLOW_BACKUP);
-        for (String forbidden : Arrays.asList(Manifest.permission.INTERNET, Manifest.permission.RECORD_AUDIO,
+        assertEquals("Launch cannot pre-grant foreground microphone access", PackageManager.PERMISSION_DENIED,
+                target.checkSelfPermission(Manifest.permission.RECORD_AUDIO));
+        assertTrue("No background microphone service may be installed",
+                info.services == null || info.services.length == 0);
+        for (String forbidden : Arrays.asList(Manifest.permission.INTERNET,
                 Manifest.permission.READ_EXTERNAL_STORAGE, Manifest.permission.WRITE_EXTERNAL_STORAGE)) {
             assertEquals("App cannot hold " + forbidden, PackageManager.PERMISSION_DENIED,
                     target.checkSelfPermission(forbidden));

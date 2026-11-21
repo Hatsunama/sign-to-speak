@@ -1,0 +1,9 @@
+{
+    global:
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_ReplyAsrRequest_nativeOpen;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_ReplyAsrRequest_nativeDecode;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_ReplyAsrRequest_nativeCancel;
+        Java_com_xmilo_1at_1your_1side_sign_1to_1speak_ReplyAsrRequest_nativeClose;
+    local:
+        *;
+};

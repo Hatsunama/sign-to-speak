@@ -66,12 +66,22 @@ internal class SpeechOwner(private val activity: MainActivity) {
     val bytes = SpeechSession.encodeText(text)
     if (bytes == null) { done("INVALID_INPUT"); return }
     val target = session ?: run { done("UNAVAILABLE"); return }
+    val lease = app.localAudioLease.tryAcquire(Any())
+        ?: run { bytes.fill(0); done("BUSY"); return }
     try {
       target.speak(internalToken, bytes) { result ->
-        if (result == SpeechSession.Result.CLEANUP_FAILED || target.isFaulted)
-          app.recordSpeechCleanupFault()
-        done(result.name)
+        try {
+          if (result == SpeechSession.Result.CLEANUP_FAILED || target.isFaulted)
+            app.recordSpeechCleanupFault()
+          done(result.name)
+        } finally {
+          // SpeechSession invokes completion only after request/player cleanup.
+          lease.close()
+        }
       }
+    } catch (failure: Throwable) {
+      lease.close()
+      throw failure
     } finally {
       // SpeechSession clones valid input before dispatch; the owner's temporary
       // buffer has no reason to survive an asynchronous completion.

@@ -183,7 +183,8 @@ def validate_app_manifest(manifest, identity_message='APK must use the isolated 
     requests=[p for p in root if p.tag in ('uses-permission','uses-permission-sdk-23','uses-permission-sdk-m')]
     internal=PACKAGE+'.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'
     require(all(p.tag=='uses-permission' for p in requests))
-    require(len(requests)==2 and {p.get(ANDROID+'name') for p in requests}=={'android.permission.CAMERA',internal})
+    require(len(requests)==3 and {p.get(ANDROID+'name') for p in requests}=={
+        'android.permission.CAMERA','android.permission.RECORD_AUDIO',internal})
     declarations=root.findall('permission')
     require(len(declarations)==1 and declarations[0].get(ANDROID+'name')==internal)
     require(declarations[0].get(ANDROID+'protectionLevel') in ('signature','0x2','0x00000002'))
@@ -193,6 +194,8 @@ def validate_app_manifest(manifest, identity_message='APK must use the isolated 
     require(app.get(ANDROID+'testOnly')=='true')
     require(app.get(ANDROID+'debuggable') in (None,'false'))
     require(app.get(ANDROID+'allowBackup')=='false' and app.get(ANDROID+'usesCleartextTraffic')=='false')
+    require(not any(app.findall(tag) for tag in ('service','receiver','provider')),
+            'Unexpected application background component')
     return root
 
 

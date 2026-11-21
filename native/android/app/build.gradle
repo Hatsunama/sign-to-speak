@@ -139,8 +139,8 @@ class MergedPermissionPolicy {
                 }
             }
         }
-        def allowed = ["android.permission.CAMERA", receiverPermission] as Set
-        if (permissions.size() != 2 || permissions.toSet() != allowed) {
+        def allowed = ["android.permission.CAMERA", "android.permission.RECORD_AUDIO", receiverPermission] as Set
+        if (permissions.size() != 3 || permissions.toSet() != allowed) {
             throw new GradleException("Merged permission allowlist failed: expected ${allowed}; found ${permissions}")
         }
         def declarations = document.getElementsByTagName("permission")
@@ -191,7 +191,7 @@ abstract class VerifyMergedPermissions extends DefaultTask {
             if (phoneQa.get()) MergedPermissionPolicy.verifyQa(document)
             else MergedPermissionPolicy.verify(document)
         }
-        logger.lifecycle("Merged permissions passed: CAMERA plus exact app-owned signature receiver protection")
+        logger.lifecycle("Merged permissions passed: CAMERA, RECORD_AUDIO, and exact app-owned receiver protection")
     }
 }
 
@@ -205,6 +205,7 @@ def permissionPolicyTests = tasks.register("verifyMergedPermissionPolicyTests") 
             def valid = """<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="${app}">
                 <application android:allowAudioPlaybackCapture="false" />
                 <uses-permission android:name="android.permission.CAMERA" />
+                <uses-permission android:name="android.permission.RECORD_AUDIO" />
                 <permission android:name="${internal}" android:protectionLevel="signature" />
                 <uses-permission android:name="${internal}" />
             </manifest>"""
@@ -273,7 +274,7 @@ androidComponents {
         def variantTitle = variant.name.capitalize()
         def verifyTask = tasks.register("verify${variantTitle}MergedPermissions", VerifyMergedPermissions) {
             group = "verification"
-            description = "Verify CAMERA plus exact app-owned signature receiver protection in ${variant.name}."
+            description = "Verify CAMERA, RECORD_AUDIO, and exact app-owned receiver protection in ${variant.name}."
             dependsOn(permissionPolicyTests)
             phoneQa.set(variant.buildType == "qa")
             if (variant.buildType == "emulatorQa") phoneQa.set(true)
@@ -333,3 +334,4 @@ androidComponents {
 
 apply from: "license-assets.gradle"
 apply from: "pocket-model-assets.gradle"
+apply from: "reply-asr-assets.gradle"

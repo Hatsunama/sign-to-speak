@@ -6,12 +6,12 @@ const root = new URL('../', import.meta.url);
 const read = p => fs.readFileSync(new URL(p, root), 'utf8');
 const java = 'android/app/src/main/java/com/xmilo_at_your_side/sign_to_speak/';
 
-test('manifest asks for camera only, disables backup and cleartext', () => {
+test('manifest asks only for camera and local reply microphone, disables backup and cleartext', () => {
   const manifest = read('android/app/src/main/AndroidManifest.xml');
   const requested = [...manifest.matchAll(/<uses-permission\b[^>]*\/>/g)]
     .map(m => m[0]).filter(tag => !tag.includes('tools:node="remove"'))
     .map(tag => tag.match(/android:name="([^"]+)"/)[1]);
-  assert.deepEqual(requested, ['android.permission.CAMERA']);
+  assert.deepEqual(requested, ['android.permission.CAMERA', 'android.permission.RECORD_AUDIO']);
   assert.match(manifest, /<uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" tools:node="remove" \/>/);
   assert.match(manifest, /android:allowBackup="false"/);
   assert.match(manifest, /android:usesCleartextTraffic="false"/);
