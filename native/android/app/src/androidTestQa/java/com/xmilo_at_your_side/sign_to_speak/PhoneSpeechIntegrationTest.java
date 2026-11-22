@@ -43,6 +43,8 @@ import org.junit.runner.RunWith;
 @RunWith(AndroidJUnit4.class)
 public final class PhoneSpeechIntegrationTest {
     private static final long WAIT_MS = 45000;
+    private static final long CANCEL_RETURN_MAX_MS = 250;
+    private static final long TRACK_STOP_WAIT_MS = 2000;
     private static final String LONG_TEXT =
             "This is a private local speech test. The audio should be heard from this phone. " +
             "The playback head must advance while these synthetic words are spoken aloud. " +
@@ -125,7 +127,7 @@ public final class PhoneSpeechIntegrationTest {
         assertNull("Recovered worker releases its job", currentJob());
     }
 
-    @Test public void cancelStopsOwnedRealTrackBeforeReturning() throws Exception {
+    @Test public void cancelReturnsPromptlyAndStopsOwnedRealTrackWithinBound() throws Exception {
         String token = begin();
         assertNotNull("Explicit begin must work on resumed real Activity", token);
         CompletableFuture<Object> result = speak(token, LONG_TEXT);
@@ -150,10 +152,18 @@ public final class PhoneSpeechIntegrationTest {
                 return true;
             }
         });
+        long cancelStartedAt = SystemClock.elapsedRealtime();
         module.cancel(token);
-        assertTrue("Owned AudioTrack must stop before cancel returns",
-                ownedTrack[0].getState() == AudioTrack.STATE_UNINITIALIZED
+        long cancelReturnedAt = SystemClock.elapsedRealtime();
+        long cancelReturnLatencyMs = cancelReturnedAt - cancelStartedAt;
+        assertTrue("Cancellation must return promptly; observed " + cancelReturnLatencyMs + " ms",
+                cancelReturnLatencyMs <= CANCEL_RETURN_MAX_MS);
+        await("owned AudioTrack leaves PLAYING after cancellation", TRACK_STOP_WAIT_MS,
+                () -> ownedTrack[0].getState() == AudioTrack.STATE_UNINITIALIZED
                         || ownedTrack[0].getPlayState() != AudioTrack.PLAYSTATE_PLAYING);
+        long trackStopLatencyMs = SystemClock.elapsedRealtime() - cancelStartedAt;
+        System.out.println("PhoneSpeechIntegrationTest cancellation latency: return="
+                + cancelReturnLatencyMs + " ms, owned-track-stop=" + trackStopLatencyMs + " ms");
         assertEquals("CANCELLED", result.get(WAIT_MS, TimeUnit.MILLISECONDS));
         assertCleaned(pcm[0], player[0]);
         assertNull("Worker releases cancelled job", currentJob());
@@ -520,7 +530,11 @@ public final class PhoneSpeechIntegrationTest {
 
     private interface Condition { boolean trueNow() throws Exception; }
     private static void await(String label, Condition condition) throws Exception {
-        long until = SystemClock.elapsedRealtime() + WAIT_MS;
+        await(label, WAIT_MS, condition);
+    }
+
+    private static void await(String label, long timeoutMs, Condition condition) throws Exception {
+        long until = SystemClock.elapsedRealtime() + timeoutMs;
         while (SystemClock.elapsedRealtime() < until) {
             if (condition.trueNow()) return;
             SystemClock.sleep(25);
