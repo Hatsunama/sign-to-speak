@@ -168,6 +168,10 @@ jobs:
                 url = project.uri(centralMirror)
               }
             }
+            project.tasks.withType(Test).configureEach {
+              systemProperty 'robolectric.dependency.repo.id', 'googleMavenCentralMirror'
+              systemProperty 'robolectric.dependency.repo.url', centralMirror
+            }
           }
           GRADLE
           test -s "$jar"

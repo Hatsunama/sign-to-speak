@@ -67,6 +67,17 @@ test('routes every Gradle invocation through the pinned Google Maven Central mir
   }
   assert.equal((baselineSource.match(/\.\/gradlew\s+--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
 });
+test('routes Robolectric runtime SDK downloads through the Google Maven Central mirror', () => {
+  const mirror = 'https://maven-central.storage-download.googleapis.com/maven2/';
+  const fallback = config.jobs.android.steps.find(step => step.id === 'robolectric_maven_fallback');
+
+  for (const token of [
+    'tasks.withType(Test).configureEach',
+    "systemProperty 'robolectric.dependency.repo.id', 'googleMavenCentralMirror'",
+    "systemProperty 'robolectric.dependency.repo.url', centralMirror",
+  ]) assert.ok(fallback.run.includes(token), `missing Robolectric runtime resolver policy: ${token}`);
+  assert.ok(fallback.run.includes(mirror));
+});
 for (const [name, mutate] of [
   ['ungated pull requests', c => { c.jobs.android.if = ''; }],
   ['missing reply app branch', c => { c.jobs.android.if = c.jobs.android.if.replace(/\s*\|\|\s*github\.head_ref == 'codex\/sign-to-speak-reply-app-20261121'/, ''); }],
@@ -93,6 +104,7 @@ for (const [name, mutate] of [
   ['missing reply input preparation', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'reply_inputs'); }],
   ['missing Robolectric Maven fallback', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'robolectric_maven_fallback'); }],
   ['altered Robolectric native JAR digest', c => { const s = c.jobs.android.steps.find(s => s.id === 'robolectric_maven_fallback'); s.run = s.run.replace('a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef', '06c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef'); }],
+  ['missing Robolectric runtime mirror', c => { const s = c.jobs.android.steps.find(s => s.id === 'robolectric_maven_fallback'); s.run = s.run.replace("systemProperty 'robolectric.dependency.repo.url', centralMirror", ''); }],
   ['late reply input preparation', c => { const steps=c.jobs.android.steps; const index=steps.findIndex(s=>s.id==='reply_inputs'); steps.push(...steps.splice(index,1)); }],
   ['missing phone instrumentation', c => { const s = c.jobs.android.steps.find(s => s.id === 'phone_qa'); s.run = s.run.replace(':app:assembleQaAndroidTest', ''); }],
   ['default phone test signing fallback', c => { const s = c.jobs.android.steps.find(s => s.id === 'phone_qa'); s.run = s.run.replace('-Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false', ''); }],

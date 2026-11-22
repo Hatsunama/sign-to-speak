@@ -55,7 +55,10 @@ export function validateWorkflow(config) {
     ['dl.cloudsmith.io/public/scandit/maven/maven/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar',
       'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef', '159128857',
       "--proto-redir '=https'", 'sha256sum --check', 'exclusiveContent', "includeModule('org.robolectric', 'nativeruntime-dist-compat')",
-      'allprojects', 'ROBOLECTRIC_MAVEN_REPO', 'ROBOLECTRIC_INIT_SCRIPT'].every(token => fallback.run?.includes(token)) &&
+      'allprojects', 'tasks.withType(Test).configureEach',
+      "systemProperty 'robolectric.dependency.repo.id', 'googleMavenCentralMirror'",
+      "systemProperty 'robolectric.dependency.repo.url', centralMirror",
+      'ROBOLECTRIC_MAVEN_REPO', 'ROBOLECTRIC_INIT_SCRIPT'].every(token => fallback.run?.includes(token)) &&
     !fallback.run.includes('--retry') &&
     steps[firstGradle]?.if?.includes("steps.robolectric_maven_fallback.outcome == 'success'"),
     'Exact, single-attempt Robolectric native fallback required before every Gradle or Pocket build');
