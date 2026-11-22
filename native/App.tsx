@@ -7,8 +7,12 @@ import {
 import {SafeAreaProvider, SafeAreaView} from 'react-native-safe-area-context';
 import {createSession} from './src/session.mjs';
 import {createLocalSpeech} from './src/local-speech.mjs';
+import {createLocalReply} from './src/local-reply.mjs';
 
 const HatsuBackground = requireNativeComponent<ViewProps & {active: boolean}>('HatsuBackground');
+const REPLY_START_TIMEOUT_MS = 30000;
+const REPLY_FINALIZATION_TIMEOUT_MS = 120000;
+const SPEECH_ATTEMPT_TIMEOUT_MS = 180000;
 const CameraPreview = requireNativeComponent<ViewProps & {
   active: boolean;
   lensFacing: 'back' | 'front';
@@ -19,6 +23,10 @@ const CameraPreview = requireNativeComponent<ViewProps & {
 
 function localSpeechBridge() {
   try { return NativeModules.LocalSpeech; } catch { return null; }
+}
+
+function localReplyBridge() {
+  try { return NativeModules.LocalReply; } catch { return null; }
 }
 
 function Button({children, onPress, disabled = false, testID}: {
@@ -43,14 +51,28 @@ function Home() {
   const [speechStatus, setSpeechStatus] = useState('Type text, review it, then tap Speak typed text.');
   const [speechBusy, setSpeechBusy] = useState(false);
   const [speechFault, setSpeechFault] = useState(false);
+  const [replyCaption, setReplyCaption] = useState('');
+  const [replyStatus, setReplyStatus] = useState('Tap Start listening when the other person is ready to speak.');
+  const [replyPhase, setReplyPhase] = useState<'idle' | 'requesting' | 'starting' | 'listening' | 'finishing'>('idle');
+  const [replyFault, setReplyFault] = useState(false);
   const speechFaultRef = useRef(false);
   const speechAttempt = useRef(false);
   const speechEpoch = useRef(0);
   const request = useRef<{canStart: boolean} | null>(null);
   const cameraViewRevision = useRef(0);
   const mounted = useRef(true);
+  const replyFaultRef = useRef(false);
+  const replyEpoch = useRef(0);
+  const replyRequest = useRef<{canStart: boolean} | null>(null);
+  const replyInterval = useRef<ReturnType<typeof setInterval> | null>(null);
+  const replyTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyStartWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const replyFinishWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const speechWatchdog = useRef<ReturnType<typeof setTimeout> | null>(null);
   const speech = useRef(createLocalSpeech(localSpeechBridge(), () => {
     if (!mounted.current || speechFaultRef.current) return;
+    if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+    speechWatchdog.current = null;
     speechFaultRef.current = true;
     speechEpoch.current++;
     speechAttempt.current = false;
@@ -58,12 +80,27 @@ function Home() {
     setSpeechBusy(false);
     setSpeechFault(true);
   })).current;
+  const reply = useRef(createLocalReply(localReplyBridge(), () => {
+    if (!mounted.current || replyFaultRef.current) return;
+    if (replyStartWatchdog.current !== null) clearTimeout(replyStartWatchdog.current);
+    if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
+    replyStartWatchdog.current = null;
+    replyFinishWatchdog.current = null;
+    replyFaultRef.current = true;
+    replyEpoch.current++;
+    reply.stop();
+    setReplyFault(true);
+    setReplyPhase('idle');
+    setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+  })).current;
   const gate = useRef(createSession({
     stopCamera: () => setPreview(null),
     stopSpeech: () => speech.stop(), clearNativeBuffers: () => {},
   })).current;
 
   const stopSpeech = useCallback((clearDraft: boolean, message: string) => {
+    if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+    speechWatchdog.current = null;
     speechEpoch.current++;
     speechAttempt.current = false;
     speech.stop();
@@ -74,13 +111,38 @@ function Home() {
       : message);
   }, [speech]);
 
+  const clearReplyTimers = useCallback(() => {
+    if (replyInterval.current !== null) clearInterval(replyInterval.current);
+    if (replyTimeout.current !== null) clearTimeout(replyTimeout.current);
+    if (replyStartWatchdog.current !== null) clearTimeout(replyStartWatchdog.current);
+    if (replyFinishWatchdog.current !== null) clearTimeout(replyFinishWatchdog.current);
+    replyInterval.current = null;
+    replyTimeout.current = null;
+    replyStartWatchdog.current = null;
+    replyFinishWatchdog.current = null;
+  }, []);
+
+  const stopReply = useCallback((clearCaption: boolean, message: string) => {
+    replyEpoch.current++;
+    if (replyRequest.current) replyRequest.current.canStart = false;
+    replyRequest.current = null;
+    clearReplyTimers();
+    reply.stop();
+    setReplyPhase('idle');
+    if (clearCaption) setReplyCaption('');
+    setReplyStatus(replyFaultRef.current
+      ? 'Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.'
+      : message);
+  }, [clearReplyTimers, reply]);
+
   const stop = useCallback(() => {
     request.current = null;
     gate.stop();
     stopSpeech(false, 'Speech stopped.');
+    stopReply(true, 'Listening cancelled and reply caption cleared.');
     setRequesting(false);
     setNotice('Camera is off.');
-  }, [gate, stopSpeech]);
+  }, [gate, stopReply, stopSpeech]);
 
   useEffect(() => {
     mounted.current = true;
@@ -88,11 +150,18 @@ function Home() {
       setForeground(state === 'active');
       if (state !== 'active') {
         // Every pause revokes capture eligibility, but the latest permission
-        // outcome can still explain why the camera is off when it resolves.
+        // outcome can still explain why the camera or microphone is off when
+        // it resolves. A reply request that has reached native startup is no
+        // longer only a permission request and must be cancelled normally.
         if (request.current) request.current.canStart = false;
+        const replyPermissionPending = replyRequest.current !== null && reply.state() === 'idle';
+        if (replyRequest.current) replyRequest.current.canStart = false;
         const wasPreviewing = gate.state().phase === 'preview';
         gate.stop();
         stopSpeech(true, 'Speech stopped. Type text to speak again.');
+        if (!replyPermissionPending) {
+          stopReply(true, 'Listening stopped in the background. Tap Start listening to begin again.');
+        }
         setRequesting(false);
         if (wasPreviewing) setNotice('Camera is off.');
       }
@@ -104,20 +173,28 @@ function Home() {
       gate.stop();
       speechEpoch.current++;
       speechAttempt.current = false;
+      if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+      speechWatchdog.current = null;
       speech.stop();
+      clearReplyTimers();
+      replyRequest.current = null;
+      replyEpoch.current++;
+      reply.stop();
       setDraft('');
+      setReplyCaption('');
     };
-  }, [gate, speech, stopSpeech]);
+  }, [clearReplyTimers, gate, reply, speech, stopReply, stopSpeech]);
 
   useEffect(() => {
     const subscription = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (replyPhase !== 'idle' || replyCaption) { stopReply(true, 'Listening cancelled and reply caption cleared.'); return true; }
       if (preview || requesting || request.current) { stop(); setDraft(''); return true; }
-      if (route === 'thanks') { stopSpeech(true, 'Speech stopped.'); setRoute('home'); return true; }
+      if (route === 'thanks') { stopSpeech(true, 'Speech stopped.'); stopReply(true, 'Listening cancelled and reply caption cleared.'); setRoute('home'); return true; }
       if (draft || speechBusy || speechAttempt.current) { stopSpeech(true, 'Speech stopped.'); return true; }
       return false;
     });
     return () => subscription.remove();
-  }, [preview, requesting, route, draft, speechBusy, stop, stopSpeech]);
+  }, [preview, requesting, route, draft, speechBusy, replyCaption, replyPhase, stop, stopReply, stopSpeech]);
 
   function editDraft(value: string) {
     if (speechAttempt.current) stopSpeech(false, 'Text changed. Review it and tap Speak typed text again.');
@@ -125,8 +202,13 @@ function Home() {
     setDraft(value);
   }
 
+  function editReplyCaption(value: string) {
+    if (replyRequest.current || reply.state() !== 'idle' || replyPhase !== 'idle') return;
+    setReplyCaption(value);
+  }
+
   async function speakDraft() {
-    if (speechAttempt.current || speechFaultRef.current || AppState.currentState !== 'active') return;
+    if (speechAttempt.current || speechFaultRef.current || replyFaultRef.current || replyRequest.current || reply.state() !== 'idle' || replyPhase !== 'idle' || AppState.currentState !== 'active') return;
     if (!draft.trim()) {
       setSpeechStatus('Enter text before speaking.');
       return;
@@ -140,6 +222,17 @@ function Home() {
     speechAttempt.current = true;
     setSpeechBusy(true);
     setSpeechStatus('Preparing local speech...');
+    speechWatchdog.current = setTimeout(() => {
+      if (!mounted.current || epoch !== speechEpoch.current || !speechAttempt.current) return;
+      speechWatchdog.current = null;
+      speechEpoch.current++;
+      speechAttempt.current = false;
+      speech.failClosed();
+      speechFaultRef.current = true;
+      setSpeechBusy(false);
+      setSpeechFault(true);
+      setSpeechStatus('Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.');
+    }, SPEECH_ATTEMPT_TIMEOUT_MS);
     try {
       const token = await speech.start();
       if (!mounted.current || epoch !== speechEpoch.current) return;
@@ -166,8 +259,125 @@ function Home() {
       }
     } finally {
       if (mounted.current && epoch === speechEpoch.current) {
+        if (speechWatchdog.current !== null) clearTimeout(speechWatchdog.current);
+        speechWatchdog.current = null;
         speechAttempt.current = false;
         setSpeechBusy(false);
+      }
+    }
+  }
+
+  async function finishReply() {
+    if (reply.state() !== 'listening') return;
+    const epoch = replyEpoch.current;
+    clearReplyTimers();
+    setReplyPhase('finishing');
+    setReplyStatus('Creating a local caption...');
+    replyFinishWatchdog.current = setTimeout(() => {
+      if (!mounted.current || epoch !== replyEpoch.current || reply.state() !== 'finishing') return;
+      replyFinishWatchdog.current = null;
+      replyEpoch.current++;
+      reply.failClosed();
+      replyFaultRef.current = true;
+      setReplyFault(true);
+      setReplyPhase('idle');
+      setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+    }, REPLY_FINALIZATION_TIMEOUT_MS);
+    const result = await reply.finish();
+    if (epoch === replyEpoch.current && replyFinishWatchdog.current !== null) {
+      clearTimeout(replyFinishWatchdog.current);
+      replyFinishWatchdog.current = null;
+    }
+    if (!mounted.current || epoch !== replyEpoch.current || result === null) return;
+    setReplyPhase('idle');
+    switch (result.status) {
+      case 'COMPLETED':
+        setReplyCaption(result.text);
+        setReplyStatus('Reply caption ready. Review or edit it below.');
+        break;
+      case 'NO_SPEECH': setReplyStatus('No speech was detected. Tap Start listening to try again.'); break;
+      case 'MODEL_UNAVAILABLE': setReplyStatus('The local reply model is unavailable. Try again after reopening the app.'); break;
+      case 'DECODE_FAILED': setReplyStatus('The reply could not be captioned. Tap Start listening to try again.'); break;
+      case 'BUSY': setReplyStatus('The microphone is busy. Stop other audio and try again.'); break;
+      case 'CLEANUP_FAILED':
+        replyFaultRef.current = true;
+        setReplyFault(true);
+        setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+        break;
+      case 'CANCELLED': setReplyStatus('Listening was cancelled. Tap Start listening to try again.'); break;
+      default: setReplyStatus('A local reply caption could not be created. Tap Start listening to try again.');
+    }
+  }
+
+  async function startReply() {
+    if (replyRequest.current || reply.state() !== 'idle' || replyPhase !== 'idle' || replyFaultRef.current || speechFaultRef.current || speechBusy || speechAttempt.current || AppState.currentState !== 'active') return;
+    const attempt = {canStart: true};
+    const epoch = ++replyEpoch.current;
+    replyRequest.current = attempt;
+    setReplyPhase('requesting');
+    setReplyStatus('Waiting for microphone permission...');
+    try {
+      const granted = await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.RECORD_AUDIO);
+      if (attempt !== replyRequest.current || epoch !== replyEpoch.current) return;
+      if (granted === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN) {
+        setReplyStatus('Microphone access is blocked. Enable microphone permission in Android Settings, then tap Start listening again. No audio was captured.');
+        return;
+      }
+      if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+        setReplyStatus('Microphone permission was not granted. No audio was captured.');
+        return;
+      }
+      if (!attempt.canStart || AppState.currentState !== 'active') {
+        setReplyStatus('Microphone is off. Permission was granted; tap Start listening to begin.');
+        return;
+      }
+      if (speechAttempt.current || speechFaultRef.current || replyFaultRef.current) {
+        setReplyStatus('Typed speech is active. Stop it, then tap Start listening again.');
+        return;
+      }
+      setReplyPhase('starting');
+      setReplyStatus('Starting local listening...');
+      replyStartWatchdog.current = setTimeout(() => {
+        if (!mounted.current || epoch !== replyEpoch.current || attempt !== replyRequest.current || reply.state() !== 'starting') return;
+        replyStartWatchdog.current = null;
+        replyRequest.current = null;
+        replyEpoch.current++;
+        reply.failClosed();
+        replyFaultRef.current = true;
+        setReplyFault(true);
+        setReplyPhase('idle');
+        setReplyStatus('Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.');
+      }, REPLY_START_TIMEOUT_MS);
+      const token = await reply.start();
+      if (attempt === replyRequest.current && epoch === replyEpoch.current && replyStartWatchdog.current !== null) {
+        clearTimeout(replyStartWatchdog.current);
+        replyStartWatchdog.current = null;
+      }
+      if (!mounted.current || epoch !== replyEpoch.current || attempt !== replyRequest.current) return;
+      if (token === null) {
+        setReplyStatus('Local reply captions are unavailable or the microphone is busy. Try again.');
+        return;
+      }
+      replyRequest.current = null;
+      setReplyCaption('');
+      setReplyPhase('listening');
+      setReplyStatus('Listening locally… 30 seconds remaining.');
+      const started = Date.now();
+      replyInterval.current = setInterval(() => {
+        const remaining = Math.max(0, 30 - Math.floor((Date.now() - started) / 1000));
+        if (mounted.current) {
+          setReplyStatus(`Listening locally… ${remaining} seconds remaining.`);
+        }
+      }, 1000);
+      replyTimeout.current = setTimeout(() => { void finishReply(); }, 30000);
+    } catch {
+      if (attempt === replyRequest.current && epoch === replyEpoch.current) {
+        setReplyStatus('Microphone permission could not be requested.');
+      }
+    } finally {
+      if (attempt === replyRequest.current && reply.state() !== 'listening') {
+        replyRequest.current = null;
+        setReplyPhase('idle');
       }
     }
   }
@@ -231,7 +441,7 @@ function Home() {
               <Text style={styles.warningTitle}>Translation is not available yet</Text>
               <Text style={styles.body}>Local hand tracking is experimental and available on supported devices. It does not recognize ASL or speak a translation. You can type text and speak it locally below.</Text>
             </View>
-            <Text style={styles.body}>No recording. No saved signing sessions. Camera frames stay on this device.</Text>
+            <Text style={styles.body}>No saved recordings or signing sessions. Camera frames stay on this device. Reply audio stays on this device and is not saved.</Text>
             <Button onPress={() => { stop(); stopSpeech(true, 'Speech stopped.'); setRoute('thanks'); }}>Hatsu Is Here For You</Button>
           </View>
           <View style={styles.card}>
@@ -292,9 +502,26 @@ function Home() {
               style={styles.input} placeholder="Type text here" placeholderTextColor="#A99BB8" />
             <Text style={styles.small}>Use 1 to 256 characters with the local English voice. Text stays on this screen until you clear it or leave.</Text>
             <Text testID="typed-speech-status" accessibilityLiveRegion="polite" style={styles.body}>{speechFault ? 'Speech cleanup could not be confirmed. Fully close and reopen the app before speaking again.' : speechStatus}</Text>
-            <Button testID="typed-speech-speak" onPress={speakDraft} disabled={speechBusy || speechFault}>Speak typed text</Button>
+            <Button testID="typed-speech-speak" onPress={speakDraft} disabled={speechBusy || speechFault || replyFault || replyPhase !== 'idle'}>Speak typed text</Button>
             <Button testID="typed-speech-stop" onPress={() => stopSpeech(false, 'Speech stopped.')}>Stop speech</Button>
             <Button testID="typed-speech-clear" onPress={() => stopSpeech(true, 'Typed text cleared.')}>Clear typed text</Button>
+          </View>
+          <View style={styles.card}>
+            <Text accessibilityRole="header" style={styles.sectionTitle}>Caption a spoken reply</Text>
+            <Text style={styles.body}>The other person can speak for up to 30 seconds. Audio is processed locally, stays on this device, and is not saved.</Text>
+            <Text testID="reply-caption-status" accessibilityLiveRegion="polite" style={styles.body}>{replyFault
+              ? 'Microphone cleanup could not be confirmed. Fully close and reopen the app before listening again.'
+              : replyStatus}</Text>
+            {replyPhase === 'listening'
+              ? <Button testID="reply-stop" onPress={() => { void finishReply(); }}>Stop and caption</Button>
+              : <Button testID="reply-start" onPress={() => { void startReply(); }}
+                disabled={replyPhase !== 'idle' || replyFault || speechFault || speechBusy}>Start listening</Button>}
+            <Button testID="reply-clear" onPress={() => stopReply(true, 'Listening cancelled and reply caption cleared.')}>Cancel / Clear</Button>
+            <TextInput testID="reply-caption-input" accessibilityLabel="Editable reply caption" value={replyCaption}
+              onChangeText={editReplyCaption} editable={replyPhase === 'idle'} multiline
+              autoCorrect={false} spellCheck={false} autoComplete="off" importantForAutofill="no"
+              style={styles.input} placeholder="Spoken reply caption" placeholderTextColor="#A99BB8" />
+            <Text style={styles.small}>Listening never resumes automatically. Starting again is always your choice.</Text>
           </View>
         </View>}
       </ScrollView>

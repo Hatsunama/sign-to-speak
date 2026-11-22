@@ -91,7 +91,7 @@ class RestoreIntegrationTest(unittest.TestCase):
                 destination.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copyfile(repository / path, destination)
             gradlew = root / 'native/android/gradlew'
-            gradlew.write_bytes(('#!/bin/sh\nprintf reached > gradle-invoked\nexit ' + str(fake_exit) + '\n').encode())
+            gradlew.write_bytes(('#!/bin/sh\nprintf reached > gradle-invoked\nprintf \'%s\\n\' "$@" > gradle-arguments\nexit ' + str(fake_exit) + '\n').encode())
             gradlew.chmod(0o755)
             def git(*args):
                 return subprocess.run(['git', *args], cwd=root, check=True, capture_output=True)
@@ -108,11 +108,19 @@ class RestoreIntegrationTest(unittest.TestCase):
                 converted = subprocess.run([str(bash), '-c', 'cygpath -u "$1"', '_', str(path)],
                     capture_output=True, text=True, check=True)
                 return converted.stdout.strip()
+            init_script = root / 'temp/robolectric-init.gradle'
+            init_script.parent.mkdir(parents=True, exist_ok=True)
+            init_script.write_text('// Restore-integration fixture init script.\n', encoding='utf-8')
+            init_script_path = shell_path(init_script)
             result = subprocess.run([str(bash), shell_path(root / 'native/scripts/ci-isolation-baseline.sh')], cwd=root,
                 env={**os.environ, 'RUNNER_TEMP':shell_path(root / 'temp'),
-                    'GITHUB_OUTPUT':shell_path(output)}, capture_output=True, text=True)
+                    'GITHUB_OUTPUT':shell_path(output),
+                    'ROBOLECTRIC_INIT_SCRIPT':init_script_path}, capture_output=True, text=True)
             self.assertTrue((root / 'native/android/gradle-invoked').is_file(),
                 f'Counterfactual Gradle was never reached; exit={result.returncode}; stderr={result.stderr}')
+            arguments = (root / 'native/android/gradle-arguments').read_text(encoding='utf-8').splitlines()
+            self.assertEqual(arguments.count('--init-script'), 1)
+            self.assertEqual(arguments[arguments.index('--init-script') + 1], init_script_path)
             self.assertNotEqual(result.returncode, 0, 'Missing reports or unexpected green must reject baseline')
             self.assertTrue(output.is_file(), f'Restore output missing; exit={result.returncode}; stderr={result.stderr}')
             self.assertIn('restored=true', output.read_text())

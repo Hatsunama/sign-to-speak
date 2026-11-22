@@ -568,6 +568,19 @@ public final class PhonePreviewIntegrationTest {
                 SystemClock.sleep(50);
                 continue;
             }
+            // UI Automator scrolls block for the whole gesture. The taller Reply layout made
+            // the final in-deadline gesture return after acquisition with Start still clipped.
+            // When native geometry exists, place the rendered action in the viewport in one
+            // bounded ScrollView move. Keep the gesture below as the missing-geometry fallback.
+            Rect targetViewport = new Rect(viewport);
+            int correctedScrollY = onMain(() -> scrollButtonTowardViewport(
+                    activity.getWindow().getDecorView(), label, targetViewport));
+            if (correctedScrollY >= 0) {
+                lastGesture = "nativeTarget(scrollY=" + correctedScrollY + ",target="
+                        + nativeBounds + ")";
+                SystemClock.sleep(50);
+                continue;
+            }
             Direction direction;
             int distance = 0;
             if (nativeBounds != null && nativeBounds.full.top < viewport.top) {
@@ -668,8 +681,9 @@ public final class PhonePreviewIntegrationTest {
                 while (parent instanceof View && !(parent instanceof ScrollView)) {
                     parent = parent.getParent();
                 }
-                int scrollY = parent instanceof ScrollView ? ((ScrollView) parent).getScrollY() : -1;
-                return new ButtonGeometry(full, localVisible, scrollY);
+                ScrollView scroll = parent instanceof ScrollView ? (ScrollView) parent : null;
+                int scrollY = scroll == null ? -1 : scroll.getScrollY();
+                return new ButtonGeometry(full, localVisible, scrollY, scroll);
             }
         }
         if (root instanceof ViewGroup) {
@@ -682,14 +696,78 @@ public final class PhonePreviewIntegrationTest {
         return null;
     }
 
+    private static int scrollButtonTowardViewport(View root, String label, Rect viewport) {
+        ButtonGeometry geometry = buttonGeometry(root, label);
+        if (geometry == null || geometry.scroll == null) return -1;
+        int target = ButtonScrollTarget.forGeometry(geometry.scrollY, geometry.full.top,
+                geometry.full.bottom, viewport.top, viewport.bottom);
+        if (target == geometry.scrollY) return -1;
+        geometry.scroll.scrollTo(geometry.scroll.getScrollX(), target);
+        int actual = geometry.scroll.getScrollY();
+        return actual == geometry.scrollY ? -1 : actual;
+    }
+
     private static final class ButtonGeometry {
         final Rect full, localVisible;
         final int scrollY;
-        ButtonGeometry(Rect full, Rect localVisible, int scrollY) {
+        final ScrollView scroll;
+        ButtonGeometry(Rect full, Rect localVisible, int scrollY, ScrollView scroll) {
             this.full = full; this.localVisible = localVisible; this.scrollY = scrollY;
+            this.scroll = scroll;
         }
         @Override public String toString() {
             return "{full=" + full + ",localVisible=" + localVisible + ",scrollY=" + scrollY + "}";
+        }
+    }
+
+    private static TextGeometry noticeGeometry(View root, Pattern notice) {
+        if (root instanceof TextView) {
+            CharSequence text = ((TextView) root).getText();
+            if (text != null && notice.matcher(text).matches()) {
+                int[] position = new int[2];
+                root.getLocationOnScreen(position);
+                Rect full = new Rect(position[0], position[1], position[0] + root.getWidth(),
+                        position[1] + root.getHeight());
+                ViewParent parent = root.getParent();
+                while (parent instanceof View && !(parent instanceof ScrollView)) {
+                    parent = parent.getParent();
+                }
+                ScrollView scroll = parent instanceof ScrollView ? (ScrollView) parent : null;
+                return new TextGeometry(full, scroll == null ? -1 : scroll.getScrollY(), scroll,
+                        text.toString());
+            }
+        }
+        if (root instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) root;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                TextGeometry found = noticeGeometry(group.getChildAt(i), notice);
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static int scrollNoticeTowardViewport(View root, Pattern notice, Rect viewport) {
+        TextGeometry geometry = noticeGeometry(root, notice);
+        if (geometry == null || geometry.scroll == null) return -1;
+        int target = ButtonScrollTarget.forGeometry(geometry.scrollY, geometry.full.top,
+                geometry.full.bottom, viewport.top, viewport.bottom);
+        if (target == geometry.scrollY) return -1;
+        geometry.scroll.scrollTo(geometry.scroll.getScrollX(), target);
+        int actual = geometry.scroll.getScrollY();
+        return actual == geometry.scrollY ? -1 : actual;
+    }
+
+    private static final class TextGeometry {
+        final Rect full;
+        final int scrollY;
+        final ScrollView scroll;
+        final String text;
+        TextGeometry(Rect full, int scrollY, ScrollView scroll, String text) {
+            this.full = full; this.scrollY = scrollY; this.scroll = scroll; this.text = text;
+        }
+        @Override public String toString() {
+            return "{text=" + text + ",full=" + full + ",scrollY=" + scrollY + "}";
         }
     }
 
@@ -704,10 +782,25 @@ public final class PhonePreviewIntegrationTest {
             UiObject2 node = device.findObject(By.pkg(QA_PACKAGE).text(notice));
             if (node != null) return node;
             UiObject2 scroll = device.findObject(By.pkg(QA_PACKAGE).scrollable(true));
-            if (scroll == null) SystemClock.sleep(100);
-            else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+            TextGeometry rendered = onMain(() -> noticeGeometry(
+                    activity.getWindow().getDecorView(), notice));
+            if (scroll == null || rendered == null) {
+                if (scroll == null) SystemClock.sleep(100);
+                else if (!scroll.scroll(downward ? Direction.DOWN : Direction.UP, 0.65f)) downward = !downward;
+                continue;
+            }
+            Rect targetViewport = new Rect(scroll.getVisibleBounds());
+            int correctedScrollY = onMain(() -> scrollNoticeTowardViewport(
+                    activity.getWindow().getDecorView(), notice, targetViewport));
+            // Once the rendered TextView is in the viewport, keep it still while the
+            // accessibility snapshot catches up instead of scrolling past it again.
+            SystemClock.sleep(correctedScrollY >= 0 ? 50 : 100);
         }
-        throw new AssertionError("QA UI missing preview/tracking notice matching " + notice + "; " + snapshot());
+        TextGeometry rendered = onMain(() -> noticeGeometry(
+                activity.getWindow().getDecorView(), notice));
+        throw new AssertionError("QA UI missing preview/tracking notice matching " + notice
+                + "; native rendered notice=" + rendered + "; UIA labels=" + uiLabels()
+                + "; " + snapshot());
     }
 
     private static Object field(Object owner, String name) throws ReflectiveOperationException {

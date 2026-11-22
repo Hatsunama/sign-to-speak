@@ -21,18 +21,18 @@ const compiled = ts.transpileModule(source, {compilerOptions: {
 
 // Execute the actual App.tsx and session gate, mocking only React Native boundaries.
 
-async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions = {width: 1000, height: 600}) {
+async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions = {width: 1000, height: 600}, replyBridge, timers = globalThis) {
   const stateListeners = new Set();
   const backListeners = new Set();
   const permissions = [];
   const starts = [];
   let homeRenders = 0;
   const native = {
-    NativeModules: privacy === null ? {} : {CapturePrivacy: privacy, LocalSpeech: speechBridge},
+    NativeModules: privacy === null ? {} : {CapturePrivacy: privacy, LocalSpeech: speechBridge, LocalReply: replyBridge},
     AppState: {currentState: 'active', addEventListener(_, fn) {stateListeners.add(fn); return {remove: () => stateListeners.delete(fn)};}},
     BackHandler: {addEventListener(_, fn) {backListeners.add(fn); return {remove: () => backListeners.delete(fn)};}},
     PermissionsAndroid: {
-      PERMISSIONS: {CAMERA: 'camera'},
+      PERMISSIONS: {CAMERA: 'camera', RECORD_AUDIO: 'microphone'},
       RESULTS: {GRANTED: 'granted', DENIED: 'denied', NEVER_ASK_AGAIN: 'never_ask_again'},
       request: permission => new Promise((resolve, reject) => {permissions.push({permission, resolve, reject});}),
     },
@@ -42,7 +42,11 @@ async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions =
     useWindowDimensions: () => { homeRenders++; return dimensions; },
   };
   const exports = {};
-  vm.runInNewContext(compiled, {exports, require(name) {
+  vm.runInNewContext(compiled, {
+    setTimeout: timers.setTimeout.bind(timers), clearTimeout: timers.clearTimeout.bind(timers),
+    setInterval: timers.setInterval.bind(timers), clearInterval: timers.clearInterval.bind(timers),
+    Date: timers.Date ?? Date,
+    exports, require(name) {
     if (name === 'react-native') return native;
     if (name === 'react-native-safe-area-context') return {SafeAreaProvider: 'SafeAreaProvider', SafeAreaView: 'SafeAreaView'};
     if (name === './src/session.mjs') return {createSession(options) {
@@ -50,6 +54,7 @@ async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions =
       return {...session, start(options) {starts.push(options); return session.start(options);}};
     }};
     if (name === './src/local-speech.mjs') return require('../src/local-speech.mjs');
+    if (name === './src/local-reply.mjs') return require('../src/local-reply.mjs');
     return require(name);
   }});
   let app;
@@ -67,6 +72,8 @@ async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions =
   const input = () => app.root.findAllByType('TextInput').find(node => node.props.testID === 'typed-speech-input');
   const edit = async value => { assert.ok(input()); await act(() => input().props.onChangeText(value)); };
   const speechStatus = () => app.root.findAllByType('Text').find(node => node.props.testID === 'typed-speech-status')?.props.children;
+  const replyInput = () => app.root.findAllByType('TextInput').find(node => node.props.testID === 'reply-caption-input');
+  const replyStatus = () => app.root.findAllByType('Text').find(node => node.props.testID === 'reply-caption-status')?.props.children;
   const notice = () => app.root.findAllByType('Text').find(node => node.props.accessibilityLiveRegion === 'polite' && !node.props.testID).props.children;
   const grant = value => permissions.at(-1).resolve(value);
   const resolve = async (value, index = permissions.length - 1) => {await act(() => {permissions[index].resolve(value);});};
@@ -78,8 +85,414 @@ async function renderHome(t, privacy = {ready: true}, speechBridge, dimensions =
     return results;
   };
   const status = async (handler, value) => {await act(() => handler({nativeEvent: {status: value}}));};
-  return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, input, edit, speechStatus, notice, grant, resolve, reject, state, back, status};
+  return {app, native, homeRenders: () => homeRenders, stateListeners, backListeners, permissions, starts, text, button, press, cameras, input, edit, speechStatus, replyInput, replyStatus, notice, grant, resolve, reject, state, back, status};
 }
+
+function replyTimers() {
+  let next = 1;
+  const timeouts = new Map();
+  const intervals = new Map();
+  return {
+    Date,
+    setTimeout(fn, delay) { const id = next++; timeouts.set(id, {fn, delay}); return id; },
+    clearTimeout(id) { timeouts.delete(id); },
+    setInterval(fn) { const id = next++; intervals.set(id, fn); return id; },
+    clearInterval(id) { intervals.delete(id); },
+    timeoutCount() { return timeouts.size; },
+    intervalCount() { return intervals.size; },
+    timeoutDelays() { return [...timeouts.values()].map(entry => entry.delay); },
+    takeTimeout() {
+      const entry = timeouts.entries().next().value;
+      assert.ok(entry, 'an active timeout exists');
+      timeouts.delete(entry[0]);
+      return entry[1].fn;
+    },
+  };
+}
+
+test('reply captions request microphone only on explicit Start and handle grant, denial and a late grant', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+  assert.equal(h.permissions.length, 0);
+  assert.match(h.text(), /Start listening/);
+  await h.press('Start listening');
+  assert.equal(h.permissions[0].permission, 'microphone');
+  await h.resolve('denied');
+  assert.equal(begins.length, 0);
+  assert.match(h.replyStatus(), /permission was not granted/i);
+  await h.press('Start listening');
+  await h.state('background');
+  await h.state('active');
+  await h.resolve('granted', 1);
+  assert.equal(begins.length, 0, 'a lifecycle-interrupted grant never starts listening');
+  assert.match(h.replyStatus(), /tap Start listening/i);
+  await h.press('Start listening');
+  await h.resolve('granted', 2);
+  assert.equal(begins.length, 1);
+  assert.ok(h.button('Stop and caption'));
+  assert.match(h.replyStatus(), /Listening locally.*30 seconds remaining/i);
+});
+
+test('reply permission denial survives the Android permission-dialog pause and remains retryable', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.state('background');
+  await h.resolve('denied');
+  await h.state('active');
+
+  assert.deepEqual(begins, [], 'permission denial never reaches the native microphone owner');
+  assert.equal(h.replyStatus(), 'Microphone permission was not granted. No audio was captured.');
+  assert.equal(h.button('Start listening').props.disabled, false, 'denial permits another explicit request');
+
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(begins, ['begin'], 'a fresh foreground retry can start listening');
+});
+
+test('permanently blocked microphone permission directs the user to Android Settings without capturing', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.resolve('never_ask_again');
+
+  assert.deepEqual(begins, [], 'a permanently blocked permission never reaches the native microphone owner');
+  assert.equal(
+    h.replyStatus(),
+    'Microphone access is blocked. Enable microphone permission in Android Settings, then tap Start listening again. No audio was captured.',
+  );
+  assert.equal(h.button('Start listening').props.disabled, false, 'the app remains ready after Settings changes');
+});
+
+test('reply permission grant after the Android permission-dialog pause requires a fresh explicit Start', async t => {
+  const begins = [];
+  const bridge = {begin: async () => {begins.push('begin'); return 'reply-1';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, bridge);
+
+  await h.press('Start listening');
+  await h.state('background');
+  await h.resolve('granted');
+  await h.state('active');
+
+  assert.deepEqual(begins, [], 'a lifecycle-interrupted grant cannot start microphone capture');
+  assert.equal(h.replyStatus(), 'Microphone is off. Permission was granted; tap Start listening to begin.');
+  assert.equal(h.button('Start listening').props.disabled, false);
+
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(begins, ['begin'], 'only the fresh foreground request starts listening');
+});
+
+test('reply caption success is editable, separate from typed speech and never auto-speaks', async t => {
+  const spoken = [];
+  const speech = {begin: async () => 'speech', speak: async (_, text) => {spoken.push(text); return 'COMPLETED';}, cancel() {}};
+  const reply = {begin: async () => 'reply', finish: async () => ({status: 'COMPLETED', text: 'How are you?'}), cancel() {}};
+  const h = await renderHome(t, {ready: true}, speech, undefined, reply);
+  await h.edit('MY TYPED WORDS');
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.equal(h.input().props.value, 'MY TYPED WORDS');
+  assert.equal(h.button('Speak typed text').props.disabled, true, 'TTS visibly conflicts while microphone is owned');
+  await h.press('Stop and caption');
+  assert.equal(h.replyInput().props.value, 'How are you?');
+  assert.equal(h.input().props.value, 'MY TYPED WORDS');
+  assert.deepEqual(spoken, [], 'a caption is never spoken automatically');
+  await act(() => h.replyInput().props.onChangeText('How are you today?'));
+  assert.equal(h.replyInput().props.value, 'How are you today?');
+  assert.equal(h.button('Speak typed text').props.disabled, false);
+});
+
+test('reply caption input disables correction, spellcheck and autofill', async t => {
+  const h = await renderHome(t);
+  assert.equal(h.replyInput().props.autoCorrect, false);
+  assert.equal(h.replyInput().props.spellCheck, false);
+  assert.equal(h.replyInput().props.autoComplete, 'off');
+  assert.equal(h.replyInput().props.importantForAutofill, 'no');
+});
+
+test('same-frame Start listening and Speak typed text cannot acquire both local audio paths', async t => {
+  const speechBegins = [];
+  const replyBegins = [];
+  const speech = {begin: async () => {speechBegins.push('speech'); return 'speech';}, speak: async () => 'COMPLETED', cancel() {}};
+  const reply = {begin: async () => {replyBegins.push('reply'); return 'reply';}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, speech, undefined, reply);
+  await h.edit('HELLO');
+  const start = h.button('Start listening');
+  const speak = h.button('Speak typed text');
+  await act(() => {
+    start.props.onPress();
+    speak.props.onPress();
+  });
+  assert.deepEqual(speechBegins, [], 'a pending microphone request excludes typed speech immediately');
+  await h.resolve('granted');
+  assert.deepEqual(replyBegins, ['reply']);
+});
+
+test('an admitted reply clears the old caption, keeps it on denial, and freezes edits while finishing', async t => {
+  let finish;
+  const reply = {
+    begin: async () => 'reply',
+    finish: () => new Promise(resolve => {finish = resolve;}),
+    cancel() {},
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply);
+  await act(() => h.replyInput().props.onChangeText('private old caption'));
+  await h.press('Start listening');
+  await h.resolve('denied');
+  assert.equal(h.replyInput().props.value, 'private old caption', 'permission denial retains the reviewed caption');
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.equal(h.replyInput().props.value, '', 'the old caption clears only after native listening begins');
+  assert.equal(h.replyInput().props.editable, false);
+  await h.press('Stop and caption');
+  assert.equal(h.replyInput().props.editable, false, 'a pending native result cannot race an edit');
+  await act(() => finish({status: 'COMPLETED', text: 'new caption'}));
+  assert.equal(h.replyInput().props.editable, true);
+  assert.equal(h.replyInput().props.value, 'new caption');
+});
+
+test('reply timeout finishes exactly once and Cancel clears its timer', async t => {
+  const timers = replyTimers();
+  const finishes = [];
+  const reply = {begin: async () => 'reply', finish: async () => {finishes.push('finish'); return {status: 'NO_SPEECH'};}, cancel() {}};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.equal(timers.timeoutCount(), 1);
+  assert.equal(timers.intervalCount(), 1);
+  const timeout = timers.takeTimeout();
+  await act(() => timeout());
+  await act(() => timeout());
+  assert.deepEqual(finishes, ['finish'], 'even a stale duplicate callback cannot finish twice');
+  assert.equal(timers.timeoutCount(), 0);
+  assert.equal(timers.intervalCount(), 0);
+
+  await h.press('Start listening');
+  await h.resolve('granted');
+  const cancelledTimeout = timers.takeTimeout();
+  await h.press('Cancel / Clear');
+  assert.equal(timers.timeoutCount(), 0);
+  assert.equal(timers.intervalCount(), 0);
+  await act(() => cancelledTimeout());
+  assert.deepEqual(finishes, ['finish'], 'a cancelled timeout cannot finish the retired session');
+});
+
+test('unresolved reply startup is bounded, marks native state uncertain, and ignores a late token', async t => {
+  const timers = replyTimers();
+  const beginning = {};
+  beginning.promise = new Promise(resolve => { beginning.resolve = resolve; });
+  const events = [];
+  const reply = {
+    begin: () => beginning.promise,
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  assert.deepEqual(timers.timeoutDelays(), [30000], 'native admission has a thirty-second deadline');
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['uncertain'], 'fault latch precedes any token cleanup');
+  assert.match(h.replyStatus(), /close and reopen/i);
+  assert.equal(h.button('Start listening').props.disabled, true);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+
+  await act(() => beginning.resolve('late-reply'));
+  assert.deepEqual(events, ['uncertain', 'cancel:late-reply']);
+  assert.equal(h.button('Stop and caption'), undefined, 'a late token cannot revive listening');
+  assert.equal(h.replyInput().props.value, '');
+});
+
+test('ordinary reply cancellation during unresolved startup never marks native state uncertain', async t => {
+  const timers = replyTimers();
+  let resolveBegin;
+  const events = [];
+  const reply = {
+    begin: () => new Promise(resolve => { resolveBegin = resolve; }),
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  await h.press('Cancel / Clear');
+  assert.deepEqual(events, []);
+  assert.equal(timers.timeoutCount(), 0);
+  await act(() => resolveBegin('cancelled-late'));
+  assert.deepEqual(events, ['cancel:cancelled-late']);
+  assert.doesNotMatch(h.replyStatus(), /close and reopen/i);
+});
+
+test('reply finalization is bounded, cancellable, and cannot publish a late caption', async t => {
+  const timers = replyTimers();
+  const finishes = [];
+  const cancelled = [];
+  const uncertain = [];
+  let next = 0;
+  const reply = {
+    begin: async () => `reply-${++next}`,
+    finish: token => new Promise(resolve => {finishes.push({token, resolve});}),
+    markUncertain: () => uncertain.push('uncertain'),
+    cancel: token => cancelled.push(token),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  async function startAndFinish() {
+    await h.press('Start listening');
+    await h.resolve('granted');
+    await h.press('Stop and caption');
+    assert.equal(timers.timeoutCount(), 1, 'native finalization has one watchdog');
+    assert.deepEqual(timers.timeoutDelays(), [120000], 'slow on-device decoding gets a separate two-minute deadline');
+    return finishes.at(-1);
+  }
+
+  const completed = await startAndFinish();
+  await act(() => completed.resolve({status: 'COMPLETED', text: 'normal caption'}));
+  assert.equal(h.replyInput().props.value, 'normal caption');
+  assert.equal(timers.timeoutCount(), 0, 'normal completion clears its watchdog');
+
+  const cancelledByButton = await startAndFinish();
+  await h.press('Cancel / Clear');
+  assert.equal(timers.timeoutCount(), 0, 'explicit cancellation clears its watchdog');
+  await act(() => cancelledByButton.resolve({status: 'COMPLETED', text: 'button stale'}));
+
+  const cancelledByBack = await startAndFinish();
+  assert.deepEqual(await h.back(), [true]);
+  assert.equal(timers.timeoutCount(), 0, 'Back clears its watchdog');
+  await act(() => cancelledByBack.resolve({status: 'COMPLETED', text: 'back stale'}));
+
+  const cancelledByHome = await startAndFinish();
+  await h.state('background');
+  assert.equal(timers.timeoutCount(), 0, 'Home/background clears its watchdog');
+  await h.state('active');
+  await act(() => cancelledByHome.resolve({status: 'COMPLETED', text: 'home stale'}));
+  assert.deepEqual(uncertain, [], 'button, Back, and Home cancellation never mark a process fault');
+
+  const expired = await startAndFinish();
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.match(h.replyStatus(), /close and reopen/i);
+  assert.equal(h.button('Start listening').props.disabled, true, 'deadline latches microphone closed');
+  assert.equal(h.button('Speak typed text').props.disabled, true, 'deadline latches typed speech closed');
+  assert.deepEqual(uncertain, ['uncertain'], 'only the elapsed finalization deadline marks native state uncertain');
+  assert.ok(cancelled.includes(expired.token), 'deadline asks native reply ownership to stop');
+  await act(() => expired.resolve({status: 'COMPLETED', text: 'too late'}));
+  assert.equal(h.replyInput().props.value, '', 'late native completion never publishes a caption');
+  assert.doesNotMatch(h.text(), /too late/);
+
+  const unmountTimers = replyTimers();
+  const unmountReply = {
+    begin: async () => 'unmount-reply',
+    finish: () => new Promise(() => {}),
+    cancel() {},
+  };
+  const unmountHome = await renderHome(t, {ready: true}, undefined, undefined, unmountReply, unmountTimers);
+  await unmountHome.press('Start listening');
+  await unmountHome.resolve('granted');
+  await unmountHome.press('Stop and caption');
+  assert.equal(unmountTimers.timeoutCount(), 1);
+  await act(() => unmountHome.app.unmount());
+  assert.equal(unmountTimers.timeoutCount(), 0, 'unmount clears its watchdog');
+});
+
+for (const [status, message] of [
+  ['NO_SPEECH', /No speech was detected/i],
+  ['MODEL_UNAVAILABLE', /model is unavailable/i],
+  ['DECODE_FAILED', /could not be captioned/i],
+]) {
+  test(`reply ${status} gives a precise retryable status after retiring the prior caption`, async t => {
+    const reply = {begin: async () => 'reply', finish: async () => ({status}), cancel() {}};
+    const h = await renderHome(t, {ready: true}, undefined, undefined, reply);
+    await act(() => h.replyInput().props.onChangeText('keep this'));
+    await h.press('Start listening');
+    await h.resolve('granted');
+    await h.press('Stop and caption');
+    assert.match(h.replyStatus(), message);
+    assert.equal(h.replyInput().props.value, '');
+    assert.ok(h.button('Start listening'));
+  });
+}
+
+test('Cancel/Clear and stale native results cannot restore a retired reply caption', async t => {
+  const cancelled = [];
+  let finish;
+  const reply = {
+    begin: async () => 'reply',
+    finish: () => new Promise(resolve => {finish = resolve;}),
+    cancel: token => cancelled.push(token),
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  await h.press('Stop and caption');
+  await h.press('Cancel / Clear');
+  assert.equal(h.replyInput().props.value, '');
+  await act(() => finish({status: 'COMPLETED', text: 'stale words'}));
+  assert.equal(h.replyInput().props.value, '');
+  assert.doesNotMatch(h.replyStatus(), /stale words/i);
+  assert.deepEqual(cancelled, ['reply']);
+});
+
+test('reply cleanup uncertainty latches both local audio controls closed', async t => {
+  const timers = replyTimers();
+  let finish;
+  const reply = {
+    begin: async () => 'reply',
+    finish: () => new Promise(resolve => {finish = resolve;}),
+    cancel() {},
+  };
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply, timers);
+  await h.press('Start listening');
+  await h.resolve('granted');
+  await h.press('Stop and caption');
+  await act(async () => {
+    finish({status: 'CLEANUP_FAILED'});
+    await Promise.resolve();
+  });
+  assert.equal(timers.timeoutCount(), 0, 'cleanup failure clears its finalization watchdog');
+  assert.match(h.replyStatus(), /close and reopen/i);
+  assert.equal(h.button('Start listening').props.disabled, true);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+});
+
+test('Back, route, background and unmount cancel reply listening and never auto-resume', async t => {
+  const cancelled = [];
+  let next = 0;
+  const reply = {begin: async () => `reply-${++next}`, cancel: token => cancelled.push(token)};
+  const h = await renderHome(t, {ready: true}, undefined, undefined, reply);
+  async function start() { await h.press('Start listening'); await h.resolve('granted'); }
+  await start();
+  assert.deepEqual(await h.back(), [true]);
+  await start();
+  await h.state('background');
+  await h.state('active');
+  assert.ok(h.button('Start listening'), 'foreground does not resume microphone capture');
+  await start();
+  await h.press('Hatsu Is Here For You');
+  await h.press('Back to Home');
+  await start();
+  await act(() => h.app.unmount());
+  assert.deepEqual(cancelled, ['reply-1', 'reply-2', 'reply-3', 'reply-4']);
+});
+
+test('reply controls preserve rear camera default, flip, typed TTS and precise local-storage copy', async t => {
+  const h = await renderHome(t, {ready: true}, {begin: async () => 'speech', speak: async () => 'COMPLETED', cancel() {}}, undefined,
+    {begin: async () => 'reply', cancel() {}});
+  assert.equal(h.button('Switch to front camera').props.disabled, false, 'rear camera remains the default');
+  await h.press('Switch to front camera');
+  assert.ok(h.button('Switch to rear camera'));
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.match(h.speechStatus(), /spoken/i);
+  assert.match(h.text(), /No saved recordings/i);
+  assert.match(h.text(), /audio stays on this device/i);
+  assert.doesNotMatch(h.text(), /No recording\./);
+});
 
 test('mounted React Stop, navigation, Back, background and unmount cancel the real native token', async t => {
   const cancelled = [];
@@ -517,6 +930,63 @@ test('pending begin and speech results cannot revive stopped or cleared private 
   assert.doesNotMatch(h.speechStatus(), /complete|spoken|finished/i);
   await h.state('active');
   assert.equal(h.input().props.value, '');
+});
+
+test('unresolved typed speech startup is bounded, fail-closed, and cannot publish a late success', async t => {
+  const timers = replyTimers();
+  let resolveBegin;
+  const events = [];
+  const speech = {
+    begin: () => new Promise(resolve => { resolveBegin = resolve; }),
+    speak: async () => 'COMPLETED',
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, speech, undefined, undefined, timers);
+  await h.edit('HELLO');
+  await h.press('Speak typed text');
+  assert.deepEqual(timers.timeoutDelays(), [180000]);
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['uncertain']);
+  assert.match(h.speechStatus(), /close and reopen/i);
+  assert.equal(h.button('Speak typed text').props.disabled, true);
+  assert.equal(h.button('Start listening').props.disabled, true);
+
+  await act(() => resolveBegin('late-speech'));
+  assert.deepEqual(events, ['uncertain', 'cancel:late-speech']);
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
+});
+
+test('unresolved typed synthesis is bounded and ordinary Stop never marks native state uncertain', async t => {
+  const timers = replyTimers();
+  const playbacks = [];
+  const events = [];
+  let next = 0;
+  const speech = {
+    begin: async () => `speech:${++next}`,
+    speak: () => new Promise(resolve => playbacks.push(resolve)),
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  };
+  const h = await renderHome(t, {ready: true}, speech, undefined, undefined, timers);
+  await h.edit('FIRST');
+  await h.press('Speak typed text');
+  assert.deepEqual(timers.timeoutDelays(), [180000]);
+  await h.press('Stop speech');
+  assert.deepEqual(events, ['cancel:speech:1']);
+  assert.equal(timers.timeoutCount(), 0);
+  await act(() => playbacks[0]('COMPLETED'));
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
+
+  await h.edit('SECOND');
+  await h.press('Speak typed text');
+  const deadline = timers.takeTimeout();
+  await act(() => deadline());
+  assert.deepEqual(events, ['cancel:speech:1', 'uncertain', 'cancel:speech:2']);
+  assert.match(h.speechStatus(), /close and reopen/i);
+  await act(() => playbacks[1]('COMPLETED'));
+  assert.doesNotMatch(h.speechStatus(), /spoken/i);
 });
 
 test('Back and route navigation clear typed draft and cancel native speech', async t => {

@@ -47,7 +47,8 @@ jobs:
           mkdir -p "$RUNNER_TEMP/sign-emulator-build"
           git rev-parse HEAD > "$RUNNER_TEMP/sign-emulator-build/tested-sha.txt"
           sha256sum vendor/pocket-tts-runtime/Cargo.toml vendor/pocket-tts-runtime/Cargo.lock vendor/pocket-tts-runtime/build.rs \
-            scripts/build-pocket-runtime.sh scripts/prepare-pocket-assets.py \
+            scripts/build-pocket-runtime.sh scripts/prepare-pocket-assets.py scripts/reply-asr-component.py \
+            vendor/reply-asr/pins.json android/app/reply-asr-assets.gradle \
             > "$RUNNER_TEMP/sign-emulator-build/source-sha256.txt"
           bash scripts/ci-emulator-diagnostics.sh
       - name: Host and unsigned build policy checks
@@ -73,6 +74,11 @@ jobs:
           python3 scripts/prepare-pocket-assets.py --asset-dir "$RUNNER_TEMP/pocket-models" \
             --metadata "$RUNNER_TEMP/pocket-x86_64-metadata.json" \
             --output-dir generated/pocket-assets
+          mkdir -p generated
+          python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
+          sha256sum generated/reply-asr-component/assets/reply-asr/*.bin \
+            generated/reply-asr-component/inputs.json \
+            > "$RUNNER_TEMP/sign-emulator-build/reply-input-sha256.txt"
       - name: Inspect exact opt-in task graph before any build task executes
         timeout-minutes: 8
         run: |
@@ -103,6 +109,10 @@ jobs:
           python3 scripts/check-pocket-apk-elf.py "${apks[0]}" x86_64 \
             "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
             "$RUNNER_TEMP/sign-emulator-build/elf"
+          python3 scripts/check-reply-apk-integration.py \
+            "$RUNNER_TEMP/sign-emulator-build/app-manifest.xml" "${apks[0]}" --abi x86_64 \
+            --readelf "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --evidence "$RUNNER_TEMP/sign-emulator-build/reply-elf"
       - name: Preserve bounded evidence, including blockers
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

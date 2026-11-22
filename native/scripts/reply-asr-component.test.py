@@ -41,6 +41,12 @@ class ProducerTest(unittest.TestCase):
             probe.write_verified(Interrupted(b"GGML"), self.root / "model.bin", self.pinned)
         self.assertEqual(list(self.root.iterdir()), [])
 
+    def test_prepare_parent_is_caller_owned_and_must_already_exist(self):
+        missing_parent = self.root / "generated"
+        with self.assertRaises(FileNotFoundError):
+            probe.prepare(missing_parent / "reply-asr-component")
+        self.assertFalse(missing_parent.exists())
+
     def test_span_hash_rejects_malformed_model_and_out_of_bounds_offsets(self):
         address = self.root / "asset-span.bin"
         address.write_bytes(b"PRE" + b"GGML" + b"POST")

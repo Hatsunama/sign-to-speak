@@ -10,16 +10,22 @@ import com.facebook.react.ReactApplication
 import com.facebook.react.ReactHost
 import com.facebook.react.ReactNativeApplicationEntryPoint.loadReactNative
 import com.facebook.react.defaults.DefaultReactHost.getDefaultReactHost
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainApplication : Application(), ReactApplication {
+  internal val localAudioLease = LocalAudioLease()
+  fun isLocalAudioLeaseHeld(): Boolean = localAudioLease.isHeld
   // False until native startup has completed the policy check. Never persisted or JS-writable.
   @Volatile var capturePrivacyReady: Boolean = false
     private set
 
-  @Volatile var speechCleanupFaulted: Boolean = false
-    private set
+  private val localAudioCleanupFault = AtomicBoolean()
+  val speechCleanupFaulted: Boolean get() = localAudioCleanupFault.get()
+  val replyCleanupFaulted: Boolean get() = localAudioCleanupFault.get()
 
-  internal fun recordSpeechCleanupFault() { speechCleanupFaulted = true }
+  internal fun recordLocalAudioCleanupFault() { localAudioCleanupFault.set(true) }
+  internal fun recordSpeechCleanupFault() = recordLocalAudioCleanupFault()
+  internal fun recordReplyCleanupFault() = recordLocalAudioCleanupFault()
 
 
   override val reactHost: ReactHost by lazy {

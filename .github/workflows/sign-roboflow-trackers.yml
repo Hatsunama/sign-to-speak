@@ -118,6 +118,12 @@ jobs:
           sh tests/run-java-tests.sh
           node --test scripts/*.test.mjs
           for test_file in scripts/*.test.py; do python3 "$test_file"; done
+      - name: Prepare pinned Reply ASR app inputs
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          mkdir -p generated
+          python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
       - name: Compile changed Android sources and tests before expensive native preparation
         timeout-minutes: 10
         run: |
@@ -170,6 +176,10 @@ jobs:
           python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
             "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
             "$RUNNER_TEMP/sign-evidence/qa-elf"
+          python3 scripts/check-reply-apk-integration.py \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/manifest.xml" "${apks[0]}" --abi arm64-v8a \
+            --readelf "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --evidence "$RUNNER_TEMP/sign-evidence/qa-reply-elf"
           sha256sum "${apks[0]}"
       - name: Compile affected x86_64 emulator instrumentation without execution
         timeout-minutes: 5

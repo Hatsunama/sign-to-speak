@@ -64,10 +64,11 @@ def verify(manifest, apk, abi):
     package = root.get('package')
     if package not in ('com.xmilo_at_your_side.sign_to_speak', 'com.xmilo_at_your_side.sign_to_speak.qa'):
         raise ValueError('Unexpected application package')
-    expected = {'android.permission.CAMERA', package + '.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
+    expected = {'android.permission.CAMERA', 'android.permission.RECORD_AUDIO',
+                package + '.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION'}
     permissions = [item.get(ANDROID + 'name') for item in root
                    if item.tag in ('uses-permission', 'uses-permission-sdk-23', 'uses-permission-sdk-m')]
-    if len(permissions) != 2 or set(permissions) != expected:
+    if len(permissions) != 3 or set(permissions) != expected:
         raise ValueError('Detector app must retain the exact no-network permission contract')
     application = root.find('application')
     if (application is None or application.get(ANDROID + 'allowAudioPlaybackCapture') != 'false' or

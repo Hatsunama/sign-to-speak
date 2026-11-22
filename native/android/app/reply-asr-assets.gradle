@@ -1,0 +1,160 @@
+import java.security.MessageDigest
+
+// reply-asr-component.py prepares this directory on the hosted builder. The app
+// consumes only local files; neither Gradle nor the Android runtime downloads a model.
+def replyStage = file("../../generated/reply-asr-component")
+def replyAssets = new File(replyStage, "assets")
+def replyNotices = new File(replyStage, "notices")
+android.sourceSets.main.assets.srcDir(replyAssets)
+android {
+    androidResources {
+        // AssetManager.openFd requires stored model entries, not deflated ZIP entries.
+        noCompress "bin"
+    }
+}
+
+def replyModels = [
+    "ggml-tiny.en.bin": [77704715L, "921e4cf8686fdd993dcd081a5da5b6c365bfde1162e72b08d75ac75289920b1f"],
+    "ggml-silero-v6.2.0.bin": [885098L, "2aa269b785eeb53a82983a20501ddf7c1d9c48e33ab63a41391ac6c9f7fb6987"],
+]
+def replyNoticeReceipts = [
+    "ARM-EXP-COPYRIGHT.txt": [158L, "bbba1005b7a0ecee1fb059e81a755d0fd2f9b9fa78371fa39d8d378963d92571"],
+    "ARM-OPTIMIZED-ROUTINES-LICENSE.txt": [13491L, "650afbf29f214451e02241adc42534e82c9d6ae2b38e2444b92b5a1ffcaf9346"],
+    "ATTRIBUTION.txt": [1269L, "63299e2ee1c91e6cd3814897ec8c1eae8f67b28f5e46af216d2c611740971e89"],
+    "FP16-MIT.txt": [1157L, "17e4f539024be2749ee729d1e2f01d24cef12ece8c9bf18e91a4349be29c80bf"],
+    "OPENAI-GPT2-LICENSE.txt": [1403L, "0dbeda4bc78823b1d67ec0ee414d8690ee4cad826bc9c147b215adc3af202436"],
+    "OPENAI-WHISPER-MIT.txt": [1063L, "b5d65a59060e68c4ff940e1eddfa6f94b2d68fdf58ed7f4dd57721c997e35e9d"],
+    "SILERO-MIT.txt": [1075L, "2e63e9a38b6e8fc0c7bc37ce174caca1862870856c6daf5697cfb785e925520b"],
+    "WHISPER-CPP-MIT.txt": [1078L, "94f29bbed6a22c35b992c5c6ebf0e7c92f13b836b90f36f461c9cf2f0f1d010d"],
+    "YARN-MIT.txt": [1088L, "c3ec00ded224ebaaa673373961babc2d79f3081914897f3325cb7927a76234c1"],
+]
+
+def sha256 = { File source ->
+    def hash = MessageDigest.getInstance("SHA-256")
+    source.withInputStream { input ->
+        byte[] block = new byte[1024 * 1024]
+        int count
+        while ((count = input.read(block)) != -1) hash.update(block, 0, count)
+    }
+    hash.digest().encodeHex().toString()
+}
+def requireExactFiles = { File directory, Map receipts, String role ->
+    if (!directory.isDirectory() || java.nio.file.Files.isSymbolicLink(directory.toPath())) {
+        throw new GradleException("Prepared Reply ASR ${role} directory missing or linked")
+    }
+    def children = directory.listFiles()
+    def actual = children?.findAll { it.isFile() }?.collect { it.name }?.toSet()
+    if (children == null || actual != receipts.keySet() || children.length != receipts.size()) {
+        throw new GradleException("Reply ASR ${role} inventory differs from the pinned set")
+    }
+    receipts.each { name, receipt ->
+        def source = new File(directory, name)
+        if (!source.isFile() || java.nio.file.Files.isSymbolicLink(source.toPath()) ||
+                source.length() != receipt[0] || sha256(source) != receipt[1]) {
+            throw new GradleException("Reply ASR ${role} missing, linked, or corrupt: ${name}")
+        }
+    }
+}
+
+def verifyReplyAsrInputs = tasks.register("verifyReplyAsrInputs") {
+    group = "verification"
+    description = "Fail closed unless the prepared Reply ASR source, models, and notices are exact."
+    doLast {
+        if (!replyStage.isDirectory() || java.nio.file.Files.isSymbolicLink(replyStage.toPath())) {
+            throw new GradleException("Prepared Reply ASR component directory missing or linked")
+        }
+        def rootNames = replyStage.listFiles()?.collect { it.name }?.toSet()
+        if (rootNames != ["assets", "inputs.json", "notices", "whisper.cpp"].toSet()) {
+            throw new GradleException("Prepared Reply ASR component has missing or unexpected root inputs")
+        }
+        def canonicalPins = file("../../vendor/reply-asr/pins.json")
+        def stagedPins = new File(replyStage, "inputs.json")
+        if (!stagedPins.isFile() || java.nio.file.Files.isSymbolicLink(stagedPins.toPath()) ||
+                stagedPins.length() != 6439L ||
+                sha256(stagedPins) != "5be8f1d0dc68ede318213a84903d4a1c35bed07a7fdbdd50db88791e348e80eb" ||
+                sha256(canonicalPins) != sha256(stagedPins)) {
+            throw new GradleException("Reply ASR staged pin receipt is missing, linked, or corrupt")
+        }
+        def modelDirectory = new File(replyAssets, "reply-asr")
+        if (replyAssets.listFiles()?.size() != 1 || !modelDirectory.isDirectory()) {
+            throw new GradleException("Reply ASR asset root contains an unexpected entry")
+        }
+        requireExactFiles(modelDirectory, replyModels, "model")
+        requireExactFiles(replyNotices, replyNoticeReceipts, "notice")
+
+        def source = new File(replyStage, "whisper.cpp")
+        if (!source.isDirectory() || java.nio.file.Files.isSymbolicLink(source.toPath())) {
+            throw new GradleException("Prepared repaired Whisper source tree missing or linked")
+        }
+        java.nio.file.Files.walk(source.toPath()).withCloseable { paths ->
+            paths.filter { !it.startsWith(new File(source, ".git").toPath()) }.forEach { path ->
+                if (java.nio.file.Files.isSymbolicLink(path)) {
+                    throw new GradleException("Prepared repaired Whisper source contains a link: ${path}")
+                }
+            }
+        }
+        def gitOutput = { List<String> arguments ->
+            providers.exec {
+                commandLine((["git", "-C", source.absolutePath] + arguments) as List<String>)
+            }.standardOutput.asText.get().replaceFirst(/\r?\n\z/, "")
+        }
+        if (gitOutput(["rev-parse", "HEAD"]) != "d1be6fde11ac6e0407606b4e42fe72d34add8037" ||
+                gitOutput(["rev-parse", "HEAD^{tree}"]) != "6fe2755682242a5c01aba65a22b3c0305d747841") {
+            throw new GradleException("Prepared Whisper source commit or tree differs from the pin")
+        }
+        def sourceChanges = gitOutput(["status", "--porcelain", "--untracked-files=all"]).readLines()
+        if (sourceChanges.size() != 2 || sourceChanges.toSet() !=
+                [" M include/whisper.h", " M src/whisper.cpp"].toSet()) {
+            throw new GradleException("Prepared Whisper source has missing, extra, or corrupt tracked inputs")
+        }
+        def repaired = [
+            "src/whisper.cpp": "7f867a2cfa0e5fca3d98fcc41379be87c5393d30130d6a777e3df60109add68c",
+            "include/whisper.h": "89dbdf9bd5415b5ed36446063eca9962fb4cf7580c3a3e20c1da8e1b8e90a125",
+        ]
+        repaired.each { relative, digest ->
+            def input = new File(source, relative)
+            if (!input.isFile() || java.nio.file.Files.isSymbolicLink(input.toPath()) || sha256(input) != digest) {
+                throw new GradleException("Prepared repaired Whisper source is missing, linked, or corrupt: ${relative}")
+            }
+        }
+    }
+}
+
+abstract class StageReplyAsrNotices extends DefaultTask {
+    @InputDirectory
+    @PathSensitive(PathSensitivity.RELATIVE)
+    abstract DirectoryProperty getNoticeDirectory()
+
+    @OutputDirectory
+    abstract DirectoryProperty getOutputDirectory()
+
+    @javax.inject.Inject
+    abstract org.gradle.api.file.FileSystemOperations getFileSystemOperations()
+
+    @TaskAction
+    void stage() {
+        fileSystemOperations.sync {
+            from(noticeDirectory)
+            into(outputDirectory.dir("reply-asr-notices"))
+            includeEmptyDirs = false
+        }
+    }
+}
+
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        def stageNotices = tasks.register("stage${variant.name.capitalize()}ReplyAsrNotices", StageReplyAsrNotices) {
+            dependsOn(verifyReplyAsrInputs)
+            noticeDirectory.set(replyNotices)
+            outputDirectory.set(layout.buildDirectory.dir("generated/reply-asr-notice-assets/${variant.name}"))
+        }
+        variant.sources.assets.addGeneratedSourceDirectory(stageNotices) { it.outputDirectory }
+    }
+}
+
+tasks.matching { it.name.startsWith("merge") && it.name.endsWith("Assets") }.configureEach {
+    dependsOn(verifyReplyAsrInputs)
+}
+tasks.matching { it.name.startsWith("package") && !it.name.endsWith("Resources") }.configureEach {
+    dependsOn(verifyReplyAsrInputs)
+}

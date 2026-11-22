@@ -11,6 +11,14 @@ public final class SpeechSessionTest {
     try { if (!latch.await(3, TimeUnit.SECONDS)) throw new AssertionError("timed out"); }
     catch (InterruptedException e) { throw new AssertionError(e); }
   }
+  static void await(BooleanSupplier condition) {
+    long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
+    while (!condition.getAsBoolean() && System.nanoTime() < deadline) {
+      try { Thread.sleep(5); }
+      catch (InterruptedException e) { throw new AssertionError(e); }
+    }
+    if (!condition.getAsBoolean()) throw new AssertionError("timed out waiting for condition");
+  }
   static class StubRequest implements SpeechSession.Request {
     final AtomicInteger cancels = new AtomicInteger(), closes = new AtomicInteger();
     byte[] seen;
@@ -64,7 +72,7 @@ public final class SpeechSessionTest {
     s.speak(t, new byte[]{'A'}, q::add); await(f.request.entered);
     s.speak(t, new byte[]{'B'}, q::add);
     check(take(q) == SpeechSession.Result.BUSY, "one job only");
-    s.stop(); check(f.request.cancels.get() > 0, "native cancelled");
+    s.stop(); await(() -> f.request.cancels.get() > 0); check(true, "native cancelled");
     f.request.release.countDown();
     check(take(q) == SpeechSession.Result.CANCELLED, "old synthesis cancelled");
     check(f.player.plays.get() == 0, "no stale playback");
@@ -75,8 +83,63 @@ public final class SpeechSessionTest {
     StubFactory f = new StubFactory(); f.player.entered = new CountDownLatch(1); f.player.release = new CountDownLatch(1);
     SpeechSession s = new SpeechSession(f); BlockingQueue<SpeechSession.Result> q = new LinkedBlockingQueue<>();
     s.speak(s.begin(true), new byte[]{'A'}, q::add); await(f.player.entered);
-    s.stop(); check(f.player.cancels.get() > 0 && f.player.guard.getAsBoolean(), "player cancelled and guarded");
+    s.stop(); await(() -> f.player.cancels.get() > 0);
+    check(f.player.guard.getAsBoolean(), "player cancelled and guarded");
     f.player.release.countDown(); check(take(q) == SpeechSession.Result.CANCELLED, "playback cancelled");
+    s.close();
+  }
+  static void blockingPlatformCancelNeverBlocksRevocationOrReentry() {
+    StubFactory f = new StubFactory();
+    CountDownLatch cancelEntered = new CountDownLatch(1), cancelRelease = new CountDownLatch(1);
+    f.player = new StubPlayer() {
+      @Override public void cancel() {
+        super.cancel();
+        cancelEntered.countDown();
+        await(cancelRelease);
+      }
+    };
+    f.player.entered = new CountDownLatch(1);
+    f.player.release = new CountDownLatch(1);
+    SpeechSession s = new SpeechSession(f);
+    BlockingQueue<SpeechSession.Result> q = new LinkedBlockingQueue<>();
+    long old = s.begin(true);
+    s.speak(old, new byte[]{'A'}, q::add);
+    await(f.player.entered);
+
+    ExecutorService callers = Executors.newFixedThreadPool(2);
+    Future<?> stopped = callers.submit(s::stop);
+    await(cancelEntered);
+    Future<Long> reopened = callers.submit(() -> s.begin(true));
+    boolean stopReturned = false, beginReturned = false;
+    long duringCleanup = -1;
+    try {
+      stopped.get(250, TimeUnit.MILLISECONDS);
+      stopReturned = true;
+    } catch (TimeoutException expected) {
+      // Captures the old defect without leaving the test process hung.
+    } catch (ExecutionException | InterruptedException failure) {
+      throw new AssertionError(failure);
+    }
+    try {
+      duringCleanup = reopened.get(250, TimeUnit.MILLISECONDS);
+      beginReturned = true;
+    } catch (TimeoutException expected) {
+      // A lifecycle/bridge caller must not wait behind platform cancellation.
+    } catch (ExecutionException | InterruptedException failure) {
+      throw new AssertionError(failure);
+    } finally {
+      cancelRelease.countDown();
+      f.player.release.countDown();
+      try { stopped.get(3, TimeUnit.SECONDS); reopened.get(3, TimeUnit.SECONDS); }
+      catch (Exception failure) { throw new AssertionError(failure); }
+      callers.shutdownNow();
+    }
+    check(stopReturned, "Stop returns while platform cancellation is blocked");
+    check(beginReturned && duringCleanup == 0,
+        "begin fails closed until cancelled job cleanup completes");
+    check(take(q) == SpeechSession.Result.CANCELLED, "revoked playback cannot complete successfully");
+    long fresh = s.begin(true);
+    check(fresh != 0 && fresh != old, "fresh generation opens only after cleanup");
     s.close();
   }
   static void cancellationFaultReported() {
@@ -91,7 +154,9 @@ public final class SpeechSessionTest {
     SpeechSession s = new SpeechSession(f); BlockingQueue<SpeechSession.Result> q = new LinkedBlockingQueue<>();
     s.speak(s.begin(true), new byte[]{'A'}, q::add); await(f.player.entered);
     s.stop();
+    await(() -> f.request.cancels.get() == 1 && f.player.cancels.get() == 1);
     check(f.request.cancels.get() == 1 && f.player.cancels.get() == 1, "both cancellation actions attempted");
+    await(s::isFaulted);
     check(s.isFaulted(), "cancellation fault latched");
     f.player.release.countDown();
     check(take(q) == SpeechSession.Result.CLEANUP_FAILED, "cancellation cleanup failure reported");
@@ -223,10 +288,12 @@ public final class SpeechSessionTest {
     s.stop();
     long retry = s.begin(true);
     s.speak(retry, new byte[]{'B'}, q::add);
-    check(take(q) == SpeechSession.Result.BUSY, "new generation waits for uncancellable factory to finish");
+    check(retry == 0 && take(q) == SpeechSession.Result.UNAVAILABLE,
+        "new generation is denied while uncancellable factory still owns cleanup");
     release.countDown();
     check(take(q) == SpeechSession.Result.CANCELLED, "factory result cancelled");
     check(f.request.closes.get() == 1 && f.request.seen == null, "loose request closed without synthesis");
+    retry = s.begin(true);
     s.speak(retry, new byte[]{'B'}, q::add);
     check(take(q) == SpeechSession.Result.COMPLETED, "fresh job starts after old factory closes");
     s.close();
@@ -291,7 +358,7 @@ public final class SpeechSessionTest {
     callback.close();
   }
   public static void main(String[] args) {
-    completedAndWiped(); busyAndCancelDuringSynthesis(); cancelDuringPlayback(); cancellationFaultReported(); fatalErrorPropagatesAfterCleanup(); fatalDispatchFailureWipesAndRecovers(); nativeLinkageFailureIsSanitized(); invalidInput(); pendingAndRejectedExecutor(); cancelBeforeFactoryReturns(); stopCancelsFactoryPreparationPromptly(); cleanupFaultAndCallbackFailure();
+    completedAndWiped(); busyAndCancelDuringSynthesis(); cancelDuringPlayback(); blockingPlatformCancelNeverBlocksRevocationOrReentry(); cancellationFaultReported(); fatalErrorPropagatesAfterCleanup(); fatalDispatchFailureWipesAndRecovers(); nativeLinkageFailureIsSanitized(); invalidInput(); pendingAndRejectedExecutor(); cancelBeforeFactoryReturns(); stopCancelsFactoryPreparationPromptly(); cleanupFaultAndCallbackFailure();
     System.out.println("SpeechSession: " + checks + " checks passed");
   }
 }

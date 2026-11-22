@@ -19,6 +19,22 @@ test('stop revokes an unresolved begin and cancels its late token', async () => 
   assert.deepEqual(cancelled, ['old']);
 });
 
+test('failClosed marks native ownership uncertain before cancelling, while stop does not', async () => {
+  const events = [];
+  const speech = createLocalSpeech({
+    begin: async () => 'speech:1',
+    markUncertain: () => events.push('uncertain'),
+    cancel: token => events.push(`cancel:${token}`),
+  });
+  await speech.start();
+  speech.stop();
+  assert.deepEqual(events, ['cancel:speech:1'], 'ordinary cancellation never latches a process fault');
+
+  await speech.start();
+  speech.failClosed();
+  assert.deepEqual(events, ['cancel:speech:1', 'uncertain', 'cancel:speech:1']);
+});
+
 test('late old begin cannot replace or stop a newer token', async () => {
   const first = deferred(), second = deferred();
   const cancelled = [];

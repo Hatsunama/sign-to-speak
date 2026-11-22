@@ -190,9 +190,9 @@ public final class SpeechTextContractTest {
       await(factory.synthesisEntered);
       check(Arrays.equals(factory.received, caller), "unicode reaches active synthesis unchanged");
       session.stop();
-      check(factory.cancels == 1, "stop cancels active synthesis");
       factory.releaseSynthesis.countDown();
       check(take(results) == SpeechSession.Result.CANCELLED, "stale unicode job is cancelled");
+      check(factory.cancels == 1, "completion follows active synthesis cancellation");
       check(factory.players == 0 && factory.plays == 0, "stale job never reaches playback");
       check(Arrays.equals(factory.ownedText, new byte[caller.length]), "cancelled text is erased");
       check(Arrays.equals(factory.ownedPcm, new short[3]), "cancelled PCM is erased");

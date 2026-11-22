@@ -43,5 +43,12 @@ export function createLocalSpeech(bridge, onCleanupFailed = () => {}) {
       token = null;
       cancel(previous);
     },
+    failClosed() {
+      try { bridge?.markUncertain?.(); } catch { /* Local retirement must still run. */ }
+      ++generation;
+      const previous = token;
+      token = null;
+      cancel(previous);
+    },
   });
 }

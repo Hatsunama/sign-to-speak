@@ -1,6 +1,6 @@
 name: Sign Android development checks
 
-# Only the reviewed same-repository candidate branch or a manual dispatch. No publishing.
+# Only either reviewed same-repository candidate branch or a manual dispatch. No publishing.
 on:
   workflow_dispatch:
   pull_request:
@@ -21,7 +21,8 @@ jobs:
     if: >-
       github.event_name == 'workflow_dispatch' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
-       github.head_ref == 'fix/android-native-foundation')
+       (github.head_ref == 'fix/android-native-foundation' ||
+        github.head_ref == 'codex/sign-to-speak-reply-app-20261121'))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     defaults:
@@ -57,6 +58,9 @@ jobs:
             vendor/pocket-tts-runtime/Cargo.toml vendor/pocket-tts-runtime/Cargo.lock vendor/pocket-tts-runtime/build.rs \
             android/app/src/main/jni/CMakeLists.txt android/app/src/main/cpp/pocket/CMakeLists.txt \
             scripts/build-pocket-runtime.sh scripts/prepare-pocket-assets.py scripts/check-pocket-apk-elf.py \
+            scripts/prepare-holistic-assets.py scripts/check-live-tracking-apk.py \
+            scripts/reply-asr-component.py scripts/check-reply-apk-integration.py \
+            vendor/reply-asr/pins.json android/app/reply-asr-assets.gradle \
             > "$RUNNER_TEMP/sign-evidence/source-checksums.txt"
       - name: Install locked JavaScript dependencies without lifecycle scripts
         run: npm ci --ignore-scripts --no-audit --no-fund
@@ -80,13 +84,108 @@ jobs:
       - name: Verify Android prerequisites without accepting new licenses
         id: sdk
         run: bash scripts/ci-sdk.sh
+      - name: Prepare pinned Reply ASR app inputs
+        id: reply_inputs
+        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        timeout-minutes: 8
+        run: |
+          set -euo pipefail
+          mkdir -p generated
+          python3 scripts/reply-asr-component.py prepare generated/reply-asr-component
+          sha256sum \
+            generated/reply-asr-component/inputs.json \
+            generated/reply-asr-component/assets/reply-asr/ggml-tiny.en.bin \
+            generated/reply-asr-component/assets/reply-asr/ggml-silero-v6.2.0.bin \
+            generated/reply-asr-component/whisper.cpp/src/whisper.cpp \
+            generated/reply-asr-component/whisper.cpp/include/whisper.h \
+            > "$RUNNER_TEMP/sign-evidence/reply-input-checksums.txt"
+          cp -R generated/reply-asr-component/notices "$RUNNER_TEMP/sign-evidence/reply-asr-notices"
+      - name: Stage pinned Robolectric native runtime fallback
+        id: robolectric_maven_fallback
+        if: ${{ !cancelled() && steps.reply_inputs.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          repo="$RUNNER_TEMP/robolectric-maven"
+          module="$repo/org/robolectric/nativeruntime-dist-compat/1.0.18"
+          jar="$module/nativeruntime-dist-compat-1.0.18.jar"
+          partial="$jar.partial"
+          pom="$module/nativeruntime-dist-compat-1.0.18.pom"
+          init="$RUNNER_TEMP/robolectric-maven.init.gradle"
+          mkdir -p "$module"
+          curl --fail --location --connect-timeout 15 --max-time 240 \
+            --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$partial" \
+            https://dl.cloudsmith.io/public/scandit/maven/maven/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar
+          test "$(stat -c %s "$partial")" = 159128857
+          printf '%s  %s\n' 'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef' "$partial" | sha256sum --check
+          mv "$partial" "$jar"
+          cat > "$pom" <<'POM'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>org.robolectric</groupId>
+            <artifactId>nativeruntime-dist-compat</artifactId>
+            <version>1.0.18</version>
+          </project>
+          POM
+          cat > "$init" <<'GRADLE'
+          def repoPath = System.getenv('ROBOLECTRIC_MAVEN_REPO')
+          if (repoPath == null) throw new GradleException('ROBOLECTRIC_MAVEN_REPO is required')
+          def centralMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          gradle.beforeSettings { settings ->
+            settings.pluginManagement.repositories {
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = settings.uri(centralMirror)
+              }
+            }
+          }
+          allprojects { project ->
+            project.buildscript.repositories {
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = project.uri(centralMirror)
+              }
+            }
+            project.repositories {
+              exclusiveContent {
+                forRepository {
+                  maven {
+                    name = 'robolectricNativeRuntimeCompatFallback'
+                    url = project.uri(repoPath)
+                    metadataSources {
+                      mavenPom()
+                      artifact()
+                    }
+                  }
+                }
+                filter {
+                  includeModule('org.robolectric', 'nativeruntime-dist-compat')
+                }
+              }
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = project.uri(centralMirror)
+              }
+            }
+            project.tasks.withType(Test).configureEach {
+              systemProperty 'robolectric.dependency.repo.id', 'googleMavenCentralMirror'
+              systemProperty 'robolectric.dependency.repo.url', centralMirror
+            }
+          }
+          GRADLE
+          test -s "$jar"
+          test -s "$pom"
+          test -s "$init"
+          echo "ROBOLECTRIC_MAVEN_REPO=$repo" >> "$GITHUB_ENV"
+          echo "ROBOLECTRIC_INIT_SCRIPT=$init" >> "$GITHUB_ENV"
       - name: Verify QA asset merger includes reviewed license asset producer
         id: license_assets_graph
-        if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.reply_inputs.outcome == 'success' && steps.robolectric_maven_fallback.outcome == 'success' }}
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --dry-run \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --dry-run \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
             -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
@@ -128,7 +227,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:testDebugUnitTest
@@ -137,16 +236,17 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --continue --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --continue --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions
       - name: Assemble unsigned development APK only
+        id: debug_apk
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:assembleDebug
@@ -158,6 +258,18 @@ jobs:
           python3 scripts/check-pocket-apk-elf.py "android/${apks[0]}" x86_64 \
             "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
             "$RUNNER_TEMP/sign-evidence/debug-elf"
+      - name: Audit local reply ASR packaging in actual development APK
+        id: reply_apk_gate
+        if: ${{ !cancelled() && steps.debug_apk.outcome == 'success' }}
+        run: |
+          set -euo pipefail
+          mapfile -t apks < <(find android/app/build/outputs/apk/debug -maxdepth 1 -name '*.apk' -type f)
+          test "${#apks[@]}" = 1
+          manifest="$RUNNER_TEMP/sign-evidence/debug-reply-manifest.xml"
+          "$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer" manifest print "${apks[0]}" > "$manifest"
+          python3 scripts/check-reply-apk-integration.py "$manifest" "${apks[0]}" --abi x86_64 \
+            --readelf "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --evidence "$RUNNER_TEMP/sign-evidence/debug-reply-elf"
       - name: Build unsigned arm64 test-only phone QA APK (no device operation)
         id: phone_qa
         if: ${{ !cancelled() && steps.host.outcome == 'success' && steps.sdk.outcome == 'success' && steps.pocket_runtime.outcome == 'success' && steps.pocket_assets.outcome == 'success' && steps.baseline.outputs.restored == 'true' }}
@@ -165,7 +277,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          qa_gradle_args=(--no-daemon --max-workers=2 --console=plain --stacktrace
+          qa_gradle_args=(--init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m'
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true
             -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false)
@@ -176,9 +288,14 @@ jobs:
           bash scripts/ci-phone-qa-audit.sh
           mapfile -t apks < <(find android/app/build/outputs/apk/qa -maxdepth 1 -name '*.apk' -type f)
           test "${#apks[@]}" = 1
+          python3 scripts/check-live-tracking-apk.py "$RUNNER_TEMP/sign-evidence/phone-qa/manifest.xml" "${apks[0]}" --abi arm64-v8a
           python3 scripts/check-pocket-apk-elf.py "${apks[0]}" arm64-v8a \
             "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
             "$RUNNER_TEMP/sign-evidence/qa-elf"
+          python3 scripts/check-reply-apk-integration.py \
+            "$RUNNER_TEMP/sign-evidence/phone-qa/manifest.xml" "${apks[0]}" --abi arm64-v8a \
+            --readelf "$ANDROID_HOME/ndk/27.1.12297006/toolchains/llvm/prebuilt/linux-x86_64/bin/llvm-readelf" \
+            --evidence "$RUNNER_TEMP/sign-evidence/qa-reply-elf"
           cd android
           ./gradlew --offline "${qa_gradle_args[@]}" \
             :app:dependencies --configuration qaRuntimeClasspath \
