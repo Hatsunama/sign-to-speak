@@ -645,7 +645,7 @@ public class ReplyLifecycleTest {
     }
   }
 
-  @Test public void invalidFinishWithoutCancellationStillFailsImmediately() {
+  @Test public void invalidFinishWithoutCancellationStillFailsImmediately() throws Exception {
     Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
     AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
     try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
@@ -659,23 +659,26 @@ public class ReplyLifecycleTest {
                when(session.finish(28L)).thenReturn(false);
              })) {
       ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
-      ReactApplicationContext context = mock(ReactApplicationContext.class);
-      when(context.getCurrentActivity()).thenReturn(controller.get());
-      LocalReplyModule bridge = new LocalReplyModule(context);
-      Promise begun = mock(Promise.class);
-      bridge.begin(begun);
+      ReplyOwner owner = new ReplyOwner(controller.get());
+      owner.resume();
+      AtomicReference<String> token = new AtomicReference<>();
+      owner.begin(value -> { token.set(value); return kotlin.Unit.INSTANCE; });
       Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
-      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
-      verify(begun).resolve(token.capture());
-      Promise finished = mock(Promise.class);
-      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
-        bridge.finish((String) token.getValue(), finished);
-        verify(finished, timeout(1000)).resolve(any());
-        assertResolvedResult(finished, "FAILED", null);
-        assertTrue(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
-      }
+      assertNotNull(token.get());
+      AtomicReference<ReplySession.Outcome> finished = new AtomicReference<>();
+      CountDownLatch finishSettled = new CountDownLatch(1);
+      owner.finish(token.get(), outcome -> {
+        finished.set(outcome);
+        finishSettled.countDown();
+        return kotlin.Unit.INSTANCE;
+      });
+      assertTrue(finishSettled.await(1, TimeUnit.SECONDS));
+      assertEquals(ReplySession.Status.FAILED, finished.get().status);
+      assertNull(finished.get().text);
+      assertTrue(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
       completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.FAILED));
       assertFalse(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
+      owner.close();
       controller.pause().stop().destroy();
     }
   }

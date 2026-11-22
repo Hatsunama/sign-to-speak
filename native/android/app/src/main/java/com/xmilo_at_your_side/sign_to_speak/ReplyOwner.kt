@@ -278,8 +278,15 @@ internal class ReplyOwner(private val activity: MainActivity) {
       pending = null; token = null; internalToken = 0L
       return
     }
-    pending = result
-    if (finishDone != null) deliver(result)
+    // The worker can finalize a result before Back/pause, then notify only after
+    // recorder/request cleanup. Lifecycle cancellation still owns settlement;
+    // only an observed cleanup failure may outrank it.
+    val settled = if (generation <= cancellationRequestedThrough &&
+        result.status != ReplySession.Status.CLEANUP_FAILED)
+      ReplySession.Outcome.status(ReplySession.Status.CANCELLED)
+    else result
+    pending = settled
+    if (finishDone != null) deliver(settled)
   }
 
   @Synchronized private fun deliver(result: ReplySession.Outcome) {
