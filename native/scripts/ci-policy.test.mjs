@@ -21,11 +21,12 @@ test('stages one exact Robolectric native JAR fallback before Gradle and scopes 
   assert.ok(fallbackIndex > 0 && fallbackIndex < firstGradleIndex && fallbackIndex < pocketIndex);
   assert.equal(fallback['timeout-minutes'], 5);
   for (const token of [
-    'https://repo1.maven.org/maven2/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar',
+    'https://dl.cloudsmith.io/public/scandit/maven/maven/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar',
     'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef',
     '159128857',
     '--connect-timeout 15',
     '--max-time 240',
+    "--proto-redir '=https'",
     '<artifactId>nativeruntime-dist-compat</artifactId>',
     "includeModule('org.robolectric', 'nativeruntime-dist-compat')",
     'exclusiveContent',

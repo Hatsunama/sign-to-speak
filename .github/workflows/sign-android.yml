@@ -114,8 +114,8 @@ jobs:
           init="$RUNNER_TEMP/robolectric-maven.init.gradle"
           mkdir -p "$module"
           curl --fail --location --connect-timeout 15 --max-time 240 \
-            --proto '=https' --tlsv1.2 --output "$partial" \
-            https://repo1.maven.org/maven2/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar
+            --proto '=https' --proto-redir '=https' --tlsv1.2 --output "$partial" \
+            https://dl.cloudsmith.io/public/scandit/maven/maven/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar
           test "$(stat -c %s "$partial")" = 159128857
           printf '%s  %s\n' 'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef' "$partial" | sha256sum --check
           mv "$partial" "$jar"

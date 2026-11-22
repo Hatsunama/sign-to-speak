@@ -19,6 +19,7 @@ internal class ReplyOwner(private val activity: MainActivity) {
   companion object {
     private val nextId = AtomicLong()
     private const val BEGIN_DEADLINE_MS = 30_000L
+    private const val CANCELLATION_DEADLINE_MS = 30_000L
     private const val FINISH_DEADLINE_MS = 120_000L
     private val finishExecutor = ThreadPoolExecutor(
       1, 1, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(4),
@@ -45,6 +46,8 @@ internal class ReplyOwner(private val activity: MainActivity) {
   private var beginDeadlineGeneration = 0L
   private var finishDeadline: Runnable? = null
   private var finishDeadlineGeneration = 0L
+  private var cancellationDeadline: Runnable? = null
+  private var cancellationDeadlineGeneration = 0L
   private var cancellationRequestedThrough = 0L
 
   @Synchronized fun resume() { if (!closed) resumed = true }
@@ -265,6 +268,7 @@ internal class ReplyOwner(private val activity: MainActivity) {
   @Synchronized private fun complete(generation: Long, result: ReplySession.Outcome) {
     cancelBeginDeadline(generation)
     cancelFinishDeadline(generation)
+    cancelCancellationDeadline(generation)
     if (result.status == ReplySession.Status.CLEANUP_FAILED || session?.isFaulted == true)
       app.recordReplyCleanupFault()
     releaseLease()
@@ -300,6 +304,37 @@ internal class ReplyOwner(private val activity: MainActivity) {
     finishDeadlineGeneration = 0L
   }
 
+  private fun armCancellationDeadline(generation: Long) {
+    // A completed turn may retain its token/pending result after releasing the lease.
+    // There is no worker cleanup left to watch in that state.
+    if (generation == 0L || lease == null || cancellationDeadlineGeneration == generation) return
+    cancellationDeadline?.let { deadlineHandler.removeCallbacks(it) }
+    lateinit var deadline: Runnable
+    deadline = Runnable {
+      val stalled = synchronized(this) {
+        if (cancellationDeadline !== deadline ||
+            cancellationDeadlineGeneration != generation) {
+          false
+        } else {
+          cancellationDeadline = null
+          cancellationDeadlineGeneration = 0L
+          true
+        }
+      }
+      if (stalled) app.recordLocalAudioCleanupFault()
+    }
+    cancellationDeadline = deadline
+    cancellationDeadlineGeneration = generation
+    deadlineHandler.postDelayed(deadline, CANCELLATION_DEADLINE_MS)
+  }
+
+  private fun cancelCancellationDeadline(generation: Long) {
+    if (generation == 0L || cancellationDeadlineGeneration != generation) return
+    cancellationDeadline?.let { deadlineHandler.removeCallbacks(it) }
+    cancellationDeadline = null
+    cancellationDeadlineGeneration = 0L
+  }
+
   @Synchronized fun cancel(requestToken: String) { if (requestToken == token) cancelAll() }
 
   @Synchronized fun cancelAll() {
@@ -310,6 +345,9 @@ internal class ReplyOwner(private val activity: MainActivity) {
     // settles it only after recorder/request cleanup. With no finish waiter, stale
     // completion needs only release the lease and may be ignored.
     if (finishDone == null) internalToken = 0L
+    // Worker completion is the only proof that recorder/request cleanup finished.
+    // Fault a cancellation that parks in platform code, without releasing its lease.
+    armCancellationDeadline(local)
     // Logical authority is revoked immediately. This never touches AudioRecord and
     // therefore cannot park Back/pause behind a platform start/stop call.
     target?.invalidate(local)
@@ -326,6 +364,7 @@ internal class ReplyOwner(private val activity: MainActivity) {
     val local = internalToken
     if (finishDone == null) internalToken = 0L
     val target = session ?: return
+    armCancellationDeadline(local)
     target.invalidate(local)
     cancellationRequestedThrough = maxOf(cancellationRequestedThrough, local)
     requestClose(target, local)
@@ -370,7 +409,17 @@ internal class ReplyOwner(private val activity: MainActivity) {
           return@execute
         }
         if (target.isFaulted) app.recordReplyCleanupFault()
-        if (!accepted) failFinish(generation, ReplySession.Status.FAILED, done, settlement)
+        if (!accepted) {
+          val cancelled = synchronized(this) {
+            generation <= cancellationRequestedThrough ||
+              (internalToken == generation && token != "$identity:$generation")
+          }
+          // Back/pause may invalidate while finish is queued. In that case false
+          // means cancellation won the race, not that finish itself failed. Keep
+          // the waiter attached until worker cleanup completes or its watchdog fires.
+          if (!cancelled)
+            failFinish(generation, ReplySession.Status.FAILED, done, settlement)
+        }
       }
     } catch (_: RuntimeException) {
       // Dispatch failure makes recorder cleanup unknowable and permanently faults audio.

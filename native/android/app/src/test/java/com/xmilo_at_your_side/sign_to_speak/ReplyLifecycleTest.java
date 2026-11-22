@@ -184,6 +184,94 @@ public class ReplyLifecycleTest {
       assertFalse(app.getReplyCleanupFaulted());
       assertFalse(app.getSpeechCleanupFaulted());
       assertFalse(app.isLocalAudioLeaseHeld());
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(31, TimeUnit.SECONDS);
+      assertFalse("completed cancellation must disarm its watchdog", app.getReplyCleanupFaulted());
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void stalledOrdinaryCancellationFaultsButKeepsLeaseUntilWorkerCompletes()
+      throws Exception {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    CountDownLatch cancelEntered = new CountDownLatch(1), releaseCancel = new CountDownLatch(1);
+    CountDownLatch cancelReturned = new CountDownLatch(1);
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 39L;
+               });
+               doAnswer(call -> {
+                 cancelEntered.countDown();
+                 releaseCancel.await();
+                 cancelReturned.countDown();
+                 return null;
+               }).when(session).cancel(39L);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+
+      bridge.cancel((String) token.getValue());
+      assertTrue(cancelEntered.await(1, TimeUnit.SECONDS));
+      MainApplication app = (MainApplication) controller.get().getApplication();
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(29, TimeUnit.SECONDS);
+      assertFalse(app.getReplyCleanupFaulted());
+      assertTrue(app.isLocalAudioLeaseHeld());
+
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(2, TimeUnit.SECONDS);
+      assertTrue("stalled cancellation must fault both local audio paths",
+          app.getReplyCleanupFaulted() && app.getSpeechCleanupFaulted());
+      assertTrue("watchdog must not claim worker cleanup", app.isLocalAudioLeaseHeld());
+
+      releaseCancel.countDown();
+      assertTrue(cancelReturned.await(1, TimeUnit.SECONDS));
+      assertTrue("platform cancellation alone does not prove worker cleanup",
+          app.isLocalAudioLeaseHeld());
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+      assertFalse(app.isLocalAudioLeaseHeld());
+      controller.pause().stop().destroy();
+    } finally {
+      releaseCancel.countDown();
+    }
+  }
+
+  @Test public void cancellingACompletedPendingResultDoesNotArmCleanupWatchdog() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+               completion.set(call.getArgument(2));
+               ((ReplySession.Started) call.getArgument(1)).complete(true);
+               return 40L;
+             }))) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+
+      completion.get().complete(ReplySession.Outcome.completed("already done"));
+      MainApplication app = (MainApplication) controller.get().getApplication();
+      assertFalse(app.isLocalAudioLeaseHeld());
+      bridge.cancel((String) token.getValue());
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(31, TimeUnit.SECONDS);
+      assertFalse(app.getReplyCleanupFaulted());
+      assertFalse(app.getSpeechCleanupFaulted());
       controller.pause().stop().destroy();
     }
   }
@@ -453,6 +541,91 @@ public class ReplyLifecycleTest {
         completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
         assertResolvedResult(finished, "CANCELLED", null);
       }
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void backWaitsForWorkerWhenQueuedFinishObservesInvalidation() throws Exception {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    CountDownLatch finishEntered = new CountDownLatch(1), releaseFinish = new CountDownLatch(1);
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(
+             DefaultReactActivityDelegate.class,
+             (delegate, ignored) -> when(delegate.onBackPressed()).thenReturn(true));
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 27L;
+               });
+               when(session.finish(27L)).thenAnswer(call -> {
+                 finishEntered.countDown();
+                 releaseFinish.await();
+                 return false;
+               });
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      MainActivity activity = controller.get();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(activity);
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        assertTrue(finishEntered.await(1, TimeUnit.SECONDS));
+        activity.onBackPressed();
+        releaseFinish.countDown();
+        verify(sessions.constructed().get(0), timeout(1000)).finish(27L);
+        verify(finished, after(100).never()).resolve(any());
+        assertTrue(((MainApplication) activity.getApplication()).isLocalAudioLeaseHeld());
+
+        completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+        assertResolvedResult(finished, "CANCELLED", null);
+        assertFalse(((MainApplication) activity.getApplication()).isLocalAudioLeaseHeld());
+      }
+      controller.pause().stop().destroy();
+    } finally {
+      releaseFinish.countDown();
+    }
+  }
+
+  @Test public void invalidFinishWithoutCancellationStillFailsImmediately() {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 28L;
+               });
+               when(session.finish(28L)).thenReturn(false);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        verify(finished, timeout(1000)).resolve(any());
+        assertResolvedResult(finished, "FAILED", null);
+        assertTrue(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
+      }
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.FAILED));
+      assertFalse(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
       controller.pause().stop().destroy();
     }
   }
