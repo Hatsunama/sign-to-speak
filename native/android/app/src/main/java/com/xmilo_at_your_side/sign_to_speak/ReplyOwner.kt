@@ -10,6 +10,9 @@ import com.facebook.react.bridge.UiThreadUtil
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import java.util.concurrent.ArrayBlockingQueue
+import java.util.concurrent.ThreadPoolExecutor
+import java.util.concurrent.TimeUnit
 
 /** Activity-scoped, foreground-only microphone authority. It never automatically resumes. */
 internal class ReplyOwner(private val activity: MainActivity) {
@@ -17,6 +20,10 @@ internal class ReplyOwner(private val activity: MainActivity) {
     private val nextId = AtomicLong()
     private const val BEGIN_DEADLINE_MS = 30_000L
     private const val FINISH_DEADLINE_MS = 120_000L
+    private val cancellationExecutor = ThreadPoolExecutor(
+      1, 1, 0L, TimeUnit.MILLISECONDS, ArrayBlockingQueue(1),
+      { task -> Thread(task, "reply-owner-cancel").apply { isDaemon = true } },
+      ThreadPoolExecutor.AbortPolicy())
   }
   private val identity = nextId.incrementAndGet().toString()
   private val app get() = activity.application as MainApplication
@@ -34,6 +41,7 @@ internal class ReplyOwner(private val activity: MainActivity) {
   private var beginDeadlineGeneration = 0L
   private var finishDeadline: Runnable? = null
   private var finishDeadlineGeneration = 0L
+  private var cancellationRequestedThrough = 0L
 
   @Synchronized fun resume() { if (!closed) resumed = true }
 
@@ -93,13 +101,16 @@ internal class ReplyOwner(private val activity: MainActivity) {
     finishDone = null
     val localRef = AtomicLong()
     val beginSettled = AtomicBoolean()
+    val outcomeEndedBegin = AtomicBoolean()
     val earlyStarted = AtomicReference<Boolean>()
     val earlyOutcome = AtomicReference<ReplySession.Outcome>()
-    fun resolveBegin(value: String?) {
+    fun resolveBegin(value: String?): Boolean {
       if (beginSettled.compareAndSet(false, true)) {
-        cancelBeginDeadline(localRef.get())
+        synchronized(this) { cancelBeginDeadline(localRef.get()) }
         done(value)
+        return true
       }
+      return false
     }
     fun handleStarted(recording: Boolean) {
       UiThreadUtil.runOnUiThread {
@@ -113,32 +124,65 @@ internal class ReplyOwner(private val activity: MainActivity) {
           if (recording && token == "$identity:$current" && eligible()) resolveBegin(token)
           else {
             if (token == "$identity:$current") { token = null; internalToken = 0L }
-            // A deadline is only a fail-closed fence. JavaScript requests
-            // cancellation separately, and a parked recorder start must not block
-            // the main looper after the fence has fired.
-            if (recording && !app.replyCleanupFaulted) session?.cancel(current)
+            // A parked recorder start must be cancelled without ever blocking the
+            // main looper. The generation-keyed helper deduplicates a timeout's
+            // earlier request from this late start notification.
+            if (recording) requestCancellation(current)
             resolveBegin(null)
           }
         }
       }
     }
     val local = session!!.begin(true, { recording -> handleStarted(recording) }, { result ->
+      // Completion is terminal for begin even if the platform's started callback
+      // never arrived. Settle before the main-looper deadline can report a timeout.
+      val beginEndedHere = resolveBegin(null)
+      if (beginEndedHere) outcomeEndedBegin.set(true)
       var current = localRef.get()
       if (current == 0L) {
         earlyOutcome.set(result)
         current = localRef.get()
-        if (current != 0L && earlyOutcome.compareAndSet(result, null)) complete(current, result)
-      } else complete(current, result)
+        if (current != 0L && earlyOutcome.compareAndSet(result, null)) {
+          if (outcomeEndedBegin.get()) synchronized(this) {
+            if (token == "$identity:$current") token = null
+          }
+          complete(current, result)
+        }
+      } else {
+        if (outcomeEndedBegin.get()) synchronized(this) {
+          if (token == "$identity:$current") token = null
+        }
+        complete(current, result)
+      }
     })
     if (local == 0L) { releaseLease(); resolveBegin(null); return }
     internalToken = local
     token = "$identity:$local"
     localRef.set(local)
     if (!beginSettled.get()) {
-      val deadline = Runnable {
-        if (beginSettled.compareAndSet(false, true)) {
-          app.recordLocalAudioCleanupFault()
-          done(null)
+      lateinit var deadline: Runnable
+      deadline = Runnable {
+        val timedOut = synchronized(this) {
+          if (beginDeadline !== deadline || beginDeadlineGeneration != local) {
+            false
+          } else if (internalToken != local || !beginSettled.compareAndSet(false, true)) {
+            beginDeadline = null
+            beginDeadlineGeneration = 0L
+            false
+          } else {
+            beginDeadline = null
+            beginDeadlineGeneration = 0L
+            if (token == "$identity:$local") token = null
+            true
+          }
+        }
+        if (timedOut) {
+          try {
+            app.recordLocalAudioCleanupFault()
+            done(null)
+          } finally {
+            requestCancellation(local)
+          }
         }
       }
       beginDeadline = deadline
@@ -146,7 +190,12 @@ internal class ReplyOwner(private val activity: MainActivity) {
       deadlineHandler.postDelayed(deadline, BEGIN_DEADLINE_MS)
     }
     earlyStarted.getAndSet(null)?.let { handleStarted(it) }
-    earlyOutcome.getAndSet(null)?.let { complete(local, it) }
+    earlyOutcome.getAndSet(null)?.let {
+      if (outcomeEndedBegin.get()) synchronized(this) {
+        if (token == "$identity:$local") token = null
+      }
+      complete(local, it)
+    }
   }
 
   @Synchronized fun finish(requestToken: String, done: (ReplySession.Outcome) -> Unit) {
@@ -173,13 +222,32 @@ internal class ReplyOwner(private val activity: MainActivity) {
       done(ReplySession.Outcome.status(ReplySession.Status.FAILED))
     } else if (finishDone != null && internalToken != 0L) {
       val local = internalToken
-      val deadline = Runnable {
-        if (settlement.compareAndSet(false, true)) {
-          app.recordLocalAudioCleanupFault()
-          // Keep the generation/token until cleanup completes. This both retains
-          // the lease and lets the JS watchdog's separate cancel still reach the
-          // worker after this callback has been settled.
-          done(ReplySession.Outcome.status(ReplySession.Status.CLEANUP_FAILED))
+      lateinit var deadline: Runnable
+      deadline = Runnable {
+        val callback = synchronized(this) {
+          if (internalToken != local || finishDeadline !== deadline ||
+              finishDeadlineGeneration != local || finishDone !== done ||
+              finishSettled !== settlement || !settlement.compareAndSet(false, true)) {
+            null
+          } else {
+            // Detach the settled callback without claiming worker cleanup. The
+            // generation and lease remain owned until complete() arrives.
+            finishDeadline = null
+            finishDeadlineGeneration = 0L
+            finishDone = null
+            finishSettled = null
+            pending = null
+            token = null
+            done
+          }
+        }
+        if (callback != null) {
+          try {
+            app.recordLocalAudioCleanupFault()
+            callback(ReplySession.Outcome.status(ReplySession.Status.CLEANUP_FAILED))
+          } finally {
+            requestCancellation(local)
+          }
         }
       }
       finishDeadline = deadline
@@ -195,7 +263,7 @@ internal class ReplyOwner(private val activity: MainActivity) {
       app.recordReplyCleanupFault()
     releaseLease()
     if (generation != internalToken) return
-    if (app.replyCleanupFaulted && finishDone == null) {
+    if (finishDone == null && token != "$identity:$generation") {
       pending = null; token = null; internalToken = 0L
       return
     }
@@ -234,7 +302,12 @@ internal class ReplyOwner(private val activity: MainActivity) {
     // settles it only after recorder/request cleanup. With no finish waiter, stale
     // completion needs only release the lease and may be ignored.
     if (finishDone == null) internalToken = 0L
-    try { if (local != 0L) session?.cancel(local) }
+    try {
+      if (local != 0L && local > cancellationRequestedThrough) {
+        cancellationRequestedThrough = local
+        session?.cancel(local)
+      }
+    }
     catch (_: RuntimeException) {
       app.recordReplyCleanupFault()
       if (finishDone != null) deliver(ReplySession.Outcome.status(ReplySession.Status.CLEANUP_FAILED))
@@ -255,4 +328,24 @@ internal class ReplyOwner(private val activity: MainActivity) {
   }
 
   private fun releaseLease() { lease?.close(); lease = null }
+
+  /** Timeout cancellation may touch platform audio and must never run on the main looper. */
+  private fun requestCancellation(generation: Long) {
+    if (generation == 0L) return
+    val target = synchronized(this) {
+      if (generation <= cancellationRequestedThrough) return
+      cancellationRequestedThrough = generation
+      session
+    } ?: return
+    try {
+      cancellationExecutor.execute {
+        try { target.cancel(generation) }
+        catch (_: RuntimeException) { app.recordReplyCleanupFault() }
+        if (target.isFaulted) app.recordReplyCleanupFault()
+      }
+    } catch (_: RuntimeException) {
+      // The queue is deliberately bounded. Failure to submit leaves cleanup uncertain.
+      app.recordReplyCleanupFault()
+    }
+  }
 }
