@@ -6,9 +6,44 @@ import {validateWorkflow} from './ci-policy.mjs';
 const require = createRequire(import.meta.url);
 const yaml = require('yaml');
 const source = readFileSync(new URL('../../.github/workflows/sign-android.yml', import.meta.url), 'utf8');
+const baselineSource = readFileSync(new URL('./ci-isolation-baseline.sh', import.meta.url), 'utf8');
 const config = yaml.parse(source);
 test('development workflow satisfies cost, permission, provenance and test gates', () => {
   assert.deepEqual(validateWorkflow(config), []);
+});
+test('stages one exact Robolectric native JAR fallback before Gradle and scopes it to both unit suites', () => {
+  const steps = config.jobs.android.steps;
+  const fallbackIndex = steps.findIndex(step => step.id === 'robolectric_maven_fallback');
+  const fallback = steps[fallbackIndex];
+  const firstGradleIndex = steps.findIndex(step => step.run?.includes('./gradlew'));
+  const pocketIndex = steps.findIndex(step => step.id === 'pocket_runtime');
+
+  assert.ok(fallbackIndex > 0 && fallbackIndex < firstGradleIndex && fallbackIndex < pocketIndex);
+  assert.equal(fallback['timeout-minutes'], 5);
+  for (const token of [
+    'https://repo1.maven.org/maven2/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar',
+    'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef',
+    '159128857',
+    '--connect-timeout 15',
+    '--max-time 240',
+    '<artifactId>nativeruntime-dist-compat</artifactId>',
+    "includeModule('org.robolectric', 'nativeruntime-dist-compat')",
+    'exclusiveContent',
+    'allprojects',
+    'ROBOLECTRIC_MAVEN_REPO',
+    'ROBOLECTRIC_INIT_SCRIPT',
+  ]) assert.ok(fallback.run.includes(token), `missing fallback policy token: ${token}`);
+  assert.equal((fallback.run.match(/\bcurl\b/g) ?? []).length, 1);
+  assert.doesNotMatch(fallback.run, /--retry/);
+  assert.match(fallback.run, /stat -c %s[^\n]+159128857|159128857[^\n]+stat -c %s/);
+  assert.match(fallback.run, /sha256sum --check/);
+  assert.ok(steps[firstGradleIndex].if.includes("steps.robolectric_maven_fallback.outcome == 'success'"));
+
+  const unitStep = steps.find(step => step.run?.includes(':app:testDebugUnitTest'));
+  assert.equal((unitStep.run.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
+  assert.equal((source.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
+  assert.equal((baselineSource.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
+  assert.match(baselineSource, /:\s*"\$\{ROBOLECTRIC_INIT_SCRIPT:\?[^}]+\}"/);
 });
 for (const [name, mutate] of [
   ['ungated pull requests', c => { c.jobs.android.if = ''; }],
@@ -34,6 +69,8 @@ for (const [name, mutate] of [
   ['missing x86 source compile', c => { c.jobs.android.steps.find(s => s.id === 'pocket_runtime').run = 'bash scripts/build-pocket-runtime.sh arm64-v8a'; }],
   ['missing model preparation', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'pocket_assets'); }],
   ['missing reply input preparation', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'reply_inputs'); }],
+  ['missing Robolectric Maven fallback', c => { c.jobs.android.steps = c.jobs.android.steps.filter(s => s.id !== 'robolectric_maven_fallback'); }],
+  ['altered Robolectric native JAR digest', c => { const s = c.jobs.android.steps.find(s => s.id === 'robolectric_maven_fallback'); s.run = s.run.replace('a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef', '06c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef'); }],
   ['late reply input preparation', c => { const steps=c.jobs.android.steps; const index=steps.findIndex(s=>s.id==='reply_inputs'); steps.push(...steps.splice(index,1)); }],
   ['missing phone instrumentation', c => { const s = c.jobs.android.steps.find(s => s.id === 'phone_qa'); s.run = s.run.replace(':app:assembleQaAndroidTest', ''); }],
   ['default phone test signing fallback', c => { const s = c.jobs.android.steps.find(s => s.id === 'phone_qa'); s.run = s.run.replace('-Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false', ''); }],

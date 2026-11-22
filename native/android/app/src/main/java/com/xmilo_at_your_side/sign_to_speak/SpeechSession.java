@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.CountDownLatch;
 import java.util.function.BooleanSupplier;
 
 /** Owns one local synthesis and playback job at a time. It retains no speech history. */
@@ -41,7 +42,8 @@ public final class SpeechSession implements AutoCloseable {
     final byte[] ascii;
     final Completion done;
     volatile boolean cancelled, cancellationFailed;
-    boolean started, abandoned;
+    boolean started, abandoned, cancellationDispatched, cleanupStarted;
+    final CountDownLatch cancellationFinished = new CountDownLatch(1);
     Request request;
     Player player;
     short[] pcm;
@@ -53,6 +55,7 @@ public final class SpeechSession implements AutoCloseable {
   private final Object gate = new Object();
   private final Factory factory;
   private final ExecutorService executor;
+  private final ExecutorService cancellationExecutor;
   private long generation;
   private boolean eligible, closed, faulted;
   private Job current;
@@ -67,13 +70,21 @@ public final class SpeechSession implements AutoCloseable {
   public SpeechSession(Factory factory, ExecutorService executor) {
     this.factory = Objects.requireNonNull(factory);
     this.executor = Objects.requireNonNull(executor);
+    this.cancellationExecutor = Executors.newSingleThreadExecutor(r -> {
+      Thread t = new Thread(r, "sign-to-speak-cancel");
+      t.setDaemon(true);
+      return t;
+    });
   }
 
   /** Opens a new eligible generation, or returns zero when speech cannot start. */
   public long begin(boolean allowed) {
     stop();
     synchronized (gate) {
-      if (closed || faulted || !allowed) return 0;
+      // The previous job owns its native resources until its cleanup and
+      // completion callback finish. Never let a fresh generation race those
+      // resources, even though platform cancellation itself runs off-caller.
+      if (closed || faulted || !allowed || current != null) return 0;
       eligible = true;
       return generation;
     }
@@ -226,6 +237,19 @@ public final class SpeechSession implements AutoCloseable {
       boolean cleanupFailed = false;
       Arrays.fill(job.ascii, (byte) 0);
       if (job.pcm != null) Arrays.fill(job.pcm, (short) 0);
+      boolean waitForCancellation;
+      synchronized (gate) {
+        job.cleanupStarted = true;
+        waitForCancellation = job.cancellationDispatched;
+      }
+      if (waitForCancellation) {
+        boolean interrupted = false;
+        for (;;) {
+          try { job.cancellationFinished.await(); break; }
+          catch (InterruptedException ignored) { interrupted = true; }
+        }
+        if (interrupted) Thread.currentThread().interrupt();
+      }
       cleanupFailed |= closePlayer(job.player);
       cleanupFailed |= closePlayer(loosePlayer);
       cleanupFailed |= closeRequest(job.request);
@@ -233,6 +257,7 @@ public final class SpeechSession implements AutoCloseable {
       synchronized (gate) {
         if (cleanupFailed) faulted = true;
         if (current == job) current = null;
+        if (job.cancelled && result == Result.COMPLETED) result = Result.CANCELLED;
       }
       notifySafely(job.done, cleanupFailed || job.cancellationFailed ? Result.CLEANUP_FAILED : result);
     }
@@ -253,28 +278,59 @@ public final class SpeechSession implements AutoCloseable {
     catch (RuntimeException | LinkageError ignored) { /* An application callback cannot strand the owner. */ }
   }
 
-  /** Invalidates in-flight work and calls cancellation without waiting for its worker. */
+  private static final class Cancellation {
+    final Job job;
+    final Request request;
+    final Player player;
+    Cancellation(Job job, Request request, Player player) {
+      this.job = job; this.request = request; this.player = player;
+    }
+  }
+
+  /** Invalidates in-flight work before returning; platform cancellation runs off-caller. */
   public void stop() {
-    Job job;
-    Request request;
-    Player player;
+    Cancellation cancellation;
     synchronized (gate) {
       generation++;
       eligible = false;
-      job = current;
+      Job job = current;
       if (job == null) return;
       job.cancelled = true;
-      request = job.request;
-      player = job.player;
+      if (job.cleanupStarted || job.cancellationDispatched) return;
+      job.cancellationDispatched = true;
+      cancellation = new Cancellation(job, job.request, job.player);
     }
+    try {
+      cancellationExecutor.execute(() -> cancel(cancellation));
+    } catch (RuntimeException dispatchFailure) {
+      synchronized (gate) {
+        cancellation.job.cancellationFailed = true;
+        faulted = true;
+      }
+      cancellation.job.cancellationFinished.countDown();
+    }
+  }
+
+  private void cancel(Cancellation cancellation) {
     boolean failed = false;
-    if (request != null) {
-      try { request.cancel(); } catch (RuntimeException | LinkageError failure) { failed = true; }
+    try {
+      // Stop queued audio before entering a native request cancellation that
+      // may itself take time. Both are still attempted on failure.
+      if (cancellation.player != null) {
+        try { cancellation.player.cancel(); }
+        catch (RuntimeException | LinkageError failure) { failed = true; }
+      }
+      if (cancellation.request != null) {
+        try { cancellation.request.cancel(); }
+        catch (RuntimeException | LinkageError failure) { failed = true; }
+      }
+      if (failed) synchronized (gate) {
+        cancellation.job.cancellationFailed = true;
+        faulted = true;
+      }
+    } finally {
+      cancellation.job.cancellationFinished.countDown();
     }
-    if (player != null) {
-      try { player.cancel(); } catch (RuntimeException | LinkageError failure) { failed = true; }
-    }
-    if (failed) synchronized (gate) { job.cancellationFailed = true; faulted = true; }
   }
 
   @Override public void close() {
@@ -284,5 +340,6 @@ public final class SpeechSession implements AutoCloseable {
     }
     stop();
     executor.shutdown();
+    cancellationExecutor.shutdown();
   }
 }

@@ -11,6 +11,9 @@ import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReadableMap;
 import com.facebook.react.defaults.DefaultReactActivityDelegate;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
@@ -30,6 +33,105 @@ import org.robolectric.annotation.Config;
 @Config(sdk = 36, application = MainApplication.class,
     shadows = {ReactBootstrapShadow.class, CaptureAudioManagerShadow.class})
 public class ReplyLifecycleTest {
+  @Test public void backReturnsBeforeBlockingNativeCancellation() throws Exception {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    CountDownLatch cancelEntered = new CountDownLatch(1), releaseCancel = new CountDownLatch(1);
+    CountDownLatch invalidationEntered = new CountDownLatch(1);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(
+             DefaultReactActivityDelegate.class,
+             (delegate, ignored) -> when(delegate.onBackPressed()).thenReturn(true));
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 53L;
+               });
+               doAnswer(call -> {
+                 cancelEntered.countDown();
+                 releaseCancel.await();
+                 return null;
+               }).when(session).cancel(53L);
+               doAnswer(call -> {
+                 invalidationEntered.countDown();
+                 return null;
+               }).when(session).invalidate(53L);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      MainActivity activity = controller.get();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(activity);
+      Promise begun = mock(Promise.class);
+      new LocalReplyModule(context).begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+
+      ExecutorService caller = Executors.newSingleThreadExecutor();
+      try {
+        Future<?> returned = caller.submit(activity::onBackPressed);
+        returned.get(500, TimeUnit.MILLISECONDS);
+        assertTrue("Back must synchronously revoke the reply generation",
+            invalidationEntered.await(100, TimeUnit.MILLISECONDS));
+        assertTrue("native cancellation must still be requested", cancelEntered.await(1, TimeUnit.SECONDS));
+      } finally {
+        releaseCancel.countDown();
+        caller.shutdownNow();
+      }
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+      controller.pause().stop().destroy();
+    }
+  }
+
+  @Test public void finishArmsDeadlineBeforeBlockingNativeStop() throws Exception {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    CountDownLatch finishEntered = new CountDownLatch(1), releaseFinish = new CountDownLatch(1);
+    CountDownLatch cancellationEntered = new CountDownLatch(1);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(DefaultReactActivityDelegate.class);
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 59L;
+               });
+               when(session.finish(59L)).thenAnswer(call -> {
+                 finishEntered.countDown();
+                 releaseFinish.await();
+                 return true;
+               });
+               doAnswer(call -> {
+                 cancellationEntered.countDown();
+                 return null;
+               }).when(session).cancel(59L);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(controller.get());
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        assertTrue("native stop must run off the bridge caller", finishEntered.await(1, TimeUnit.SECONDS));
+        Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(121, TimeUnit.SECONDS);
+        assertResolvedResult(finished, "CLEANUP_FAILED", null);
+        assertTrue("watchdog cancellation must enter while native finish remains blocked",
+            cancellationEntered.await(1, TimeUnit.SECONDS));
+        assertTrue(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
+      } finally {
+        releaseFinish.countDown();
+      }
+      completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
+      assertFalse(((MainApplication) controller.get().getApplication()).isLocalAudioLeaseHeld());
+      controller.pause().stop().destroy();
+    }
+  }
+
   @Test public void markUncertainFaultsProcessAndBlocksBothAudioBridgesAcrossRecreation()
       throws Exception {
     Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
@@ -304,7 +406,7 @@ public class ReplyLifecycleTest {
       assertTrue(((String) token.getValue()).endsWith(":17"));
       ReplySession session = sessions.constructed().get(0);
       activity.onBackPressed();
-      verify(session).cancel(17L);
+      verify(session, timeout(1000)).cancel(17L);
       // Cancellation alone cannot release the process audio lease; worker cleanup does.
       assertTrue(((MainApplication) activity.getApplication()).isLocalAudioLeaseHeld());
       completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
@@ -313,7 +415,7 @@ public class ReplyLifecycleTest {
       controller.pause().resume();
       verify(session, never()).begin(eq(true), any(), any());
       controller.pause().stop().destroy();
-      verify(session).close();
+      verify(session, timeout(1000)).close();
     }
   }
 
@@ -347,7 +449,7 @@ public class ReplyLifecycleTest {
         bridge.finish((String) token.getValue(), finished);
         activity.onBackPressed();
         verify(finished, never()).resolve(any());
-        verify(sessions.constructed().get(0)).cancel(23L);
+        verify(sessions.constructed().get(0), timeout(1000)).cancel(23L);
         completion.get().complete(ReplySession.Outcome.status(ReplySession.Status.CANCELLED));
         assertResolvedResult(finished, "CANCELLED", null);
       }
@@ -378,7 +480,7 @@ public class ReplyLifecycleTest {
       Promise finished = mock(Promise.class);
       try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
         bridge.finish((String) token.getValue(), finished);
-        verify(sessions.constructed().get(0)).cancel(29L);
+        verify(sessions.constructed().get(0), timeout(1000)).cancel(29L);
         assertResolvedResult(finished, "UNAVAILABLE", null);
       }
       controller.pause().stop().destroy();

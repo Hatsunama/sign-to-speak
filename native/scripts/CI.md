@@ -42,6 +42,14 @@ Node 24.19.0 was verified against the [official Node release commit](https://git
 
 The [official Ubuntu runner inventory](https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2404-Readme.md) was checked on 2026-10-12: SDK36, build-tools36.0.0 and CMake3.31.5 were present; NDK27.1 was absent. Runner images evolve, so runtime preflight is authoritative.
 
+## Pinned Robolectric native-runtime fallback
+
+[Run 45042296191](https://github.com/Hatsunama/sign-to-speak/actions/runs/45042296191), attempts 1 and 2, completed the app compilation and other preceding work but failed before Robolectric executed because Maven Central returned HTTP 429 for `org.robolectric:nativeruntime-dist-compat:1.0.18`. Those attempts provide no unit-suite, counterfactual or restored-candidate result.
+
+The Android workflow now makes one bounded request to the canonical `repo1.maven.org` Central endpoint before any Gradle or expensive Pocket build. It accepts only the 159128857-byte `1.0.18` JAR whose SHA-256 is `a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef`, then places it with a minimal POM in a runner-temporary Maven repository. One generated Gradle init script grants that repository exclusive content only for `org.robolectric:nativeruntime-dist-compat`; the same script is used only by the cleanup counterfactual and unchanged full unit suite. Size, digest, POM and init-script checks all fail closed before Gradle.
+
+This is deterministic staging, not a rate-limit bypass: `repo1.maven.org` is a canonical Central CDN endpoint, the workflow performs no HTTP retry, and an active 429 still fails the run. The workflow's existing no-persistent-cache policy remains unchanged; a later run should follow diagnosis or meaningful cooldown rather than immediately repeating a Central request.
+
 ## Historical implementation and run evidence
 
 The following checkpoints preserve the original preparation and repair sequence. Their test counts and “not performed”/“next candidate” language refer to those earlier revisions, superseded by the verified checkpoint above. They are not current blockers or authority to execute a build.

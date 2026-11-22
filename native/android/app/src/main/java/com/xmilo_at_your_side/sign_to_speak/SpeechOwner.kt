@@ -60,6 +60,11 @@ internal class SpeechOwner(private val activity: MainActivity) {
             appContext, { eligible() }, { cancelAll() })
       })
     }
+    // A begin attempt revokes the previous generation even when its native
+    // cleanup is still finishing. Do not leave an owner token usable when the
+    // session correctly refuses to overlap that cleanup.
+    token = null
+    internalToken = 0L
     val local = session!!.begin(true)
     if (session!!.isFaulted) app.recordSpeechCleanupFault()
     if (local == 0L || app.speechCleanupFaulted) return null
@@ -79,6 +84,11 @@ internal class SpeechOwner(private val activity: MainActivity) {
     val deadline = Runnable {
       if (settled.compareAndSet(false, true)) {
         app.recordLocalAudioCleanupFault()
+        // stop() invalidates this generation before returning and delegates only
+        // platform cancellation to SpeechSession's cancellation worker.
+        try { target.stop() }
+        catch (_: RuntimeException) { app.recordSpeechCleanupFault() }
+        if (target.isFaulted) app.recordSpeechCleanupFault()
         done(SpeechSession.Result.CLEANUP_FAILED.name)
       }
     }
@@ -117,7 +127,8 @@ internal class SpeechOwner(private val activity: MainActivity) {
   @Synchronized fun cancelAll() {
     token = null
     internalToken = 0L
-    try { session?.stop() } catch (_: RuntimeException) { app.recordSpeechCleanupFault() }
+    try { session?.stop() }
+    catch (_: RuntimeException) { app.recordSpeechCleanupFault() }
     if (session?.isFaulted == true) app.recordSpeechCleanupFault()
   }
 
@@ -134,4 +145,5 @@ internal class SpeechOwner(private val activity: MainActivity) {
     if (session?.isFaulted == true) app.recordSpeechCleanupFault()
     session = null
   }
+
 }

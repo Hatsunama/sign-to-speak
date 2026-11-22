@@ -120,7 +120,7 @@ public class SpeechLifecycleTest {
             verify(speaking).resolve("CLEANUP_FAILED");
             assertTrue("speech deadline must request stop",
                     cancellationRequested.await(1, TimeUnit.SECONDS));
-            assertNotSame("SpeechSession.stop must not run on the main looper",
+            assertSame("SpeechSession.stop must synchronously invalidate on the main looper",
                     Thread.currentThread(), cancellationThread.get());
             verify(sessions.constructed().get(0), timeout(1000).times(1)).stop();
             assertTrue("lease remains held until worker completion", app.isLocalAudioLeaseHeld());

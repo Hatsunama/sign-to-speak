@@ -4,6 +4,7 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."
 : "${RUNNER_TEMP:?GitHub runner required}"
 : "${GITHUB_OUTPUT:?GitHub step outputs required}"
+: "${ROBOLECTRIC_INIT_SCRIPT:?CI Robolectric fallback init script required}"
 report="$RUNNER_TEMP/sign-evidence/isolation-baseline"
 mkdir -p "$report"
 patch=native/tests/fixtures/pre-isolation.patch
@@ -34,7 +35,7 @@ sha256sum "${files[@]}" > "$report/counterfactual-source.sha256"
 status=0
 (
   cd native/android
-  ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+  ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace \
     -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
     -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
     :app:testDebugUnitTest --tests '*NativeBackPrivacyTest.cleanupFailure*'

@@ -5,6 +5,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 public final class ReplySessionTest {
   private static void check(boolean value, String message) {
@@ -13,6 +14,7 @@ public final class ReplySessionTest {
 
   public static void main(String[] args) throws Exception {
     cancellationCannotReturnBeforePendingStartIsSerialized();
+    logicalCancellationInvalidatesWithoutWaitingForPendingStart();
     finishPublishesOnlyAfterCleanup();
     cancelUnblocksReadAndSuppressesTranscript();
     exactSampleLimitAutoStopsAndDecodes();
@@ -52,6 +54,62 @@ public final class ReplySessionTest {
     canceller.join(2_000);
     check(completed.await(2, TimeUnit.SECONDS), "cancelled startup did not complete");
     check(!returnedWhileStartPending, "cancel returned before the pending recorder start was serialized");
+    session.close(); worker.awaitTermination(1, TimeUnit.SECONDS);
+  }
+
+  private static void logicalCancellationInvalidatesWithoutWaitingForPendingStart() throws Exception {
+    ExecutorService worker = Executors.newSingleThreadExecutor();
+    CountDownLatch startEntered = new CountDownLatch(1), allowStart = new CountDownLatch(1);
+    CountDownLatch invalidationReturned = new CountDownLatch(1), completed = new CountDownLatch(1);
+    AtomicBoolean recording = new AtomicBoolean(), decoded = new AtomicBoolean();
+    AtomicReference<Throwable> invalidationFailure = new AtomicReference<>();
+    ReplySession session = new ReplySession(new ReplySession.Factory() {
+      public ReplySession.Recorder newRecorder() {
+        return new ReplySession.Recorder() {
+          public void start() {
+            startEntered.countDown();
+            try { allowStart.await(); } catch (InterruptedException ignored) { Thread.currentThread().interrupt(); }
+            recording.set(true);
+          }
+          public int read(short[] target, int offset, int count) { return recording.get() ? 1 : 0; }
+          public void stop() { recording.set(false); }
+          public void close() { recording.set(false); }
+        };
+      }
+      public ReplySession.Request newRequest(java.util.function.BooleanSupplier cancelled) {
+        return new ReplySession.Request() {
+          public ReplySession.Outcome decode(short[] pcm, int count) {
+            decoded.set(true);
+            return ReplySession.Outcome.completed("unexpected");
+          }
+          public void cancel() {}
+          public void close() {}
+        };
+      }
+    }, worker, 8);
+    long token = session.begin(true, ignored -> {}, ignored -> completed.countDown());
+    check(startEntered.await(2, TimeUnit.SECONDS), "start was not reached");
+    Thread invalidator = new Thread(() -> {
+      try {
+        ReplySession.class.getMethod("invalidate", long.class).invoke(session, token);
+      } catch (ReflectiveOperationException failure) {
+        invalidationFailure.set(failure);
+      } finally {
+        invalidationReturned.countDown();
+      }
+    });
+    invalidator.setUncaughtExceptionHandler((thread, failure) -> {});
+    invalidator.start();
+    boolean returnedWhileStartPending = invalidationReturned.await(1, TimeUnit.SECONDS);
+    allowStart.countDown();
+    invalidator.join(2_000);
+    check(completed.await(2, TimeUnit.SECONDS), "invalidated startup did not complete");
+    check(returnedWhileStartPending,
+        "logical invalidation must not wait for a pending platform recorder start");
+    check(invalidationFailure.get() == null,
+        "ReplySession must expose immediate logical invalidation: " + invalidationFailure.get());
+    check(!decoded.get(), "an invalidated startup must not decode or publish text");
+    check(!recording.get(), "an in-flight recorder start must be cleaned after invalidation");
     session.close(); worker.awaitTermination(1, TimeUnit.SECONDS);
   }
 

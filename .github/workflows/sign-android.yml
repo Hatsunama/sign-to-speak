@@ -100,9 +100,65 @@ jobs:
             generated/reply-asr-component/whisper.cpp/include/whisper.h \
             > "$RUNNER_TEMP/sign-evidence/reply-input-checksums.txt"
           cp -R generated/reply-asr-component/notices "$RUNNER_TEMP/sign-evidence/reply-asr-notices"
+      - name: Stage pinned Robolectric native runtime fallback
+        id: robolectric_maven_fallback
+        if: ${{ !cancelled() && steps.reply_inputs.outcome == 'success' }}
+        timeout-minutes: 5
+        run: |
+          set -euo pipefail
+          repo="$RUNNER_TEMP/robolectric-maven"
+          module="$repo/org/robolectric/nativeruntime-dist-compat/1.0.18"
+          jar="$module/nativeruntime-dist-compat-1.0.18.jar"
+          partial="$jar.partial"
+          pom="$module/nativeruntime-dist-compat-1.0.18.pom"
+          init="$RUNNER_TEMP/robolectric-maven.init.gradle"
+          mkdir -p "$module"
+          curl --fail --location --connect-timeout 15 --max-time 240 \
+            --proto '=https' --tlsv1.2 --output "$partial" \
+            https://repo1.maven.org/maven2/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar
+          test "$(stat -c %s "$partial")" = 159128857
+          printf '%s  %s\n' 'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef' "$partial" | sha256sum --check
+          mv "$partial" "$jar"
+          cat > "$pom" <<'POM'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <project xmlns="http://maven.apache.org/POM/4.0.0">
+            <modelVersion>4.0.0</modelVersion>
+            <groupId>org.robolectric</groupId>
+            <artifactId>nativeruntime-dist-compat</artifactId>
+            <version>1.0.18</version>
+          </project>
+          POM
+          cat > "$init" <<'GRADLE'
+          def repoPath = System.getenv('ROBOLECTRIC_MAVEN_REPO')
+          if (repoPath == null) throw new GradleException('ROBOLECTRIC_MAVEN_REPO is required')
+          allprojects { project ->
+            project.repositories {
+              exclusiveContent {
+                forRepository {
+                  maven {
+                    name = 'robolectricNativeRuntimeCompatFallback'
+                    url = project.uri(repoPath)
+                    metadataSources {
+                      mavenPom()
+                      artifact()
+                    }
+                  }
+                }
+                filter {
+                  includeModule('org.robolectric', 'nativeruntime-dist-compat')
+                }
+              }
+            }
+          }
+          GRADLE
+          test -s "$jar"
+          test -s "$pom"
+          test -s "$init"
+          echo "ROBOLECTRIC_MAVEN_REPO=$repo" >> "$GITHUB_ENV"
+          echo "ROBOLECTRIC_INIT_SCRIPT=$init" >> "$GITHUB_ENV"
       - name: Verify QA asset merger includes reviewed license asset producer
         id: license_assets_graph
-        if: ${{ !cancelled() && steps.reply_inputs.outcome == 'success' }}
+        if: ${{ !cancelled() && steps.reply_inputs.outcome == 'success' && steps.robolectric_maven_fallback.outcome == 'success' }}
         run: |
           set -euo pipefail
           cd android
@@ -148,7 +204,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:testDebugUnitTest

@@ -4,6 +4,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
 /** One bounded, volatile microphone capture and local decode. Retains no transcript history. */
@@ -73,9 +74,10 @@ public final class ReplySession implements AutoCloseable {
   private final Factory factory;
   private final ExecutorService executor;
   private final int maxSamples;
+  private final AtomicLong invalidatedThrough = new AtomicLong();
   private long generation;
   private boolean closed, faulted;
-  private Job current;
+  private volatile Job current;
 
   public ReplySession(Factory factory) {
     this(factory, Executors.newSingleThreadExecutor(r -> {
@@ -124,7 +126,24 @@ public final class ReplySession implements AutoCloseable {
     return true;
   }
 
+  /**
+   * Revokes a generation without touching the recorder or waiting for its platform calls.
+   * Lifecycle owners call this synchronously before dispatching the potentially blocking
+   * {@link #cancel(long)} cleanup on a platform worker.
+   */
+  public void invalidate(long token) {
+    if (token == 0) return;
+    long observed = invalidatedThrough.get();
+    while (observed < token &&
+        !invalidatedThrough.compareAndSet(observed, token)) {
+      observed = invalidatedThrough.get();
+    }
+    Job job = current;
+    if (job != null && job.generation == token) job.cancelled = true;
+  }
+
   public void cancel(long token) {
+    invalidate(token);
     Job job;
     synchronized (gate) {
       job = current;
@@ -150,7 +169,9 @@ public final class ReplySession implements AutoCloseable {
 
   private boolean cancelled(Job job) {
     synchronized (gate) {
-      return closed || faulted || job.cancelled || current != job || generation != job.generation;
+      return closed || faulted || job.cancelled ||
+          invalidatedThrough.get() >= job.generation || current != job ||
+          generation != job.generation;
     }
   }
 

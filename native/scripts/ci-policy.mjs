@@ -45,8 +45,20 @@ export function validateWorkflow(config) {
     replyInputs.run?.includes('ggml-tiny.en.bin') &&
     replyInputs.run?.includes('ggml-silero-v6.2.0.bin'),
     'Pinned repaired Reply ASR source and models required before Gradle');
+  const fallback = steps.find(s => s.id === 'robolectric_maven_fallback');
   const firstGradle = steps.findIndex(s => s.run?.includes('./gradlew'));
   check(firstGradle > steps.indexOf(replyInputs), 'Reply ASR preparation must precede every Gradle invocation');
+  check(fallback?.['timeout-minutes'] === 5 &&
+    steps.indexOf(fallback) > steps.indexOf(replyInputs) &&
+    steps.indexOf(fallback) < firstGradle &&
+    steps.indexOf(fallback) < steps.indexOf(pocket) &&
+    ['repo1.maven.org/maven2/org/robolectric/nativeruntime-dist-compat/1.0.18/nativeruntime-dist-compat-1.0.18.jar',
+      'a6c34d92c990754e5aee076032a36f8e38fcacb5eb878ebe0a324509f3864eef', '159128857',
+      'sha256sum --check', 'exclusiveContent', "includeModule('org.robolectric', 'nativeruntime-dist-compat')",
+      'allprojects', 'ROBOLECTRIC_MAVEN_REPO', 'ROBOLECTRIC_INIT_SCRIPT'].every(token => fallback.run?.includes(token)) &&
+    !fallback.run.includes('--retry') &&
+    steps[firstGradle]?.if?.includes("steps.robolectric_maven_fallback.outcome == 'success'"),
+    'Exact, single-attempt Robolectric native fallback required before every Gradle or Pocket build');
   check(steps.filter(s => /:app:(testDebugUnitTest|verifyDebugMergedPermissions|assembleDebug|assembleQa)/.test(s.run ?? ''))
     .every(s => s.if?.includes("steps.pocket_runtime.outcome == 'success'") &&
                  s.if?.includes("steps.pocket_assets.outcome == 'success'")),
