@@ -545,6 +545,56 @@ public class ReplyLifecycleTest {
     }
   }
 
+  @Test public void backOverridesLateSuccessfulFinishOutcomes() {
+    assertBackSettlesLateFinish(
+        ReplySession.Outcome.completed("should not publish"), "CANCELLED");
+    assertBackSettlesLateFinish(
+        ReplySession.Outcome.status(ReplySession.Status.NO_SPEECH), "CANCELLED");
+  }
+
+  @Test public void lateCleanupFailureRetainsPriorityAfterBack() {
+    assertBackSettlesLateFinish(
+        ReplySession.Outcome.status(ReplySession.Status.CLEANUP_FAILED), "CLEANUP_FAILED");
+  }
+
+  private void assertBackSettlesLateFinish(
+      ReplySession.Outcome workerOutcome, String expectedStatus) {
+    Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
+    AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();
+    try (MockedConstruction<DefaultReactActivityDelegate> delegates = mockConstruction(
+             DefaultReactActivityDelegate.class,
+             (delegate, ignored) -> when(delegate.onBackPressed()).thenReturn(true));
+         MockedConstruction<ReplySession> sessions = mockConstruction(ReplySession.class,
+             (session, ignored) -> {
+               when(session.begin(eq(true), any(), any())).thenAnswer(call -> {
+                 completion.set(call.getArgument(2));
+                 ((ReplySession.Started) call.getArgument(1)).complete(true);
+                 return 25L;
+               });
+               when(session.finish(25L)).thenReturn(true);
+             })) {
+      ActivityController<MainActivity> controller = Robolectric.buildActivity(MainActivity.class).setup();
+      MainActivity activity = controller.get();
+      ReactApplicationContext context = mock(ReactApplicationContext.class);
+      when(context.getCurrentActivity()).thenReturn(activity);
+      LocalReplyModule bridge = new LocalReplyModule(context);
+      Promise begun = mock(Promise.class);
+      bridge.begin(begun);
+      Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+      ArgumentCaptor<Object> token = ArgumentCaptor.forClass(Object.class);
+      verify(begun).resolve(token.capture());
+      Promise finished = mock(Promise.class);
+      try (MockedStatic<Arguments> arguments = mockArgumentsMaps()) {
+        bridge.finish((String) token.getValue(), finished);
+        activity.onBackPressed();
+        verify(sessions.constructed().get(0), timeout(1000)).cancel(25L);
+        completion.get().complete(workerOutcome);
+        assertResolvedResult(finished, expectedStatus, null);
+      }
+      controller.pause().stop().destroy();
+    }
+  }
+
   @Test public void backWaitsForWorkerWhenQueuedFinishObservesInvalidation() throws Exception {
     Shadows.shadowOf(RuntimeEnvironment.getApplication()).grantPermissions(Manifest.permission.RECORD_AUDIO);
     AtomicReference<ReplySession.Completion> completion = new AtomicReference<>();

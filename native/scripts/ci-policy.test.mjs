@@ -42,9 +42,30 @@ test('stages one exact Robolectric native JAR fallback before Gradle and scopes 
 
   const unitStep = steps.find(step => step.run?.includes(':app:testDebugUnitTest'));
   assert.equal((unitStep.run.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
-  assert.equal((source.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
+  assert.equal((source.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 5);
   assert.equal((baselineSource.match(/--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
   assert.match(baselineSource, /:\s*"\$\{ROBOLECTRIC_INIT_SCRIPT:\?[^}]+\}"/);
+});
+test('routes every Gradle invocation through the pinned Google Maven Central mirror init script', () => {
+  const mirror = 'https://maven-central.storage-download.googleapis.com/maven2/';
+  const fallback = config.jobs.android.steps.find(step => step.id === 'robolectric_maven_fallback');
+  assert.ok(fallback.run.includes(mirror));
+  for (const token of ['gradle.beforeSettings', 'pluginManagement', 'buildscript', 'allprojects']) {
+    assert.ok(fallback.run.includes(token), `missing Google mirror init-script scope: ${token}`);
+  }
+
+  const gradleRuns = config.jobs.android.steps
+    .filter(step => step.run?.includes('./gradlew'))
+    .map(step => step.run);
+  assert.equal(gradleRuns.reduce((count, run) => count + (run.match(/\.\/gradlew\b/g) ?? []).length, 0), 6);
+  for (const run of gradleRuns) {
+    const invocations = (run.match(/\.\/gradlew\b/g) ?? []).length;
+    const direct = (run.match(/\.\/gradlew\s+(?:--offline\s+)?--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length;
+    const viaArgs = /qa_gradle_args=\([\s\S]*--init-script "\$ROBOLECTRIC_INIT_SCRIPT"[\s\S]*\)/.test(run) &&
+      (run.match(/\.\/gradlew(?:\s+--offline)?\s+"\$\{qa_gradle_args\[@\]\}"/g) ?? []).length === invocations;
+    assert.ok(direct === invocations || viaArgs, 'Gradle invocation bypasses the CI dependency init script');
+  }
+  assert.equal((baselineSource.match(/\.\/gradlew\s+--init-script "\$ROBOLECTRIC_INIT_SCRIPT"/g) ?? []).length, 1);
 });
 for (const [name, mutate] of [
   ['ungated pull requests', c => { c.jobs.android.if = ''; }],

@@ -131,7 +131,22 @@ jobs:
           cat > "$init" <<'GRADLE'
           def repoPath = System.getenv('ROBOLECTRIC_MAVEN_REPO')
           if (repoPath == null) throw new GradleException('ROBOLECTRIC_MAVEN_REPO is required')
+          def centralMirror = 'https://maven-central.storage-download.googleapis.com/maven2/'
+          gradle.beforeSettings { settings ->
+            settings.pluginManagement.repositories {
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = settings.uri(centralMirror)
+              }
+            }
+          }
           allprojects { project ->
+            project.buildscript.repositories {
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = project.uri(centralMirror)
+              }
+            }
             project.repositories {
               exclusiveContent {
                 forRepository {
@@ -148,6 +163,10 @@ jobs:
                   includeModule('org.robolectric', 'nativeruntime-dist-compat')
                 }
               }
+              maven {
+                name = 'googleMavenCentralMirror'
+                url = project.uri(centralMirror)
+              }
             }
           }
           GRADLE
@@ -162,7 +181,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --dry-run \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --dry-run \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true \
             -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false \
@@ -213,7 +232,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --continue --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --continue --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:verifyDebugMergedPermissions :app:verifyReleaseMergedPermissions
@@ -223,7 +242,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          ./gradlew --no-daemon --max-workers=2 --console=plain --stacktrace \
+          ./gradlew --init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace \
             -Dorg.gradle.jvmargs='-Xmx3g -XX:MaxMetaspaceSize=768m' \
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=x86_64 \
             :app:assembleDebug
@@ -254,7 +273,7 @@ jobs:
         run: |
           set -euo pipefail
           cd android
-          qa_gradle_args=(--no-daemon --max-workers=2 --console=plain --stacktrace
+          qa_gradle_args=(--init-script "$ROBOLECTRIC_INIT_SCRIPT" --no-daemon --max-workers=2 --console=plain --stacktrace
             '-Dorg.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=768m'
             -Pandroid.builder.sdkDownload=false -PreactNativeArchitectures=arm64-v8a -PunsignedPhoneQa=true
             -Pandroid.experimental.useDefaultDebugSigningConfigForProfileableBuildtypes=false)
